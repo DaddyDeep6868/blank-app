@@ -1,0 +1,2400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dinger Lab — MLB HR Parlay Predictor</title>
+<style>
+/*
+ * _base.css — Global design tokens, element defaults, page shell, and tiny utilities.
+ * ALWAYS included in every page.
+ *
+ * Provides:
+ *   :root variables (light + dark), box-sizing, html/body,
+ *   element defaults (button, input, select, textarea, label, fieldset, legend,
+ *   a, hr, img, h1-h4, p, ul/ol/li, blockquote, table/th/td, details/summary,
+ *   pre/code), main / .notion-shell, utility classes, .notion-footer,
+ *   reduced-motion and responsive breakpoints for base elements.
+ */
+
+:root {
+	color-scheme: light dark;
+	--notion-bg: #ffffff;
+	--notion-bg-soft: #f9f9f8;
+	--notion-surface: #ffffff;
+	--notion-surface-hover: #f6f5f4;
+	--notion-text: #191918;
+	--notion-text-soft: rgba(0, 0, 0, 0.54);
+	--notion-text-faint: rgba(0, 0, 0, 0.3);
+	--notion-border: rgba(0, 0, 0, 0.1);
+	--notion-border-soft: rgba(0, 0, 0, 0.05);
+	--notion-shadow:
+		0px 0.7px 1.462px rgba(0, 0, 0, 0.015), 0px 3px 9px rgba(0, 0, 0, 0.03);
+	--notion-blue: #2783de;
+	--notion-orange: #d5803b;
+	--notion-red: #e56458;
+	--notion-blue-bg: #f3f9fd;
+	--notion-yellow-bg: #fcfaef;
+	--notion-orange-bg: #fcf7f4;
+	--notion-green-bg: #f6f9f7;
+	--notion-red-bg: #fdf6f6;
+	--notion-gray-bg: #f9f8f7;
+	--notion-radius: 8px;
+	--notion-page-width: 900px;
+	--notion-chart-1: #5e9fe8;
+	--notion-chart-2: #eac26b;
+	--notion-chart-3: #72bc8f;
+	--notion-chart-4: #bf8eda;
+	--notion-chart-5: #de9255;
+	--notion-chart-6: #df84a8;
+	--notion-chart-7: #4fb9c9;
+	--notion-chart-8: #e97366;
+	--diff-add: #47c1b6;
+	--diff-del: #f07070;
+	--pr-approved: #2b8a3e;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--notion-bg: #000000;
+		--notion-bg-soft: #191918;
+		--notion-surface: #191918;
+		--notion-surface-hover: #31302e;
+		--notion-text: #ffffff;
+		--notion-text-soft: rgba(255, 255, 255, 0.5);
+		--notion-text-faint: rgba(255, 255, 255, 0.3);
+		--notion-border: rgba(255, 255, 255, 0.2);
+		--notion-border-soft: rgba(255, 255, 255, 0.1);
+		--notion-shadow:
+			0px 0.7px 1.462px rgba(0, 0, 0, 0.06), 0px 3px 9px rgba(0, 0, 0, 0.12);
+		--notion-blue: #5e9fe8;
+		--notion-orange: #de9255;
+		--notion-red: #e97366;
+		--notion-blue-bg: rgba(41, 139, 253, 0.061);
+		--notion-yellow-bg: rgba(203, 145, 47, 0.08);
+		--notion-orange-bg: rgba(246, 126, 35, 0.08);
+		--notion-green-bg: rgba(42, 157, 118, 0.08);
+		--notion-red-bg: rgba(246, 73, 50, 0.08);
+		--notion-gray-bg: #31302e;
+		--diff-add: #5dd8cb;
+		--diff-del: #ff8a80;
+		--pr-approved: #69db7c;
+	}
+}
+
+* {
+	box-sizing: border-box;
+}
+html {
+	scroll-behavior: smooth;
+}
+body {
+	margin: 0;
+	background: var(--notion-bg);
+	color: var(--notion-text);
+	font-family:
+		ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica,
+		"Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
+	font-size: 16px;
+	line-height: 1.5;
+	transition:
+		background 180ms ease,
+		color 180ms ease;
+}
+
+/* -- Base element defaults -------------------------------- */
+button,
+[type="button"],
+[type="submit"],
+[type="reset"] {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 8px 16px;
+	font: inherit;
+	font-size: 14px;
+	font-weight: 500;
+	line-height: 1.2;
+	color: #ffffff;
+	background: var(--notion-blue);
+	border: 1px solid transparent;
+	border-radius: 8px;
+	cursor: pointer;
+	transition: background 150ms;
+	white-space: nowrap;
+}
+button:hover,
+[type="button"]:hover,
+[type="submit"]:hover,
+[type="reset"]:hover {
+	background: color-mix(in srgb, var(--notion-blue) 82%, black);
+}
+button:focus-visible,
+[type="button"]:focus-visible,
+[type="submit"]:focus-visible,
+[type="reset"]:focus-visible {
+	outline: 2px solid var(--notion-blue);
+	outline-offset: 2px;
+}
+
+input,
+select,
+textarea {
+	font: inherit;
+	font-size: 14px;
+	line-height: 1.4;
+	color: var(--notion-text);
+	background: var(--notion-surface);
+	border: 1px solid var(--notion-border);
+	border-radius: 8px;
+	padding: 8px 12px;
+	transition: border-color 150ms;
+}
+input:focus,
+select:focus,
+textarea:focus {
+	outline: none;
+	border-color: var(--notion-blue);
+	box-shadow: 0 0 0 2px rgba(9, 127, 232, 0.15);
+}
+input::placeholder,
+textarea::placeholder {
+	color: var(--notion-text-faint);
+}
+select {
+	appearance: none;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' fill='none' stroke='%23999' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 10px center;
+	padding-right: 30px;
+}
+textarea {
+	resize: vertical;
+	min-height: 80px;
+}
+input[type="range"] {
+	border: none;
+	padding: 0;
+	background: transparent;
+	accent-color: var(--notion-blue);
+	height: 18px;
+	cursor: pointer;
+	box-shadow: none;
+}
+input[type="range"]:focus {
+	box-shadow: none;
+}
+input[type="checkbox"],
+input[type="radio"] {
+	width: 16px;
+	height: 16px;
+	accent-color: var(--notion-blue);
+	border: 1px solid var(--notion-border);
+	padding: 0;
+	cursor: pointer;
+}
+label {
+	display: block;
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--notion-text);
+	margin-bottom: 6px;
+}
+fieldset {
+	border: 1px solid var(--notion-border-soft);
+	border-radius: 10px;
+	padding: 16px;
+	margin: 0;
+}
+legend {
+	font-weight: 600;
+	padding: 0 4px;
+}
+
+a {
+	color: var(--notion-text);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	text-decoration-color: var(--notion-border);
+}
+a:hover {
+	text-decoration-color: var(--notion-text);
+}
+
+hr {
+	height: 1px;
+	margin: 34px 0;
+	border: none;
+	background: var(--notion-border-soft);
+}
+
+img {
+	max-width: 100%;
+	height: auto;
+	border-radius: 8px;
+}
+
+h1,
+h2,
+h3,
+h4 {
+	text-wrap: balance;
+}
+h1 {
+	margin: 0 0 14px;
+	font-size: clamp(42px, 7vw, 72px);
+	line-height: 1.1;
+	letter-spacing: -0.035em;
+	font-weight: 700;
+}
+h2 {
+	margin: 44px 0 10px;
+	font-size: 32px;
+	line-height: 1.25;
+	letter-spacing: -0.025em;
+}
+h3 {
+	margin: 0 0 6px;
+	font-size: 18px;
+	line-height: 1.556;
+	letter-spacing: -0.007em;
+}
+p {
+	margin: 0 0 10px;
+}
+
+ul,
+ol {
+	margin: 8px 0 16px;
+	padding-left: 24px;
+}
+li {
+	margin-bottom: 4px;
+}
+li::marker {
+	color: var(--notion-text-faint);
+}
+
+blockquote {
+	border-left: 3px solid var(--notion-text);
+	padding: 4px 0 4px 16px;
+	margin: 24px 0;
+}
+blockquote p {
+	font-size: 18px;
+	line-height: 1.5;
+	margin: 0;
+}
+
+table {
+	width: 100%;
+	margin: 14px 0;
+	border-collapse: separate;
+	border-spacing: 0;
+	border: 1px solid var(--notion-border-soft);
+	border-radius: 10px;
+	overflow: hidden;
+	background: var(--notion-surface);
+	font-size: 14px;
+}
+th,
+td {
+	padding: 12px 14px;
+	vertical-align: top;
+	text-align: left;
+	border-right: 1px solid var(--notion-border-soft);
+	border-bottom: 1px solid var(--notion-border-soft);
+}
+th:last-child,
+td:last-child {
+	border-right: 0;
+}
+tr:last-child td {
+	border-bottom: 0;
+}
+th {
+	background: var(--notion-bg-soft);
+	color: var(--notion-text-soft);
+	font-weight: 600;
+}
+
+details {
+	margin: 16px 0;
+	border-radius: var(--notion-radius);
+}
+summary {
+	padding: 8px 10px;
+	border-radius: var(--notion-radius);
+	cursor: pointer;
+	font-weight: 600;
+}
+summary:hover {
+	background: var(--notion-surface-hover);
+}
+details p {
+	margin: 8px 10px 0 28px;
+	color: var(--notion-text-soft);
+}
+
+pre,
+code {
+	font-family: ui-monospace, "iA Writer Mono", Nitti, Menlo, Courier, monospace;
+}
+pre {
+	margin: 16px 0;
+	padding: 14px 16px;
+	overflow-x: auto;
+	border: 1px solid var(--notion-border-soft);
+	border-radius: 10px;
+	background: var(--notion-gray-bg);
+	font-size: 13px;
+	line-height: 1.55;
+}
+code {
+	font-size: 0.9em;
+	padding: 2px 5px;
+	border-radius: 4px;
+	background: var(--notion-gray-bg);
+}
+pre code {
+	font-size: inherit;
+	padding: 0;
+	border-radius: 0;
+	background: none;
+}
+
+main {
+	max-width: var(--notion-page-width);
+	margin: 0 auto;
+	padding: 76px 24px 88px;
+}
+
+section {
+	margin-top: 44px;
+}
+section:first-child {
+	margin-top: 0;
+}
+
+/* -- Page shell ------------------------------------------- */
+.notion-shell {
+	max-width: var(--notion-page-width);
+	margin: 0 auto;
+	padding: 76px 24px 88px;
+}
+
+/* -- Tiny utilities --------------------------------------- */
+.notion-lede {
+	max-width: 720px;
+	margin: 0 0 24px;
+	color: var(--notion-text-soft);
+	font-size: 20px;
+}
+.notion-muted {
+	color: var(--notion-text-soft);
+}
+.notion-faint {
+	color: var(--notion-text-faint);
+}
+.notion-divider {
+	height: 1px;
+	margin: 34px 0;
+	background: var(--notion-border-soft);
+}
+.notion-eyebrow {
+	display: inline-block;
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: 0.0078125rem;
+	text-transform: uppercase;
+	color: var(--notion-blue);
+}
+
+/* -- Footer ----------------------------------------------- */
+.notion-footer {
+	margin-top: 52px;
+	padding-top: 18px;
+	border-top: 1px solid var(--notion-border-soft);
+	color: var(--notion-text-faint);
+	font-size: 13px;
+}
+
+/* -- Accessibility & motion ------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+}
+
+/* -- Responsive: 560px (base elements) -------------------- */
+@media (max-width: 560px) {
+	main,
+	.notion-shell {
+		padding-inline: 16px;
+	}
+	table {
+		display: block;
+		overflow-x: auto;
+	}
+}
+/*
+ * callout — Highlighted info box with icon and text.
+ * Options: data-tone="blue" | "green" | "orange" | "red" (default: yellow)
+ *
+ * HTML:
+ * <div class="notion-callout" data-tone="blue">
+ *   <div>💡</div>
+ *   <div><strong>Note</strong><p>Helpful context.</p></div>
+ * </div>
+ */
+
+.notion-callout {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 14px;
+	margin: 18px 0;
+	padding: 16px 18px;
+	border-radius: var(--notion-radius);
+	background: var(--notion-yellow-bg);
+	box-shadow: inset 0 0 0 1px var(--notion-border-soft);
+}
+.notion-callout[data-tone="blue"] {
+	background: var(--notion-blue-bg);
+}
+.notion-callout[data-tone="green"] {
+	background: var(--notion-green-bg);
+}
+.notion-callout[data-tone="orange"] {
+	background: var(--notion-orange-bg);
+}
+.notion-callout[data-tone="red"] {
+	background: var(--notion-red-bg);
+}
+.notion-callout strong {
+	display: block;
+	margin-bottom: 3px;
+}
+.notion-callout p {
+	margin: 0;
+	color: var(--notion-text-soft);
+}
+/* ===== HR Parlay Predictor — custom styles ===== */
+.app-header{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--notion-bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--notion-border-soft);padding:14px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.app-header .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;letter-spacing:-0.02em}
+.app-header .brand .logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#d5803b,#e56458);display:flex;align-items:center;justify-content:center;font-size:18px}
+.app-header .spacer{flex:1}
+.app-wrap{max-width:1120px;margin:0 auto;padding:28px 24px 90px}
+.hero-sub{color:var(--notion-text-soft);font-size:15px;max-width:760px;margin:-4px 0 0}
+
+.toolbar{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;background:var(--notion-surface);border:1px solid var(--notion-border);border-radius:14px;padding:16px;box-shadow:var(--notion-shadow);margin-top:18px}
+.field{display:flex;flex-direction:column;gap:0}
+.field label{margin-bottom:4px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--notion-text-soft)}
+.field input,.field select{min-width:150px}
+button.ghost{background:var(--notion-surface);color:var(--notion-text);border:1px solid var(--notion-border)}
+button.ghost:hover{background:var(--notion-surface-hover)}
+button.warn{background:var(--notion-orange)}
+button.warn:hover{background:color-mix(in srgb,var(--notion-orange) 82%,black)}
+
+.statusbar{margin-top:12px;font-size:13px;color:var(--notion-text-soft);min-height:20px;display:flex;align-items:center;gap:8px}
+.spinner{width:14px;height:14px;border:2px solid var(--notion-border);border-top-color:var(--notion-blue);border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.log{margin-top:8px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--notion-text-faint);max-height:120px;overflow:auto;white-space:pre-wrap}
+
+.tabbar{display:flex;gap:6px;margin:26px 0 8px;border-bottom:1px solid var(--notion-border-soft)}
+.tabbar button{background:transparent;color:var(--notion-text-soft);border:none;border-bottom:2px solid transparent;border-radius:0;padding:10px 14px;font-weight:600}
+.tabbar button.active{color:var(--notion-text);border-bottom-color:var(--notion-orange)}
+.tabbar button:hover{background:transparent;color:var(--notion-text)}
+
+.game-card{background:var(--notion-surface);border:1px solid var(--notion-border);border-radius:16px;box-shadow:var(--notion-shadow);margin-top:18px;overflow:hidden}
+.game-head{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:16px 18px;cursor:pointer;background:var(--notion-bg-soft)}
+.game-matchup{font-size:17px;font-weight:700;letter-spacing:-0.01em}
+.game-meta{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--notion-text-soft)}
+.game-meta .chip{display:inline-flex;align-items:center;gap:5px;background:var(--notion-gray-bg);border:1px solid var(--notion-border-soft);border-radius:20px;padding:3px 10px}
+.game-body{padding:6px 18px 20px;display:none}
+.game-card.open .game-body{display:block}
+.game-card.open .game-head .caret{transform:rotate(90deg)}
+.caret{transition:transform .15s;color:var(--notion-text-faint)}
+
+.env-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:14px 0}
+.env-cell{background:var(--notion-gray-bg);border:1px solid var(--notion-border-soft);border-radius:10px;padding:10px 12px}
+.env-cell .k{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--notion-text-faint)}
+.env-cell .v{font-size:15px;font-weight:600;margin-top:2px}
+.env-cell .s{font-size:11.5px;color:var(--notion-text-soft)}
+
+.section-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--notion-text-soft);margin:18px 0 6px}
+
+table.players{font-size:13px}
+table.players th{cursor:pointer;white-space:nowrap}
+table.players td.num,table.players th.num{text-align:right;font-variant-numeric:tabular-nums}
+.prob-pill{display:inline-block;min-width:52px;text-align:center;padding:2px 8px;border-radius:6px;font-weight:700;font-variant-numeric:tabular-nums}
+.bar-mini{height:5px;border-radius:3px;background:var(--notion-border-soft);overflow:hidden;margin-top:3px}
+.bar-mini>span{display:block;height:100%;background:var(--notion-orange)}
+.ev-pos{color:#2b8a3e;font-weight:700}
+.ev-neg{color:var(--notion-red)}
+.handed{font-size:11px;color:var(--notion-text-faint)}
+
+.parlay-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-top:8px}
+.parlay-card{border:1px solid var(--notion-border);border-radius:13px;padding:14px;background:var(--notion-bg-soft);position:relative}
+.parlay-card .rank{position:absolute;top:-10px;left:14px;background:var(--notion-orange);color:#fff;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px}
+.parlay-card.r1 .rank{background:#d5803b}.parlay-card.r2 .rank{background:#9b8759}.parlay-card.r3 .rank{background:#7a8a8f}
+.parlay-card h4{margin:6px 0 8px;font-size:14.5px}
+.parlay-stat{display:flex;justify-content:space-between;font-size:12.5px;padding:3px 0;border-bottom:1px dashed var(--notion-border-soft)}
+.parlay-stat:last-child{border-bottom:none}
+.parlay-stat .lbl{color:var(--notion-text-soft)}
+.parlay-stat .val{font-weight:700;font-variant-numeric:tabular-nums}
+
+.factor-row{display:flex;justify-content:space-between;font-size:12px;padding:2px 0}
+.factor-row .mult{font-variant-numeric:tabular-nums;font-weight:600}
+.mult.up{color:#2b8a3e}.mult.down{color:var(--notion-red)}
+details.breakdown summary{font-size:12px;color:var(--notion-blue);padding:4px 0}
+details.breakdown summary:hover{background:transparent}
+
+.settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.slider-field label{display:flex;justify-content:space-between;font-weight:600;font-size:13px;margin-bottom:4px}
+.slider-field .sval{color:var(--notion-blue);font-variant-numeric:tabular-nums}
+.slider-field input[type=range]{width:100%}
+.slider-field .hint{font-size:11.5px;color:var(--notion-text-faint);margin-top:2px}
+
+.manual-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.help-note{font-size:12.5px;color:var(--notion-text-soft)}
+.empty{text-align:center;color:var(--notion-text-faint);padding:50px 20px;font-size:14px}
+.legend{font-size:11.5px;color:var(--notion-text-faint);margin-top:6px}
+.pill-tag{display:inline-block;font-size:10.5px;padding:1px 6px;border-radius:5px;background:var(--notion-gray-bg);border:1px solid var(--notion-border-soft);color:var(--notion-text-soft);margin-left:4px}
+
+/* ===== Micro-interactions ===== */
+.parlay-card{transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease}
+.parlay-card:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--notion-border) 50%, var(--notion-orange));box-shadow:0 10px 30px rgba(0,0,0,.10)}
+.chip{user-select:none}
+
+/* Toast */
+.toast{position:fixed;right:18px;bottom:18px;z-index:9999;min-width:240px;max-width:360px;
+  background:color-mix(in srgb,var(--notion-surface) 92%, transparent);
+  border:1px solid var(--notion-border);
+  box-shadow:var(--notion-shadow);
+  border-radius:14px;padding:12px 14px;
+  display:flex;gap:10px;align-items:flex-start;
+  transform:translateY(12px);opacity:0;pointer-events:none;
+  transition:opacity .18s ease, transform .18s ease}
+.toast.show{opacity:1;transform:translateY(0);pointer-events:auto}
+.toast .ticon{width:22px;height:22px;border-radius:7px;background:var(--notion-blue-bg);display:flex;align-items:center;justify-content:center;font-size:13px}
+.toast .ttitle{font-weight:700;font-size:13px;line-height:1.2}
+.toast .tmsg{font-size:12.5px;color:var(--notion-text-soft);margin-top:2px;line-height:1.35}
+.toast .tclose{margin-left:auto;background:transparent;border:0;color:var(--notion-text-faint);cursor:pointer;padding:2px 6px}
+.toast .tclose:hover{color:var(--notion-text)}
+
+/* Highlight freshly saved */
+tr.flash{animation:flash 1.2s ease}
+@keyframes flash{0%{background:color-mix(in srgb,var(--notion-green-bg) 70%, transparent)}100%{background:transparent}}
+
+/* Betslip drawer */
+.drawer{position:fixed;top:72px;right:18px;z-index:9000;width:min(380px, calc(100vw - 36px));
+  background:var(--notion-surface);border:1px solid var(--notion-border);border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.20);
+  overflow:hidden;display:flex;flex-direction:column;max-height:calc(100vh - 96px)}
+.drawer.hidden{display:none}
+.drawer-h{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--notion-bg-soft);border-bottom:1px solid var(--notion-border-soft)}
+.drawer-h .ttl{font-weight:800;letter-spacing:-0.01em}
+.drawer-h .sub{font-size:12px;color:var(--notion-text-soft)}
+.drawer-h .sp{flex:1}
+.drawer-h button{padding:6px 10px;font-size:12px}
+.drawer-b{padding:12px 14px;overflow:auto}
+.leg{display:flex;justify-content:space-between;gap:10px;padding:10px 10px;border:1px solid var(--notion-border-soft);border-radius:12px;background:var(--notion-bg-soft);margin-bottom:10px}
+.leg .nm{font-weight:700;font-size:13px;line-height:1.2}
+.leg .meta{font-size:12px;color:var(--notion-text-soft);margin-top:2px;line-height:1.25}
+.leg .rm{background:transparent;border:0;color:var(--notion-text-faint);cursor:pointer;padding:2px 6px}
+.leg .rm:hover{color:var(--notion-text)}
+.avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid var(--notion-border-soft);background:var(--notion-gray-bg)}
+.nameRow{display:flex;align-items:center;gap:10px}
+.drawer-sum{padding:12px 14px;border-top:1px solid var(--notion-border-soft);background:color-mix(in srgb,var(--notion-bg-soft) 70%, transparent)}
+.drawer-sum .row{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:3px 0}
+.drawer-sum .row .lbl{color:var(--notion-text-soft)}
+.drawer-sum .row .val{font-weight:800;font-variant-numeric:tabular-nums}
+.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--notion-border-soft);background:var(--notion-gray-bg);border-radius:999px;padding:2px 10px;font-size:12px;color:var(--notion-text-soft)}
+.badge strong{color:var(--notion-text)}
+</style>
+</head>
+<body>
+<header class="app-header">
+  <div class="brand"><span class="logo">⚾</span> Dinger Lab</div>
+  <span class="pill-tag">MLB Home-Run Parlay Model</span>
+  <div class="spacer"></div>
+  <button class="ghost" id="btnDemo">Load sample game</button>
+  <button id="btnLoad">Load MLB slate</button>
+  <button class="ghost" id="btnLoadOdds">Load HR odds (DK+Fanatics)</button>
+</header>
+
+<main class="app-wrap">
+  <section style="margin-top:6px">
+    <span class="notion-eyebrow">Poisson + Gaussian-copula engine</span>
+    <h2 style="margin-top:4px">Home-run probability &amp; parlay optimizer</h2>
+    <p class="hero-sub">Estimates each hitter's probability of going deep using regressed season rates, recent-form trends, pitcher matchup, park factors and live weather — then finds the player pairs most likely to <em>both</em> homer in the same game and flags positive expected-value bets.</p>
+  </section>
+
+  <div class="toolbar">
+    <div class="field"><label>Slate date</label><input type="date" id="dateInput"></div>
+    <div class="field"><label>Data source</label>
+      <select id="srcSelect">
+        <option value="mlb">MLB Stats API (live, free)</option>
+        <option value="manual">Manual / sample only</option>
+      </select>
+    </div>
+    <div class="field"><label>&nbsp;</label><button id="btnLoad2">Fetch slate</button></div>
+    <div class="field"><label>&nbsp;</label><button class="ghost" id="btnSettings">⚙ Model settings</button></div>
+  </div>
+  <div class="statusbar" id="status">Ready. Pick a date and load the slate, or try a sample game.</div>
+  <div class="log" id="log"></div>
+
+  <div class="tabbar">
+    <button class="active" data-tab="games">Games &amp; Parlays</button>
+    <button data-tab="manual">Manual entry</button>
+    <button data-tab="track">Tracking</button>
+    <button data-tab="parks">Ballpark factors</button>
+    <button data-tab="method">Methodology</button>
+  </div>
+
+  <!-- SETTINGS (hidden) -->
+  <div id="settingsPanel" style="display:none">
+    <div class="game-card open"><div class="game-body" style="display:block;padding:18px">
+      <div class="section-title">Model parameters</div>
+      <div class="settings-grid" id="settingsGrid"></div>
+    </div></div>
+  </div>
+
+  <!-- TAB: GAMES -->
+  <div data-panel="games">
+    <div class="game-card open" id="builderCard" style="display:none"><div class="game-body" style="display:block;padding:18px">
+      <div class="section-title">🧩 Cross-game parlay builder</div>
+      <p class="help-note">Build parlays across <b>different games</b> for higher true win probability (near-independent legs). Choose leg count and whether to prioritize win chance or payout.</p>
+      <div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-top:10px">
+        <div class="field"><label>Legs</label>
+          <select id="legCount">
+            <option value="2">2-leg</option>
+            <option value="3">3-leg</option>
+            <option value="4">4-leg</option>
+            <option value="5">5-leg</option>
+          </select>
+        </div>
+        <div class="field"><label>Optimize for</label>
+          <select id="optMode">
+            <option value="chance">Best chance</option>
+            <option value="payout">Big payout</option>
+            <option value="ev">Best +EV (value)</option>
+            <option value="mix" selected>Chance × payout</option>
+          </select>
+        </div>
+        <div class="field"><label>Leg pricing</label>
+          <select id="priceMode">
+            <option value="best" selected>Best per leg (mix books)</option>
+            <option value="draftkings">DraftKings only</option>
+            <option value="fanatics">Fanatics only</option>
+          </select>
+        </div>
+        <div class="field"><label>Shortlist size</label>
+          <select id="shortlistSize">
+            <option value="40">Top 40 hitters</option>
+            <option value="60" selected>Top 60 hitters</option>
+            <option value="90">Top 90 hitters</option>
+            <option value="120">Top 120 hitters</option>
+          </select>
+        </div>
+        <div class="field"><label>Exclude low confidence</label>
+          <select id="confFilter">
+            <option value="any" selected>Allow all</option>
+            <option value="med">Med+ only</option>
+            <option value="high">High only</option>
+          </select>
+        </div>
+        <div class="field"><label>Max 1 leg per game</label>
+          <select id="maxPerGame">
+            <option value="auto" selected>Auto (ON for 4+)</option>
+            <option value="on">On</option>
+            <option value="off">Off</option>
+          </select>
+        </div>
+        <div class="field"><label>Min leg HR%</label><input id="minLegP" type="number" value="12" min="0" max="60" step="1"></div>
+        <div class="field"><label>Min combined %</label><input id="minComboP" type="number" value="1.0" min="0" max="30" step="0.1"></div>
+        <div class="field"><label>Bankroll ($)</label><input id="bankroll" type="number" value="100" min="0" step="10"></div>
+        <div class="field"><label>Kelly fraction</label><select id="kellyFrac"><option value="0.25" selected>Quarter Kelly</option><option value="0.5">Half Kelly</option><option value="1">Full Kelly</option><option value="0.1">Tenth Kelly</option></select></div>
+        <div class="field"><label>Correlation model</label><select id="corrMode"><option value="standard" selected>Standard</option><option value="boosted">Boosted</option><option value="off">Independent</option></select></div>
+        <div class="field"><label>Value filter</label><label style="display:flex;align-items:center;gap:6px;font-weight:400;text-transform:none;letter-spacing:0"><input id="evOnly" type="checkbox"> +EV only</label></div>
+        <div class="field"><label>&nbsp;</label><button id="btnBuildGlobal">Build parlays</button></div>
+      </div>
+      <div class="legend">Tips: raise <b>Min leg HR%</b> to increase win chance; increase legs to increase payout; use <b>Chance × payout</b> for a balanced list.</div>
+      <div id="builderResults" style="margin-top:10px"></div>
+    </div></div>
+    <div id="globalPairsContainer"></div>
+    <div id="gamesContainer"><div class="empty">No games loaded yet. Use <b>Load MLB slate</b> for live data, or <b>Load sample game</b> to explore.</div></div>
+  </div>
+
+  <!-- TAB: MANUAL -->
+  <div data-panel="manual" style="display:none">
+    <div class="game-card open"><div class="game-body" style="display:block;padding:18px">
+      <div class="section-title">Build a game manually</div>
+      <p class="help-note">No API needed — type in the matchup, park, weather and hitters. Everything recalculates instantly.</p>
+      <div class="manual-grid" style="margin-top:10px">
+        <div class="field"><label>Away team</label><input id="mAway" placeholder="e.g. Yankees"></div>
+        <div class="field"><label>Home team</label><input id="mHome" placeholder="e.g. Red Sox"></div>
+        <div class="field"><label>Ballpark</label><select id="mPark"></select></div>
+        <div class="field"><label>Day / Night</label><select id="mDayNight"><option value="night">Night</option><option value="day">Day</option></select></div>
+        <div class="field"><label>Temp (°F)</label><input id="mTemp" type="number" value="72"></div>
+        <div class="field"><label>Wind speed (mph)</label><input id="mWind" type="number" value="6"></div>
+        <div class="field"><label>Wind blowing toward (°from N)</label><input id="mWindDir" type="number" value="0" placeholder="0=N,90=E,180=S,270=W"></div>
+        <div class="field"><label>Humidity (%)</label><input id="mHum" type="number" value="50"></div>
+      </div>
+      <div class="section-title" style="margin-top:16px">Add hitter</div>
+      <div class="manual-grid">
+        <div class="field"><label>Name</label><input id="hName" placeholder="Player"></div>
+        <div class="field"><label>Team side</label><select id="hSide"><option value="home">Home</option><option value="away">Away</option></select></div>
+        <div class="field"><label>Bats</label><select id="hBats"><option>R</option><option>L</option><option>S</option></select></div>
+        <div class="field"><label>Season HR</label><input id="hHR" type="number" value="20"></div>
+        <div class="field"><label>Season PA</label><input id="hPA" type="number" value="500"></div>
+        <div class="field"><label>Last-15 HR</label><input id="hRecHR" type="number" value="3"></div>
+        <div class="field"><label>Last-15 PA</label><input id="hRecPA" type="number" value="60"></div>
+        <div class="field"><label>Lineup spot</label><input id="hSpot" type="number" value="3" min="1" max="9"></div>
+        <div class="field"><label>HR prop odds (American)</label><input id="hOdds" type="number" value="350" placeholder="e.g. +350"></div>
+      </div>
+      <div class="manual-grid" style="margin-top:10px">
+        <div class="field"><label>Opposing pitcher hand</label><select id="hOppHand"><option>R</option><option>L</option></select></div>
+        <div class="field"><label>Opp pitcher HR/9</label><input id="hOppHR9" type="number" step="0.01" value="1.25"></div>
+        <div class="field" style="justify-content:flex-end"><label>&nbsp;</label><button id="btnAddHitter">+ Add hitter</button></div>
+        <div class="field" style="justify-content:flex-end"><label>&nbsp;</label><button class="warn" id="btnBuildManual">Build / refresh game</button></div>
+      </div>
+      <div class="legend">Tip: add hitters from both teams, then press <b>Build / refresh game</b>. The manual game appears in the Games tab.</div>
+      <div id="manualRoster" style="margin-top:12px"></div>
+    </div></div>
+  </div>
+
+  <!-- TAB: TRACKING -->
+  <div data-panel="track" style="display:none">
+    <div class="game-card open"><div class="game-body" style="display:block;padding:18px">
+      <div class="section-title">📌 Saved parlays</div>
+      <p class="help-note">Save parlays you like, then mark results later. Stored locally in your browser (no accounts, no uploads).</p>
+      <div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-top:10px">
+        <div class="field"><label>Status</label>
+          <select id="trackStatus">
+            <option value="all" selected>All</option>
+            <option value="pending">Pending</option>
+            <option value="win">Wins</option>
+            <option value="loss">Losses</option>
+          </select>
+        </div>
+        <div class="field"><label>Legs</label>
+          <select id="trackLegs">
+            <option value="all" selected>All</option>
+            <option value="2">2-leg</option>
+            <option value="3">3-leg</option>
+            <option value="4">4-leg</option>
+            <option value="5">5-leg</option>
+          </select>
+        </div>
+        <div class="field"><label>Search</label><input id="trackSearch" placeholder="player name…"></div>
+        <div class="field"><label>&nbsp;</label><button class="ghost" id="btnClearSaved">Clear all</button></div>
+      </div>
+      <div id="trackTable" style="margin-top:10px"></div>
+    </div></div>
+  </div>
+
+  <!-- TAB: PARKS -->
+  <div data-panel="parks" style="display:none">
+    <div class="game-card open"><div class="game-body" style="display:block;padding:18px">
+      <div class="section-title">Embedded ballpark database (HR park factors)</div>
+      <p class="help-note">100 = league-neutral. Higher = more homer-friendly. Used to scale every probability.</p>
+      <div id="parkTable"></div>
+    </div></div>
+  </div>
+
+  <!-- TAB: METHOD -->
+  <div data-panel="method" style="display:none">
+    <div class="game-card open"><div class="game-body" style="display:block;padding:18px" id="methodBody"></div></div>
+  </div>
+
+  <p class="notion-footer">Dinger Lab · Model output is for informational and entertainment purposes only. Probabilities are estimates, not guarantees. Bet responsibly; 21+. If gambling is a problem, call 1-800-GAMBLER.</p>
+</main>
+
+<div class="toast" id="toast" aria-live="polite" aria-atomic="true">
+  <div class="ticon" id="toastIcon">✨</div>
+  <div>
+    <div class="ttitle" id="toastTitle">Done</div>
+    <div class="tmsg" id="toastMsg">—</div>
+  </div>
+  <button class="tclose" id="toastClose" aria-label="Close">✕</button>
+</div>
+
+<div class="drawer hidden" id="betslip">
+  <div class="drawer-h">
+    <div>
+      <div class="ttl">Betslip</div>
+      <div class="sub" id="betslipSub">0 legs</div>
+    </div>
+    <div class="sp"></div>
+    <button class="ghost" id="btnCopySlip">Copy</button>
+    <button class="ghost" id="btnClearSlip">Clear</button>
+    <button class="ghost" id="btnCloseSlip">✕</button>
+  </div>
+  <div class="drawer-b" id="betslipBody"></div>
+  <div class="drawer-sum">
+    <div class="row"><span class="lbl">Combined chance</span><span class="val" id="slipProb">—</span></div>
+    <div class="row"><span class="lbl">Fair odds</span><span class="val" id="slipFair">—</span></div>
+    <div class="row"><span class="lbl">Mixed-books odds</span><span class="val" id="slipOdds">—</span></div>
+    <div class="row"><span class="lbl">Difficulty</span><span class="val" id="slipDiff">—</span></div>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   DINGER LAB — MLB Home Run Probability & Parlay Optimizer
+   Self-contained. Live data: MLB Stats API + Open-Meteo (both free, no key).
+   ========================================================================= */
+
+/* ---------- Embedded ballpark database ----------
+   teamId: MLB Stats API team id; hr: HR park factor (100=neutral);
+   cf: compass bearing (deg) from home plate out to center field;
+   roof: open|retractable|dome; lat/lon for weather; elev ft. */
+const PARKS = {
+  108:{team:'Angels',park:'Angel Stadium',hr:101,cf:48,roof:'open',lat:33.800,lon:-117.883,elev:160},
+  109:{team:'Diamondbacks',park:'Chase Field',hr:103,cf:0,roof:'retractable',lat:33.445,lon:-112.067,elev:1059},
+  110:{team:'Orioles',park:'Camden Yards',hr:104,cf:32,roof:'open',lat:39.284,lon:-76.622,elev:33},
+  111:{team:'Red Sox',park:'Fenway Park',hr:101,cf:42,roof:'open',lat:42.346,lon:-71.097,elev:21},
+  112:{team:'Cubs',park:'Wrigley Field',hr:103,cf:31,roof:'open',lat:41.948,lon:-87.655,elev:600},
+  113:{team:'Reds',park:'Great American Ball Park',hr:113,cf:28,roof:'open',lat:39.097,lon:-84.507,elev:490},
+  114:{team:'Guardians',park:'Progressive Field',hr:98,cf:0,roof:'open',lat:41.496,lon:-81.685,elev:660},
+  115:{team:'Rockies',park:'Coors Field',hr:118,cf:0,roof:'open',lat:39.756,lon:-104.994,elev:5200},
+  116:{team:'Tigers',park:'Comerica Park',hr:94,cf:25,roof:'open',lat:42.339,lon:-83.049,elev:600},
+  117:{team:'Astros',park:'Minute Maid Park',hr:105,cf:20,roof:'retractable',lat:29.757,lon:-95.355,elev:50},
+  118:{team:'Royals',park:'Kauffman Stadium',hr:92,cf:0,roof:'open',lat:39.051,lon:-94.480,elev:750},
+  119:{team:'Dodgers',park:'Dodger Stadium',hr:106,cf:25,roof:'open',lat:34.073,lon:-118.240,elev:500},
+  120:{team:'Nationals',park:'Nationals Park',hr:101,cf:30,roof:'open',lat:38.873,lon:-77.007,elev:25},
+  121:{team:'Mets',park:'Citi Field',hr:97,cf:24,roof:'open',lat:40.757,lon:-73.846,elev:20},
+  133:{team:'Athletics',park:'Sutter Health Park',hr:99,cf:30,roof:'open',lat:38.580,lon:-121.513,elev:25},
+  134:{team:'Pirates',park:'PNC Park',hr:96,cf:7,roof:'open',lat:40.447,lon:-80.006,elev:730},
+  135:{team:'Padres',park:'Petco Park',hr:96,cf:0,roof:'open',lat:32.707,lon:-117.157,elev:60},
+  136:{team:'Mariners',park:'T-Mobile Park',hr:95,cf:6,roof:'retractable',lat:47.591,lon:-122.332,elev:10},
+  137:{team:'Giants',park:'Oracle Park',hr:90,cf:24,roof:'open',lat:37.778,lon:-122.389,elev:10},
+  138:{team:'Cardinals',park:'Busch Stadium',hr:98,cf:0,roof:'open',lat:38.622,lon:-90.193,elev:465},
+  139:{team:'Rays',park:'George M. Steinbrenner Field',hr:101,cf:30,roof:'open',lat:27.980,lon:-82.507,elev:15},
+  140:{team:'Rangers',park:'Globe Life Field',hr:100,cf:0,roof:'retractable',lat:32.747,lon:-97.084,elev:550},
+  141:{team:'Blue Jays',park:'Rogers Centre',hr:105,cf:0,roof:'retractable',lat:43.641,lon:-79.389,elev:280},
+  142:{team:'Twins',park:'Target Field',hr:99,cf:0,roof:'open',lat:44.982,lon:-93.278,elev:830},
+  143:{team:'Phillies',park:'Citizens Bank Park',hr:107,cf:0,roof:'open',lat:39.906,lon:-75.166,elev:20},
+  144:{team:'Braves',park:'Truist Park',hr:103,cf:30,roof:'open',lat:33.891,lon:-84.468,elev:1050},
+  145:{team:'White Sox',park:'Rate Field',hr:103,cf:0,roof:'open',lat:41.830,lon:-87.634,elev:595},
+  146:{team:'Marlins',park:'loanDepot park',hr:92,cf:23,roof:'retractable',lat:25.778,lon:-80.220,elev:10},
+  147:{team:'Yankees',park:'Yankee Stadium',hr:112,cf:23,roof:'open',lat:40.829,lon:-73.926,elev:55},
+  158:{team:'Brewers',park:'American Family Field',hr:102,cf:0,roof:'retractable',lat:43.028,lon:-87.971,elev:635}
+};
+
+/* ---------- Tunable model parameters ---------- */
+const CFG = {
+  leagueHRperPA: 0.0340,   // league baseline HR per PA
+  regressionPA: 175,       // shrinkage constant (PA of league-average prior)
+  recentWeight: 0.30,      // weight on last-15 form vs season
+  tempPerDeg: 0.0055,      // multiplier change per °F above/below 70
+  windPerMph: 0.0100,      // multiplier change per mph of straight-out wind
+  humidityPer: 0.0008,     // per % humidity above/below 50
+  platoonEdge: 0.080,      // opposite-hand batter boost
+  dayBoost: 0.020,         // day-game carry boost
+  corrTeammates: 0.12,     // same-game HR correlation, same team
+  corrOpponents: 0.06      // same-game HR correlation, opposing teams
+};
+const LEAGUE_HR9 = 1.25;   // league avg pitcher HR allowed per 9 IP
+const PA_BY_SPOT = {1:4.65,2:4.55,3:4.45,4:4.32,5:4.20,6:4.08,7:3.96,8:3.84,9:3.72};
+const DEFAULT_STARTER_IP = 5.3; // simple leash estimate for bullpen blending
+
+/* ---------- Math helpers ---------- */
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const toRad=d=>d*Math.PI/180;
+function normPdf(z){return Math.exp(-0.5*z*z)/Math.sqrt(2*Math.PI);}
+// inverse standard normal CDF (Acklam)
+function normInv(p){
+  if(p<=0)return -40;if(p>=1)return 40;
+  const a=[-3.969683028665376e+01,2.209460984245205e+02,-2.759285104469687e+02,1.383577518672690e+02,-3.066479806614716e+01,2.506628277459239e+00];
+  const b=[-5.447609879822406e+01,1.615858368580409e+02,-1.556989798598866e+02,6.680131188771972e+01,-1.328068155288572e+01];
+  const c=[-7.784894002430293e-03,-3.223964580411365e-01,-2.400758277161838e+00,-2.549732539343734e+00,4.374664141464968e+00,2.938163982698783e+00];
+  const d=[7.784695709041462e-03,3.224671290700398e-01,2.445134137142996e+00,3.754408661907416e+00];
+  const pl=0.02425;let q,r;
+  if(p<pl){q=Math.sqrt(-2*Math.log(p));return(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}
+  if(p<=1-pl){q=p-0.5;r=q*q;return(((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);}
+  q=Math.sqrt(-2*Math.log(1-p));return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+}
+/* American odds helpers */
+function amToDecimal(a){a=Number(a);if(!a)return null;return a>0?1+a/100:1+100/(-a);}
+function amToImplied(a){const d=amToDecimal(a);return d?1/d:null;}
+function decToAmerican(d){if(!d||d<=1)return null;return d>=2?'+'+Math.round((d-1)*100):'-'+Math.round(100/(d-1));}
+function fmtPct(x){return(100*x).toFixed(1)+'%';}
+
+/* ===== Added features: staking / EV / confidence reasons / correlation ===== */
+var STAKE = { bankroll: 100, kelly: 0.25 };
+function readStakeCfg(){
+  var be=document.querySelector('#bankroll'), ke=document.querySelector('#kellyFrac');
+  var b=be?parseFloat(be.value):NaN, k=ke?parseFloat(ke.value):NaN;
+  if(!isNaN(b)&&b>0) STAKE.bankroll=b;
+  if(!isNaN(k)&&k>0) STAKE.kelly=k;
+  return STAKE;
+}
+function readCorrMult(){
+  var el=document.querySelector('#corrMode'); var v=el?el.value:'standard';
+  if(v==='off') return 0;
+  if(v==='boosted') return 1.6;
+  return 1;
+}
+function parlayEV(prob, decOdds){
+  if(prob==null||decOdds==null||decOdds<=1) return null;
+  return prob*decOdds - 1;
+}
+function kellyFraction(prob, decOdds){
+  if(prob==null||decOdds==null||decOdds<=1) return 0;
+  var b=decOdds-1; var f=(prob*b-(1-prob))/b;
+  return f>0?f:0;
+}
+function suggestStake(prob, decOdds){
+  var f=kellyFraction(prob, decOdds)*STAKE.kelly;
+  return { f:f, stake:STAKE.bankroll*f };
+}
+function nLegBestDec(b){
+  var a=b.mixedDec||0, c=b.sameBookBestDec||0, d=a>c?a:c;
+  return d>1?d:null;
+}
+function getCalibration(){
+  var out={ High:1, Med:1, Low:1 };
+  try{
+    var arr=loadSaved();
+    var agg={ High:{w:0,l:0,ps:0,pn:0}, Med:{w:0,l:0,ps:0,pn:0}, Low:{w:0,l:0,ps:0,pn:0} };
+    for(var i=0;i<arr.length;i++){
+      var x=arr[i], t=x.tier;
+      if(t!=='High'&&t!=='Med'&&t!=='Low') continue;
+      if(x.result!=='win'&&x.result!=='loss') continue;
+      if(x.result==='win') agg[t].w++; else agg[t].l++;
+      var pp=(x.predProb!=null)?Number(x.predProb):((x.combinedPct!=null)?Number(x.combinedPct)/100:null);
+      if(pp!=null){ agg[t].ps+=pp; agg[t].pn++; }
+    }
+    ['High','Med','Low'].forEach(function(t){
+      var a=agg[t], n=a.w+a.l;
+      if(n>=8 && a.pn>0 && a.ps>0){ var actual=a.w/n, pred=a.ps/a.pn; if(pred>0) out[t]=clamp(actual/pred,0.6,1.4); }
+    });
+  }catch(e){}
+  return out;
+}
+function calibratedJoint(joint, tier){ var c=getCalibration(); var f=(c&&c[tier])?c[tier]:1; return Math.min(0.999, joint*f); }
+function nLegEV(b){ var tier=weakestTier(b.picks.map(function(x){return confidenceLabel(x.p);})); return parlayEV(calibratedJoint(b.joint, tier), nLegBestDec(b)); }
+function confidenceReasons(p){
+  var out=[]; var PA=Number(p.PA||0);
+  if(PA>=350) out.push('Large sample ('+PA+' PA)');
+  else if(PA>=200) out.push('Solid sample ('+PA+' PA)');
+  else if(PA>0&&PA<120) out.push('Small sample ('+PA+' PA)');
+  var f=(p.calc&&p.calc.factors)?p.calc.factors:null;
+  if(f){
+    if(f.park>1.03) out.push('HR-friendly park'); else if(f.park<0.97) out.push('Pitcher-friendly park');
+    if(f.pitcher>1.03) out.push('Weak opposing pitcher'); else if(f.pitcher<0.97) out.push('Tough opposing pitcher');
+    if(f.platoon>1.01) out.push('Platoon edge');
+    if(f.temp>1.02) out.push('Warm weather');
+    if(f.wind>1.03) out.push('Wind blowing out'); else if(f.wind<0.97) out.push('Wind blowing in');
+  }
+  if(p.p>=0.22) out.push('High HR rate'); else if(p.p>0&&p.p<0.10) out.push('Longshot');
+  return out;
+}
+function tierColor(lbl){ return lbl==='High'?'#2b8a3e':(lbl==='Med'?'#b08900':'#c92a2a'); }
+function tierBadge(p){
+  var lbl=confidenceLabel(p); var col=tierColor(lbl);
+  return '<span class="chip" style="background:'+col+'22;color:'+col+'">'+lbl+'</span>';
+}
+function weakestTier(labels){
+  var order={High:3,Med:2,Low:1}; var w='High';
+  labels.forEach(function(l){ if((order[l]||0)<(order[w]||0)) w=l; });
+  return w;
+}
+
+
+
+function fmtLocalTime(iso){
+  try{
+    const d=new Date(iso);
+    return d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+  }catch(e){
+    return '';
+  }
+}
+
+function headshotUrl(mlbId){
+  if(!mlbId) return null;
+  return `https://img.mlbstatic.com/mlb-photos/image/upload/v1/people/${mlbId}/headshot/67/current`;
+}
+
+/* ---------- Core HR model ---------- */
+// returns {p, lambda, factors:{}, perPA}
+function playerHRProb(pl, env){
+  const lg=CFG.leagueHRperPA;
+  const seasonRate=(pl.PA>0)?pl.HR/pl.PA:lg;
+  // Bayesian shrinkage toward league mean
+  const regRate=(pl.HR + CFG.regressionPA*lg)/(pl.PA + CFG.regressionPA);
+  let base=regRate;
+  // recent form blend
+  if(pl.recPA>0){const recRate=pl.recHR/pl.recPA;base=(1-CFG.recentWeight)*regRate+CFG.recentWeight*recRate;}
+  const f={};
+  // park
+  f.park=env.parkHR/100;
+  // pitcher quality
+  // Blend starter HR/9 with bullpen HR/9 (if available). This better matches "vs staff" reality.
+  const sp = (env.oppHR9!=null?env.oppHR9:LEAGUE_HR9);
+  const pen = (env.bullpenHR9!=null?env.bullpenHR9:LEAGUE_HR9);
+  const penShare = clamp(1-(DEFAULT_STARTER_IP/9), 0.25, 0.55);
+  const staffHR9 = (1-penShare)*sp + penShare*pen;
+  f.pitcher=clamp(staffHR9/LEAGUE_HR9,0.6,1.7);
+  // platoon / handedness
+  if(pl.bats==='S')f.platoon=1+CFG.platoonEdge*0.4;
+  else f.platoon=(pl.bats!==env.oppHand)?1+CFG.platoonEdge:1-CFG.platoonEdge*0.75;
+  // weather (neutralized under closed roof)
+  const closed=(env.roof==='dome')||(env.roof==='retractable'&&env.roofClosed);
+  if(closed){f.temp=1.0;f.wind=1.0;f.humidity=1.0;}
+  else{
+    f.temp=clamp(1+(env.temp-70)*CFG.tempPerDeg,0.80,1.25);
+    // wind component blowing straight out to CF
+    let outMph=0;
+    if(env.windSpeed>0&&env.windDir!=null&&env.cf!=null){
+      const ang=toRad(env.windDir-env.cf); // wind blowing-toward vs CF bearing
+      outMph=env.windSpeed*Math.cos(ang);
+    }
+    f.wind=clamp(1+outMph*CFG.windPerMph,0.78,1.30);
+    f.humidity=clamp(1+(env.humidity-50)*CFG.humidityPer,0.95,1.06);
+  }
+  f.daynight=(env.dayNight==='day')?1+CFG.dayBoost:1.0;
+  const mult=f.park*f.pitcher*f.platoon*f.temp*f.wind*f.humidity*f.daynight;
+  const perPA=clamp(base*mult,0,0.13);
+  const pa=PA_BY_SPOT[pl.spot]||4.2;
+  // If lineups aren't confirmed, apply a small PA uncertainty penalty.
+  const paAdj = env.lineupsConfirmed ? pa : pa*0.95;
+  const lambda=perPA*paAdj;            // expected HR in game (Poisson mean)
+  const p=1-Math.exp(-lambda);      // P(>=1 HR)
+  return {p,lambda,perPA,base,factors:f,pa:paAdj};
+}
+
+/* ---------- Pair correlation (Gaussian copula, 1st-order) ---------- */
+function jointHRprob(pA,pB,sameTeam){
+  pA=clamp(pA,1e-6,0.999);pB=clamp(pB,1e-6,0.999);
+  const rho=(sameTeam?CFG.corrTeammates:CFG.corrOpponents)*(window.DL_CORR_MULT==null?1:window.DL_CORR_MULT);
+  const zA=normInv(1-pA), zB=normInv(1-pB);
+  // P(both exceed) ≈ (1-Φ(zA))(1-Φ(zB)) + ρ·φ(zA)φ(zB)
+  let joint=pA*pB + rho*normPdf(zA)*normPdf(zB);
+  return clamp(joint, pA*pB, Math.min(pA,pB));
+}
+
+/* ============================ STATE ============================ */
+let GAMES=[];           // [{id,away,home,env,players:[...]}]
+let MANUAL={meta:null, players:[]};
+let activeTab='games';
+const TRACK_KEY='dingerlab_saved_parlays_v1';
+
+function loadSaved(){
+  try{ return JSON.parse(localStorage.getItem(TRACK_KEY)||'[]'); }catch(e){ return []; }
+}
+function saveSaved(arr){
+  localStorage.setItem(TRACK_KEY, JSON.stringify(arr));
+}
+function addSaved(entry){
+  const arr=loadSaved();
+  arr.unshift(entry);
+  saveSaved(arr);
+}
+function updateSaved(id, patch){
+  const arr=loadSaved();
+  const i=arr.findIndex(x=>x.id===id);
+  if(i>=0){ arr[i]=Object.assign({}, arr[i], patch); saveSaved(arr); }
+}
+function deleteSaved(id){
+  const arr=loadSaved().filter(x=>x.id!==id);
+  saveSaved(arr);
+}
+
+function renderTracking(){
+  let arr=loadSaved();
+
+  // apply filters
+  const statusSel=$('#trackStatus')?$('#trackStatus').value:'all';
+  const legsSel=$('#trackLegs')?$('#trackLegs').value:'all';
+  const q=$('#trackSearch')?($('#trackSearch').value||'').trim().toLowerCase():'';
+  arr=arr.filter(x=>{
+    const res=x.result||'pending';
+    if(statusSel!=='all' && res!==statusSel) return false;
+    if(legsSel!=='all' && String(x.legCount||'')!==legsSel) return false;
+    if(q){
+      const blob=(x.legs||[]).join(' ').toLowerCase();
+      if(!blob.includes(q)) return false;
+    }
+    return true;
+  });
+  if(!arr.length){
+    $('#trackTable').innerHTML='<div class="help-note">No saved parlays yet. Use the Cross-game builder and click <b>Save</b> on a parlay.</div>';
+    return;
+  }
+
+  // Summary
+  const done=arr.filter(x=>x.result==='win'||x.result==='loss');
+  const wins=arr.filter(x=>x.result==='win').length;
+  const losses=arr.filter(x=>x.result==='loss').length;
+  const wr=(wins+losses)>0 ? (wins/(wins+losses)) : null;
+  const byLeg={};
+  for(const x of arr){
+    const k=String(x.legCount||'?');
+    byLeg[k]=byLeg[k]||{w:0,l:0,p:0};
+    if(x.result==='win') byLeg[k].w++;
+    else if(x.result==='loss') byLeg[k].l++;
+    else byLeg[k].p++;
+  }
+  const legSummary=Object.keys(byLeg).sort((a,b)=>Number(a)-Number(b)).map(k=>{
+    const s=byLeg[k];
+    const t=s.w+s.l;
+    const wri=t?((s.w/t)*100).toFixed(1)+'%':'—';
+    return `<span class="chip">${k}-leg: ${s.w}-${s.l} (WR ${wri})</span>`;
+  }).join(' ');
+
+  let staked=0, returned=0;
+  for(const x of arr){ const st=Number(x.stake||0), dec=Number(x.decOdds||0); if(x.result==='win'||x.result==='loss') staked+=st; if(x.result==='win') returned += st*(dec>1?dec:1); }
+  const profit = returned - staked;
+  const roi = staked>0 ? (profit/staked) : null;
+  const roiTxt = roi==null ? '—' : ((roi>=0?'+':'')+(roi*100).toFixed(1)+'%');
+  const summaryHtml=`
+    <div class="notion-callout" data-tone="blue" style="margin:0 0 12px">
+      <div>📊</div>
+      <div>
+        <strong>Summary</strong>
+        <p>Total saved: <b>${arr.length}</b> · Wins: <b>${wins}</b> · Losses: <b>${losses}</b> · Win rate: <b>${wr==null?'—':(wr*100).toFixed(1)+'%'}</b></p>
+        <p style="margin-top:6px">Settled stake: <b>$${staked.toFixed(2)}</b> · Returned: <b>$${returned.toFixed(2)}</b> · Profit: <b>$${profit.toFixed(2)}</b> · ROI: <b>${roiTxt}</b></p>
+        <p style="margin-top:6px">${legSummary}</p>
+      </div>
+    </div>`;
+
+  const _wrRoi=function(items){
+    let w=0,l=0,st=0,ret=0,ps=0,pn=0;
+    for(const x of items){
+      const r=x.result;
+      if(r==='win'||r==='loss'){ const stk=Number(x.stake||0), dec=Number(x.decOdds||0); st+=stk; if(r==='win'){ w++; ret+=stk*(dec>1?dec:1); } else { l++; } const pp=(x.predProb!=null)?Number(x.predProb):((x.combinedPct!=null)?Number(x.combinedPct)/100:null); if(pp!=null){ ps+=pp; pn++; } }
+    }
+    const t=w+l;
+    return { w:w, l:l, t:t, wr:(t?w/t:null), roi:(st>0?((ret-st)/st):null), avgPred:(pn?ps/pn:null) };
+  };
+  const _fmt=function(v){ return v==null?'—':(v*100).toFixed(1)+'%'; };
+  const _roiFmt=function(v){ return v==null?'—':((v>=0?'+':'')+(v*100).toFixed(1)+'%'); };
+  const calib=getCalibration();
+  const tierRows=['High','Med','Low'].map(function(t){
+    const grp=arr.filter(function(x){return x.tier===t;});
+    if(!grp.length) return '';
+    const stt=_wrRoi(grp);
+    const f=calib[t]; const fTxt=(f && Math.abs(f-1)>0.001)?('×'+f.toFixed(2)):'—';
+    const col=tierColor(t);
+    return `<tr><td><span class="chip" style="background:${col}22;color:${col}">${t}</span></td><td class="num">${stt.t}</td><td class="num">${stt.w}-${stt.l}</td><td class="num">${_fmt(stt.avgPred)}</td><td class="num">${_fmt(stt.wr)}</td><td class="num">${_roiFmt(stt.roi)}</td><td class="num">${fTxt}</td></tr>`;
+  }).join('') || '<tr><td colspan="7" class="notion-faint">No settled bets with a saved tier yet.</td></tr>';
+  const _evb=function(ev){ if(ev==null) return null; if(ev<0) return '−EV'; if(ev<0.10) return '0–10%'; if(ev<0.30) return '10–30%'; return '30%+'; };
+  const evGroups={};
+  arr.forEach(function(x){ const bb=_evb(x.ev); if(bb==null) return; (evGroups[bb]=evGroups[bb]||[]).push(x); });
+  const evRows=['−EV','0–10%','10–30%','30%+'].filter(function(bb){return evGroups[bb];}).map(function(bb){
+    const stt=_wrRoi(evGroups[bb]);
+    return `<tr><td>${bb}</td><td class="num">${stt.t}</td><td class="num">${stt.w}-${stt.l}</td><td class="num">${_fmt(stt.wr)}</td><td class="num">${_roiFmt(stt.roi)}</td></tr>`;
+  }).join('') || '<tr><td colspan="5" class="notion-faint">No EV data yet — save parlays after loading odds.</td></tr>';
+  const btHtml=`
+    <div class="notion-callout" data-tone="blue" style="margin:0 0 12px">
+      <div>🎯</div>
+      <div>
+        <strong>Backtesting & calibration</strong>
+        <p class="notion-faint" style="margin:2px 0 8px">Settled bets only. <b>Model</b> = avg predicted combined %, <b>Actual</b> = real hit rate. Once a tier has 8+ settled bets, the <b>Calib.</b> factor auto-applies to EV, stake sizing, and the calibrated win % on cards.</p>
+        <table class="players"><thead><tr><th>Confidence</th><th class="num">Settled</th><th class="num">W-L</th><th class="num">Model</th><th class="num">Actual</th><th class="num">ROI</th><th class="num">Calib.</th></tr></thead><tbody>${tierRows}</tbody></table>
+        <table class="players" style="margin-top:8px"><thead><tr><th>EV bucket</th><th class="num">Settled</th><th class="num">W-L</th><th class="num">Hit rate</th><th class="num">ROI</th></tr></thead><tbody>${evRows}</tbody></table>
+      </div>
+    </div>`;
+  const rows=arr.map(p=>{
+    const legs=(p.legs||[]).join('<br>');
+    const res=p.result||'pending';
+    const resChip=res==='win'?'✅ Win':res==='loss'?'❌ Loss':'⏳ Pending';
+    return `<tr>
+      <td>${new Date(p.savedAt).toLocaleString()}</td>
+      <td class="num">${p.legCount}</td>
+      <td style="min-width:320px">${legs}</td>
+      <td class="num">${(p.combinedPct||0).toFixed(2)}%</td>
+      <td class="num">${p.bestSameBook||'—'}</td>
+      <td class="num">${p.stake?('$'+Number(p.stake).toFixed(2)):'—'}</td>
+      <td>${resChip}</td>
+      <td>
+        <button class="ghost" style="padding:2px 10px" data-act="win" data-id="${p.id}">Win</button>
+        <button class="ghost" style="padding:2px 10px" data-act="loss" data-id="${p.id}">Loss</button>
+        <button class="ghost" style="padding:2px 10px" data-act="del" data-id="${p.id}">Delete</button>
+      </td>
+    </tr>`;
+  }).join('');
+  $('#trackTable').innerHTML=summaryHtml+btHtml+`<table class="players"><thead><tr>
+    <th>Saved</th><th class="num">Legs</th><th>Bet slip</th><th class="num">Combined</th><th class="num">Best same-book</th><th class="num">Stake</th><th>Status</th><th></th>
+  </tr></thead><tbody>${rows}</tbody></table>`;
+
+  $$('#trackTable [data-act]').forEach(btn=>{
+    btn.onclick=()=>{
+      const id=btn.dataset.id;
+      const act=btn.dataset.act;
+      if(act==='win') updateSaved(id,{result:'win'});
+      else if(act==='loss') updateSaved(id,{result:'loss'});
+      else if(act==='del') deleteSaved(id);
+      renderTracking();
+    };
+  });
+}
+
+function saveParlay(b64, legCount, combinedPct, bestSameBook, decOdds, stake, tier, ev, predProb){
+  const txt = decodeURIComponent(escape(atob(b64)));
+  const legs = txt.split('\n').filter(Boolean);
+  if(stake == null){ var _i = prompt('Stake for this parlay ($)?','10'); stake = (_i==null)?null:(parseFloat(_i)||null); }
+  addSaved({
+    id: 'p_' + Math.random().toString(16).slice(2) + '_' + Date.now(),
+    savedAt: Date.now(),
+    legCount,
+    combinedPct,
+    bestSameBook,
+    decOdds: (decOdds||null),
+    stake: (stake==null?null:Number(stake)),
+    tier: (tier||null),
+    ev: (ev==null?null:Number(ev)),
+    predProb: (predProb==null?null:Number(predProb)),
+    legs,
+    result: 'pending'
+  });
+  setStatus('Saved parlay. See Tracking tab.');
+}
+
+/* ============================ UI helpers ============================ */
+const $=s=>document.querySelector(s);
+const $$=s=>[...document.querySelectorAll(s)];
+function setStatus(msg,busy){$('#status').innerHTML=(busy?'<span class="spinner"></span> ':'')+msg;}
+
+function toast(title, msg, icon='✨'){
+  const el=$('#toast');
+  if(!el) return;
+  $('#toastTitle').textContent=title;
+  $('#toastMsg').textContent=msg;
+  $('#toastIcon').textContent=icon;
+  el.classList.add('show');
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer=setTimeout(()=>el.classList.remove('show'), 2800);
+}
+function logln(m){const l=$('#log');l.textContent+=m+'\n';l.scrollTop=l.scrollHeight;}
+function clearLog(){$('#log').textContent='';}
+function probColor(p){
+  // 0% red-ish faint -> high green
+  if(p>=0.25)return'#1f7a3a';if(p>=0.18)return'#2b8a3e';if(p>=0.12)return'#7a8a35';if(p>=0.08)return'#9b7a2f';return'#9a6b6b';
+}
+
+/* ============================ Betslip (interactive) ============================ */
+const SLIP=[]; // [{id,name,game,team,p,odds,dk,fan,autoBest}]
+
+function findGameById(id){
+  return GAMES.find(g=>String(g.id)===String(id)) || null;
+}
+
+function addSlipGP(gid, encName){
+  try{ addToSlipByName(decodeURIComponent(encName), gid); }catch(e){ console.error(e); }
+}
+
+function addToSlipByName(playerName, gameId){
+  const g=findGameById(gameId);
+  if(!g){ toast('Not found','Game not found. Load slate first.','⚠️'); return; }
+  const p=g.players.find(x=>x.name===playerName);
+  if(!p){ toast('Not found','Player not found in that game.','⚠️'); return; }
+  addToSlip(p,g);
+}
+
+function slipDifficulty(joint){
+  if(joint==null) return '—';
+  if(joint>=0.08) return 'Safer';
+  if(joint>=0.04) return 'Spicy';
+  if(joint>=0.015) return 'Longshot';
+  return 'Lotto';
+}
+
+function openSlip(){
+  const d=$('#betslip');
+  if(!d) return;
+  d.classList.remove('hidden');
+}
+function closeSlip(){
+  const d=$('#betslip');
+  if(!d) return;
+  d.classList.add('hidden');
+}
+
+function addToSlip(p, g){
+  const key=`${(g&&g.id)||'g'}::${p.name}::${p.side}`;
+  if(SLIP.some(x=>x.id===key)){
+    toast('Already added', 'That leg is already on your betslip.', 'ℹ️');
+    openSlip();
+    return;
+  }
+  const teamAbbr=(p.side==='home'?(g.homeAbbr||g.home):(g.awayAbbr||g.away))||'';
+  const dk=p._oddsBooks?p._oddsBooks.draftkings:null;
+  const fan=p._oddsBooks?p._oddsBooks.fanatics:null;
+  const autoBest=p._oddsBooks?p._oddsBooks.autoBest:null;
+  SLIP.push({
+    id:key,
+    name:p.name,
+    game:`${g.away} @ ${g.home}`,
+    team:teamAbbr,
+    p:p.p,
+    odds:p.odds,
+    dk, fan, autoBest,
+  });
+  toast('Added', `${p.name} added to betslip.`, '➕');
+  renderSlip();
+  openSlip();
+}
+
+function removeFromSlip(id){
+  const i=SLIP.findIndex(x=>x.id===id);
+  if(i>=0){ SLIP.splice(i,1); renderSlip(); }
+}
+
+function clearSlip(){
+  SLIP.splice(0, SLIP.length);
+  renderSlip();
+}
+
+function slipStats(){
+  if(!SLIP.length) return {joint:null, fairDec:null, bookDec:null};
+  const joint=SLIP.reduce((acc,x)=>acc*clamp(x.p,1e-9,0.999),1);
+  const fairDec=1/joint;
+  const bookDec=SLIP.reduce((acc,x)=>{
+    const d=x.odds!=null?amToDecimal(x.odds):null;
+    return d?acc*d:null;
+  },1);
+  return {joint, fairDec, bookDec};
+}
+
+function slipText(){
+  if(!SLIP.length) return '';
+  return SLIP.map(x=>{
+    const dk=x.dk!=null?(x.dk>0?`+${x.dk}`:`${x.dk}`):'—';
+    const fan=x.fan!=null?(x.fan>0?`+${x.fan}`:`${x.fan}`):'—';
+    const best=x.odds!=null?(x.odds>0?`+${x.odds}`:`${x.odds}`):'—';
+    const bestBook=x.autoBest?(x.autoBest==='draftkings'?'DK':'Fanatics'):'—';
+    return `${x.name} HR | ${x.game} | DK ${dk} | Fanatics ${fan} | Best ${bestBook} ${best} | Model ${fmtPct(x.p)}`;
+  }).join('\n');
+}
+
+function renderSlip(){
+  const sub=$('#betslipSub');
+  const body=$('#betslipBody');
+  if(!sub||!body) return;
+  sub.textContent=`${SLIP.length} leg${SLIP.length===1?'':'s'}`;
+  body.innerHTML=SLIP.length?SLIP.map(x=>{
+    const odds=x.odds!=null?(x.odds>0?`+${x.odds}`:`${x.odds}`):'—';
+    const bestBook=x.autoBest?(x.autoBest==='draftkings'?'DK':'Fanatics'):'—';
+    return `<div class="leg"><div>
+      <div class="nm">${x.name}</div>
+      <div class="meta">${x.game}<br>${x.team} · Model ${fmtPct(x.p)} · Best ${bestBook} ${odds}</div>
+    </div><button class="rm" data-rm="${x.id}" title="Remove">✕</button></div>`;
+  }).join(''):'<div class="help-note">Click <b>Add</b> next to a hitter to build a slip.</div>';
+  $$('#betslipBody [data-rm]').forEach(b=>b.onclick=()=>removeFromSlip(b.dataset.rm));
+
+  const st=slipStats();
+  $('#slipProb').textContent = st.joint==null?'—':fmtPct(st.joint);
+  $('#slipFair').textContent = st.fairDec==null?'—':decToAmerican(st.fairDec);
+  $('#slipOdds').textContent = st.bookDec==null?'—':decToAmerican(st.bookDec);
+  $('#slipDiff').innerHTML = st.joint==null ? '—' : `<span class="badge"><strong>${slipDifficulty(st.joint)}</strong> · ${fmtPct(st.joint)}</span>`;
+}
+
+/* ============================ Fetch layer ============================ */
+async function jget(url){const r=await fetch(url);if(!r.ok)throw new Error('HTTP '+r.status+' '+url);return r.json();}
+
+/* ============================ OddsBlaze (HR props) ============================
+   NOTE: Putting an API key in client-side HTML is NOT secure.
+   This is only appropriate if the file stays on your computer.
+   If fetch fails with a CORS error, you will need a local backend/proxy.
+*/
+// OddsBlaze API key is intentionally NOT stored in the HTML.
+// Run the local proxy (oddsblaze_proxy.py) and set ODDSBLAZE_KEY in your terminal instead.
+const ODDSBLAZE_KEY = "";
+
+function normalizeName(s){
+  return (s||"")
+    .normalize('NFD').replace(/\p{Diacritic}/gu,'') // remove accents (Acuña -> Acuna)
+    .toLowerCase()
+    .replace(/\./g,'')
+    .replace(/\b(jr|sr|ii|iii|iv|v)\b/g,'')
+    .replace(/[^a-z\s-]/g,'')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+
+function parseAmericanOdds(x){
+  const n=Number(String(x||"").trim());
+  return Number.isFinite(n) && n!==0 ? n : null;
+}
+
+function confidenceLabel(p){
+  // Simple, explainable confidence heuristic
+  // - More season PA = more stable HR/PA
+  // - Roof uncertainty = small penalty
+  let score=0;
+  const PA=Number(p.PA||0);
+  if(PA>=350) score+=2;
+  else if(PA>=200) score+=1;
+  else if(PA>=120) score+=0;
+  else score-=1;
+  // retractable roof uncertainty
+  if(p._env && p._env.roof==='retractable') score-=1;
+  if(score>=1) return 'High';
+  if(score>=0) return 'Med';
+  return 'Low';
+}
+
+function confidenceRank(lbl){
+  return lbl==='High'?2:lbl==='Med'?1:0;
+}
+
+function betterAmerican(a,b){
+  // Higher American odds is always better payout (e.g., -105 > -120, +520 > +500)
+  if(a==null) return false;
+  if(b==null) return true;
+  return a>b;
+}
+
+async function fetchOddsBlaze({sportsbook, league}){
+  // Preloaded odds (e.g. injected by the Streamlit wrapper) take priority — no proxy needed.
+  if(typeof window!=='undefined' && window.DL_RAW_ODDS && window.DL_RAW_ODDS[sportsbook]) return window.DL_RAW_ODDS[sportsbook];
+  // Use local proxy to bypass CORS:
+  //   python3 oddsblaze_proxy.py
+  //   then this app calls http://127.0.0.1:8787/oddsblaze
+  const url = new URL('http://127.0.0.1:8787/oddsblaze');
+  url.searchParams.set('sportsbook', sportsbook);
+  url.searchParams.set('league', league);
+  const r = await fetch(url.toString(), { headers: { accept: 'application/json' } });
+  if(!r.ok) throw new Error(`Local proxy HTTP ${r.status} (${sportsbook}, ${league})`);
+  return r.json();
+}
+
+function isAnytimeHrLeg(o){
+  return (
+    o?.market === 'Player Home Runs' &&
+    o?.selection?.side === 'Over' &&
+    o?.selection?.line === 0.5 &&
+    o?.player?.name &&
+    o?.player?.team?.abbreviation &&
+    o?.price != null
+  );
+}
+
+function extractHrOddsByPlayer(payload, bookId){
+  // Map key: "eventId::TEAM::normalizedName" -> { price, sgp, links }
+  const out = new Map();
+  for(const ev of (payload?.events||[])){
+    const eventId = ev?.id;
+    for(const o of (ev?.odds||[])){
+      if(!isAnytimeHrLeg(o)) continue;
+      const teamAbbr = o.player.team.abbreviation;
+      const nameKey = normalizeName(o.player.name);
+      const key = `${eventId}::${teamAbbr}::${nameKey}`;
+      const price = parseAmericanOdds(o.price);
+      if(price==null) continue;
+      out.set(key, { price, sgp: o.sgp||null, links: o.links||null, rawName: o.player.name });
+    }
+  }
+  return out;
+}
+
+async function loadOddsBlazeHrMerged(){
+  const BOOKS = ['draftkings','fanatics','betmgm','caesars'];
+  const results = await Promise.all(BOOKS.map(function(bk){
+    return fetchOddsBlaze({ sportsbook: bk, league: 'mlb' }).catch(function(e){ try{ logln('OddsBlaze: '+bk+' unavailable ('+e.message+')'); }catch(_e){} return null; });
+  }));
+  const merged = new Map();
+  BOOKS.forEach(function(bk, i){
+    if(!results[i]) return;
+    let cnt=0;
+    const m = extractHrOddsByPlayer(results[i], bk);
+    for(const [k,v] of m.entries()){
+      if(!merged.has(k)) merged.set(k, { draftkings:null, fanatics:null, betmgm:null, caesars:null });
+      merged.get(k)[bk] = v; cnt++;
+    }
+    try{ logln('OddsBlaze: '+bk+' → '+cnt+' HR legs.'); }catch(_e){}
+  });
+  return merged;
+}
+
+const LINE_SNAP_KEY = 'dingerlab_line_snapshot_v1';
+function checkLineMovement(){
+  let prev = {};
+  try{ prev = JSON.parse(localStorage.getItem(LINE_SNAP_KEY) || '{}'); }catch(e){ prev = {}; }
+  const now = {}; const moved = [];
+  for(const g of GAMES){
+    for(const p of g.players){
+      if(p.odds==null) continue;
+      const key = normalizeName(p.name);
+      now[key] = p.odds;
+      if(prev[key]!=null && prev[key]!==p.odds){
+        moved.push({ name: p.name, from: prev[key], to: p.odds, delta: p.odds - prev[key] });
+        p._lineMove = p.odds - prev[key];
+      }
+    }
+  }
+  moved.sort(function(a,b){ return Math.abs(b.delta)-Math.abs(a.delta); });
+  try{ localStorage.setItem(LINE_SNAP_KEY, JSON.stringify(now)); }catch(e){}
+  return moved;
+}
+
+function applyOddsToLoadedGames(merged){
+  // Attach best available price to each hitter as p.odds (so EV math works immediately)
+  // Matching uses: gamePk -> event.id mismatch is possible across providers.
+  // To keep it simple, we match ONLY by team + player name across *all events*.
+  // If you run into collisions (rare), we can tighten by date/time.
+
+  // Flatten merged into: teamAbbr::normalizedName -> { dk, fan, bestPrice, bestBook }
+  // IMPORTANT: we keep the best DK and best Fanatics line seen (across events)
+  // instead of picking a single event's snapshot. This avoids accidentally
+  // dropping Fanatics (or DK) for a player when the "bestPrice" snapshot came
+  // from the other book.
+  const byPlayer = new Map();
+  for(const [k,obj] of merged.entries()){
+    // k = eventId::TEAM::nameKey
+    const parts = k.split('::');
+    const teamAbbr = parts[1];
+    const nameKey = parts.slice(2).join('::');
+    const key2 = `${teamAbbr}::${nameKey}`;
+    const dk = obj.draftkings?.price ?? null;
+    const fan = obj.fanatics?.price ?? null;
+    const mgm = obj.betmgm?.price ?? null;
+    const cae = obj.caesars?.price ?? null;
+
+    const cur = byPlayer.get(key2) || { dk: null, fan: null, mgm: null, cae: null, bestPrice: null, bestBook: null };
+    // keep best line per-book
+    if(dk!=null && betterAmerican(dk, cur.dk)) cur.dk = dk;
+    if(fan!=null && betterAmerican(fan, cur.fan)) cur.fan = fan;
+    if(mgm!=null && betterAmerican(mgm, cur.mgm)) cur.mgm = mgm;
+    if(cae!=null && betterAmerican(cae, cur.cae)) cur.cae = cae;
+
+    // recompute best across books
+    let bestBook = null;
+    let bestPrice = null;
+    [['draftkings',cur.dk],['fanatics',cur.fan],['betmgm',cur.mgm],['caesars',cur.cae]].forEach(function(pr){
+      if(pr[1]!=null && betterAmerican(pr[1], bestPrice)){ bestPrice = pr[1]; bestBook = pr[0]; }
+    });
+    cur.bestBook = bestBook;
+    cur.bestPrice = bestPrice;
+
+    if(cur.bestPrice!=null) byPlayer.set(key2, cur);
+  }
+
+  let applied=0, total=0;
+  for(const g of GAMES){
+    for(const p of g.players){
+      total++;
+      const teamAbbr = (p.side==='home' ? g.homeAbbr : g.awayAbbr) || '';
+      const nameKey = normalizeName(p.name);
+      const hit = byPlayer.get(`${teamAbbr}::${nameKey}`);
+      if(hit){
+        p.odds = hit.bestPrice; // existing UI shows "Book" as a single number
+        // optionally stash detail if you later want an odds board
+        p._oddsBooks = { draftkings: hit.dk, fanatics: hit.fan, betmgm: hit.mgm, caesars: hit.cae, autoBest: hit.bestBook };
+        applied++;
+      }
+    }
+  }
+  const _moved = checkLineMovement();
+  recomputeAll();
+  if(_moved && _moved.length){ const top=_moved.slice(0,3).map(function(m){return m.name+' '+(m.delta>0?'+':'')+m.delta;}).join(', '); try{ toast('Line movement', _moved.length+' price change(s) since last load. Biggest: '+top, '⚡'); }catch(_e){} }
+  return { applied, total };
+}
+
+async function loadSlate(dateStr){
+  if($('#srcSelect').value==='manual'){setStatus('Manual mode selected — use the Manual entry tab or the sample game.');return;}
+  clearLog();setStatus('Fetching MLB schedule…',true);GAMES=[];
+  try{
+    const sched=await jget(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateStr}&hydrate=probablePitcher(note),team,venue,linescore`);
+    const dates=sched.dates||[];
+    const gamesRaw=dates.length?dates[0].games:[];
+    if(!gamesRaw.length){setStatus('No MLB games scheduled for '+dateStr+'. Try another date or the sample game.');renderGames();return;}
+    logln(`Found ${gamesRaw.length} games on ${dateStr}.`);
+    // gather unique teams
+    for(let gi=0; gi<gamesRaw.length; gi++){
+      const g=gamesRaw[gi];
+      const homeT=g.teams.home.team, awayT=g.teams.away.team;
+      setStatus(`Loading game ${gi+1}/${gamesRaw.length}: ${awayT.name} @ ${homeT.name}…`,true);
+      const homePark=PARKS[homeT.id]||{team:homeT.name,park:(g.venue&&g.venue.name)||'Unknown',hr:100,cf:null,roof:'open',lat:null,lon:null,elev:0};
+      const dayNight=(g.dayNight==='day')?'day':'night';
+      // probable pitchers
+      const homePP=g.teams.home.probablePitcher, awayPP=g.teams.away.probablePitcher;
+      // away hitters face HOME probable pitcher; home hitters face AWAY probable pitcher
+      const homePitcher=await pitcherInfo(homePP);   // faced by away hitters
+      const awayPitcher=await pitcherInfo(awayPP);   // faced by home hitters
+
+      // bullpen HR/9 (simple season team pitching stat minus starter is hard; we use team pitching HR/9 as proxy)
+      const homeBullpenHR9 = await teamPitchingHR9(homeT.id);
+      const awayBullpenHR9 = await teamPitchingHR9(awayT.id);
+      // weather
+      let wx=await getWeather(homePark, g.gameDate);
+      const env={park:homePark.park,parkHR:homePark.hr,cf:homePark.cf,roof:homePark.roof,
+                 temp:wx.temp,windSpeed:wx.wind,windDir:wx.windDir,humidity:wx.humidity,
+                 dayNight,roofClosed:(homePark.roof!=='open'&&(wx.temp>88||wx.temp<50||wx.precip>40)),
+                 lineupsConfirmed: window.DL_LINEUPS_CONFIRMED===true};
+      // rosters with season hitting
+      // For home hitters (facing away starter), use away team's pitching HR/9 proxy as bullpen too.
+      const homeEnv = Object.assign({}, env, { bullpenHR9: awayBullpenHR9 });
+      const awayEnv = Object.assign({}, env, { bullpenHR9: homeBullpenHR9 });
+
+      const homeHitters=await teamHitters(homeT.id, 'home', awayPitcher, homeEnv);
+      const awayHitters=await teamHitters(awayT.id, 'away', homePitcher, awayEnv);
+      GAMES.push({id:g.gamePk, gameDate:g.gameDate, startTs:Date.parse(g.gameDate), away:awayT.name, home:homeT.name, awayAbbr:awayT.abbreviation||'', homeAbbr:homeT.abbreviation||'',
+        env, wx, homePitcher, awayPitcher, players:[...awayHitters,...homeHitters]});
+      logln(`  ${awayT.name} @ ${homeT.name}: ${awayHitters.length+homeHitters.length} hitters, ${wx.summary}`);
+    }
+    setStatus(`Loaded ${GAMES.length} games. Probabilities computed.`);
+    renderGames();
+  }catch(e){
+    console.error(e);
+    setStatus('Could not load live data ('+e.message+'). Your browser may block cross-site requests — try the sample game or Manual entry.');
+    logln('ERROR: '+e.message);
+  }
+}
+
+async function teamPitchingHR9(teamId){
+  // Uses MLB team season pitching totals as a simple bullpen proxy.
+  // It's not perfect, but better than ignoring bullpen completely.
+  try{
+    const data=await jget(`{{https://statsapi.mlb.com/api/v1/teams/${teamId}/stats}}?stats=season&group=pitching`);
+    const split=data.stats&&data.stats[0]&&data.stats[0].splits&&data.stats[0].splits[0];
+    if(!split||!split.stat) return LEAGUE_HR9;
+    const ip=parseFloat(split.stat.inningsPitched||'0');
+    const hr=split.stat.homeRuns||0;
+    if(ip>0) return hr*9/ip;
+    return LEAGUE_HR9;
+  }catch(e){
+    return LEAGUE_HR9;
+  }
+}
+
+async function pitcherInfo(pp){
+  if(!pp||!pp.id)return {hand:'R',hr9:LEAGUE_HR9,name:'TBD'};
+  try{
+    const data=await jget(`https://statsapi.mlb.com/api/v1/people/${pp.id}?hydrate=stats(group=[pitching],type=[season])`);
+    const per=data.people[0];
+    const hand=(per.pitchHand&&per.pitchHand.code)||'R';
+    let hr9=LEAGUE_HR9, name=per.fullName||pp.fullName;
+    const sp=per.stats&&per.stats[0]&&per.stats[0].splits&&per.stats[0].splits[0];
+    if(sp&&sp.stat){const ip=parseFloat(sp.stat.inningsPitched||'0');const hr=sp.stat.homeRuns||0;if(ip>0)hr9=hr*9/ip;}
+    return {hand,hr9,name};
+  }catch(e){return {hand:'R',hr9:LEAGUE_HR9,name:pp.fullName||'TBD'};}
+}
+
+async function teamHitters(teamId, side, oppPitcher, env){
+  let out=[];
+  try{
+    const ros=await jget(`https://statsapi.mlb.com/api/v1/teams/${teamId}/roster?rosterType=active&hydrate=person(stats(type=season,group=hitting))`);
+    let spot=0;
+    for(const r of (ros.roster||[])){
+      const pos=r.position&&r.position.abbreviation;
+      if(pos==='P')continue; // skip pitchers as hitters
+      const per=r.person;
+      const st=per.stats&&per.stats[0]&&per.stats[0].splits&&per.stats[0].splits[0]&&per.stats[0].splits[0].stat;
+      if(!st)continue;
+      const PA=st.plateAppearances||0, HR=st.homeRuns||0;
+      if(PA<30)continue; // ignore tiny samples
+      spot++;
+      const bats=(per.batSide&&per.batSide.code)||'R';
+      out.push(makePlayer({name:per.fullName,mlbId:per.id,side,bats,HR,PA,recHR:0,recPA:0,spot:Math.min(spot,9),
+        oppHand:oppPitcher.hand,oppHR9:oppPitcher.hr9},env));
+    }
+    // keep top 9 by projected probability per team (likely starters)
+    out.sort((a,b)=>b.calc.perPA-a.calc.perPA);
+    out=out.slice(0,9).map((p,i)=>{p.spot=i+1;p.calc=playerHRProb(p,p._env);p.p=p.calc.p;return p;});
+  }catch(e){logln('  roster error team '+teamId+': '+e.message);}
+  return out;
+}
+
+function makePlayer(o,env){
+  const pl={name:o.name,side:o.side,bats:o.bats,HR:o.HR,PA:o.PA,recHR:o.recHR||0,recPA:o.recPA||0,spot:o.spot||5,
+    oppHand:o.oppHand||'R',oppHR9:o.oppHR9||LEAGUE_HR9,odds:o.odds||null};
+  const e2=Object.assign({},env,{oppHand:pl.oppHand,oppHR9:pl.oppHR9});
+  pl._env=e2;pl.calc=playerHRProb(pl,e2);pl.p=pl.calc.p;return pl;
+}
+
+async function getWeather(park, gameDateISO){
+  const fallback={temp:72,wind:6,windDir:park.cf!=null?park.cf:0,humidity:50,precip:0,summary:'weather n/a (defaults)'};
+  if(park.lat==null)return fallback;
+  if(park.roof==='dome')return {temp:72,wind:0,windDir:0,humidity:50,precip:0,summary:'dome (controlled)'};
+  try{
+    const d=new Date(gameDateISO);const ymd=d.toISOString().slice(0,10);
+    const u=`https://api.open-meteo.com/v1/forecast?latitude=${park.lat}&longitude=${park.lon}&hourly=temperature_2m,relative_humidity_2m,precipitation_probability,wind_speed_10m,wind_direction_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&start_date=${ymd}&end_date=${ymd}&timezone=auto`;
+    const w=await jget(u);
+    const hrIdx=Math.max(0,Math.min(23,d.getHours()));
+    const H=w.hourly;
+    return {temp:Math.round(H.temperature_2m[hrIdx]),wind:Math.round(H.wind_speed_10m[hrIdx]),
+      windDir:H.wind_direction_10m[hrIdx],humidity:H.relative_humidity_2m[hrIdx],
+      precip:H.precipitation_probability?H.precipitation_probability[hrIdx]:0,
+      summary:`${Math.round(H.temperature_2m[hrIdx])}°F, wind ${Math.round(H.wind_speed_10m[hrIdx])}mph`};
+  }catch(e){return fallback;}
+}
+
+/* ============================ Parlay engine ============================ */
+function bestBookDecimalForTwoLeg(a,b){
+  const aDK=a._oddsBooks?a._oddsBooks.draftkings:null;
+  const bDK=b._oddsBooks?b._oddsBooks.draftkings:null;
+  const aFAN=a._oddsBooks?a._oddsBooks.fanatics:null;
+  const bFAN=b._oddsBooks?b._oddsBooks.fanatics:null;
+  const dkDec = (aDK!=null && bDK!=null) ? (amToDecimal(aDK)*amToDecimal(bDK)) : null;
+  const fanDec = (aFAN!=null && bFAN!=null) ? (amToDecimal(aFAN)*amToDecimal(bFAN)) : null;
+  if(dkDec!=null && fanDec!=null) return {dec: Math.max(dkDec, fanDec), book: (dkDec>=fanDec?'draftkings':'fanatics'), dkDec, fanDec};
+  if(dkDec!=null) return {dec: dkDec, book: 'draftkings', dkDec, fanDec};
+  if(fanDec!=null) return {dec: fanDec, book: 'fanatics', dkDec, fanDec};
+  return {dec: null, book: null, dkDec, fanDec};
+}
+
+function bestPairs(game){
+  const ps=game.players;const pairs=[];
+  for(let i=0;i<ps.length;i++)for(let j=i+1;j<ps.length;j++){
+    const a=ps[i],b=ps[j];const sameTeam=a.side===b.side;
+    const joint=jointHRprob(a.p,b.p,sameTeam);
+    const fairDec=joint>0?1/joint:null;
+    let bookDec=null,ev=null,edge=null;
+    if(a.odds&&b.odds){const dA=amToDecimal(a.odds),dB=amToDecimal(b.odds);if(dA&&dB){bookDec=dA*dB;ev=joint*(bookDec-1)-(1-joint);edge=joint-1/bookDec;}}
+
+    const bestBook=bestBookDecimalForTwoLeg(a,b);
+    const sameBookBestDec = bestBook.dec;
+
+    // High-chance + big-payout score.
+    // Uses same-book payout when available (placeable). Falls back to mixed-books payout.
+    const payoutDec = sameBookBestDec!=null ? sameBookBestDec : bookDec;
+    const score = payoutDec!=null ? (joint * payoutDec) : joint;
+
+    pairs.push({a,b,sameTeam,joint,fairDec,bookDec,ev,edge,sameBookBestDec,score});
+  }
+
+  // Rank by "best mix" of probability and payout.
+  // Tie-breaker: higher joint probability.
+  pairs.sort((x,y)=>{
+    const ax = x.score==null ? -Infinity : x.score;
+    const ay = y.score==null ? -Infinity : y.score;
+    if(ay!==ax) return ay-ax;
+    return y.joint-x.joint;
+  });
+  return pairs;
+}
+
+// Cross-game (independent) parlay pairs across the whole slate.
+// Since the legs are in different games, correlation is ~0, so joint = pA * pB.
+function bestPairsAcrossSlate(allGames, topN=20){
+  const legs=[];
+  for(const g of allGames){
+    for(const p of g.players){
+      // require odds on at least one book so payouts can be computed
+      if(!p._oddsBooks) continue;
+      if(p._oddsBooks.draftkings==null && p._oddsBooks.fanatics==null) continue;
+      legs.push({game:g, p});
+    }
+  }
+  // keep only top legs by probability to avoid O(n^2) explosion
+  legs.sort((a,b)=>b.p.p-a.p.p);
+  const maxLegs=60;
+  const L=legs.slice(0,maxLegs);
+  const pairs=[];
+  for(let i=0;i<L.length;i++)for(let j=i+1;j<L.length;j++){
+    const A=L[i], B=L[j];
+    if(A.game.id===B.game.id) continue; // different games only
+    const a=A.p, b=B.p;
+    const joint=clamp(a.p*b.p,1e-9,0.999);
+    const fairDec=1/joint;
+    const bestBook=bestBookDecimalForTwoLeg(a,b);
+    const sameBookBestDec=bestBook.dec;
+    const payoutDec = sameBookBestDec!=null ? sameBookBestDec : (a.odds&&b.odds ? amToDecimal(a.odds)*amToDecimal(b.odds) : null);
+    const score = payoutDec!=null ? (joint * payoutDec) : joint;
+    pairs.push({
+      a, b,
+      aGameObj: A.game,
+      bGameObj: B.game,
+      earliestStartTs: Math.min(A.game.startTs||Infinity, B.game.startTs||Infinity),
+      aGame: `${A.game.away} @ ${A.game.home}`,
+      bGame: `${B.game.away} @ ${B.game.home}`,
+      joint,
+      fairDec,
+      sameBookBestDec,
+      bestBook: bestBook.book,
+      score
+    });
+  }
+  // Sort early games -> late games, then by score
+  pairs.sort((x,y)=>{
+    const ax=x.earliestStartTs||Infinity;
+    const ay=y.earliestStartTs||Infinity;
+    if(ax!==ay) return ax-ay;
+    return y.score-x.score;
+  });
+  return pairs.slice(0, topN);
+}
+
+// Build N-leg cross-game parlays from a shortlist using a simple beam search.
+// - Different games only (at most 1 leg per game)
+// - Assumes independence across games: joint = Π p_i
+// - Uses best same-book payout when possible; otherwise uses mixed-books product.
+function buildCrossGameParlays(allGames, {
+  legs=3,
+  topLegs=60,
+  minLegP=0.12,
+  minComboP=0.01,
+  mode='mix',
+  priceMode='best',
+  minConf=0,
+  maxOnePerGame=true,
+  beamSize=200,
+  outN=12,
+}={}){
+  const candidates=[];
+  for(const g of allGames){
+    for(const p of g.players){
+      if(p.p==null) continue;
+      if(p.p < minLegP) continue;
+      if(confidenceRank(confidenceLabel(p)) < minConf) continue;
+      if(!p._oddsBooks) continue;
+      if(p._oddsBooks.draftkings==null && p._oddsBooks.fanatics==null) continue;
+      candidates.push({g, p});
+    }
+  }
+  candidates.sort((a,b)=>b.p.p-a.p.p);
+  const L=candidates.slice(0, topLegs);
+  if(L.length < legs) return [];
+
+  // Each beam item: { picks:[{g,p}], usedGameIds:Set, joint, sameBookBestDec, mixedDec }
+  let beam=[{picks:[], used:new Set(), joint:1, sameBookBestDec:1, mixedDec:1}];
+  for(let step=0; step<legs; step++){
+    const next=[];
+    for(const b of beam){
+      const lastIdx = (b.lastIdx==null) ? -1 : b.lastIdx;
+      for(let ci=0; ci<L.length; ci++){
+        const it=L[ci];
+        if(ci <= lastIdx) continue; // strictly increasing => no duplicate legs, no reversed-order dupes
+        if(maxOnePerGame && b.used.has(it.g.id)) continue;
+        // add pick
+        const picks=b.picks.concat([it]);
+        const used=new Set(b.used); used.add(it.g.id);
+        const joint=b.joint * it.p.p;
+
+        // update decimal odds depending on pricing mode
+        let legDec=null;
+        if(priceMode==='draftkings') legDec = it.p._oddsBooks.draftkings!=null ? amToDecimal(it.p._oddsBooks.draftkings) : null;
+        else if(priceMode==='fanatics') legDec = it.p._oddsBooks.fanatics!=null ? amToDecimal(it.p._oddsBooks.fanatics) : null;
+        else legDec = it.p.odds!=null ? amToDecimal(it.p.odds) : null; // best per leg (mix)
+
+        // mixed-books decimal product (or single-book if priceMode forced)
+        const legBestDec = legDec;
+        const mixedDec = legBestDec!=null ? (b.mixedDec * legBestDec) : null;
+
+        // update same-book best decimal: for N legs, compute DK product and FAN product
+        // by carrying per-book products in the object (simple and effective).
+        const dkProd = (b.dkProd!=null ? b.dkProd : 1) * (it.p._oddsBooks.draftkings!=null ? amToDecimal(it.p._oddsBooks.draftkings) : NaN);
+        const fanProd = (b.fanProd!=null ? b.fanProd : 1) * (it.p._oddsBooks.fanatics!=null ? amToDecimal(it.p._oddsBooks.fanatics) : NaN);
+        const dkOk = Number.isFinite(dkProd);
+        const fanOk = Number.isFinite(fanProd);
+        let sameBookBestDec = null;
+        let sameBookBest = null;
+        if(dkOk && fanOk){ sameBookBestDec = Math.max(dkProd, fanProd); sameBookBest = dkProd>=fanProd?'draftkings':'fanatics'; }
+        else if(dkOk){ sameBookBestDec = dkProd; sameBookBest = 'draftkings'; }
+        else if(fanOk){ sameBookBestDec = fanProd; sameBookBest = 'fanatics'; }
+
+        // scoring
+        const payoutDec = sameBookBestDec!=null ? sameBookBestDec : mixedDec;
+        let score=joint;
+        if(mode==='chance') score = joint;
+        else if(mode==='payout') score = payoutDec!=null ? payoutDec : -Infinity;
+        else score = payoutDec!=null ? (joint * payoutDec) : joint;
+
+        next.push({
+          picks, used,
+          lastIdx: ci,
+          joint,
+          mixedDec,
+          dkProd: dkOk ? dkProd : null,
+          fanProd: fanOk ? fanProd : null,
+          sameBookBestDec,
+          sameBookBest,
+          score,
+        });
+      }
+    }
+    // keep best beam items
+    next.sort((x,y)=>y.score-x.score);
+    beam=next.slice(0, beamSize);
+  }
+
+  // final filter + format
+  const out=[];
+  for(const b of beam){
+    if(b.picks.length!==legs) continue;
+    if(b.joint < minComboP) continue;
+    out.push(b);
+  }
+  out.sort((x,y)=>y.score-x.score);
+  return out.slice(0, outN);
+}
+
+/* ============================ Renderers ============================ */
+function renderGames(){
+  const all=[...GAMES];
+  if(MANUAL.meta&&MANUAL.players.length)all.unshift(buildManualGame());
+  const c=$('#gamesContainer');
+
+  // Global cross-game suggestions (only for real slate, not manual/sample-only)
+  const gc=$('#globalPairsContainer');
+  const bc=$('#builderCard');
+  if(GAMES.length>=2){
+    bc.style.display='';
+    const best=bestPairsAcrossSlate(GAMES, 12);
+    if(best.length){
+      gc.innerHTML=`<div class="game-card open"><div class="game-body" style="display:block;padding:18px">
+        <div class="section-title">🌍 Cross-game parlay pairs (different games)</div>
+        <p class="help-note">These pairs are from <b>different games</b> (near-independent). Ranked for high chance + payout using same-book odds when available.</p>
+        <div class="parlay-grid">${best.map((pr,k)=>globalParlayCardHTML(pr,k+1)).join('')}</div>
+      </div></div>`;
+    } else {
+      gc.innerHTML='';
+    }
+  } else {
+    gc.innerHTML='';
+    bc.style.display='none';
+  }
+
+  if(!all.length){c.innerHTML='<div class="empty">No games loaded yet. Use <b>Load MLB slate</b> for live data, or <b>Load sample game</b> to explore.</div>';return;}
+  c.innerHTML=all.map((g,gi)=>gameCardHTML(g,gi)).join('');
+  // wire toggles
+  $$('#gamesContainer .game-head').forEach(h=>h.onclick=()=>h.parentElement.classList.toggle('open'));
+}
+
+function globalParlayCardHTML(pr,rank){
+  const bookLine = pr.sameBookBestDec ? (pr.bestBook==='draftkings'?'DK':'Fanatics') + ' ' + decToAmerican(pr.sameBookBestDec) : '—';
+  const tA = pr.aGameObj && pr.aGameObj.gameDate ? fmtLocalTime(pr.aGameObj.gameDate) : '';
+  const tB = pr.bGameObj && pr.bGameObj.gameDate ? fmtLocalTime(pr.bGameObj.gameDate) : '';
+  const aImg = headshotUrl(pr.a && pr.a.mlbId);
+  const bImg = headshotUrl(pr.b && pr.b.mlbId);
+  const _dec = pr.sameBookBestDec || null;
+  const _ev = parlayEV(calibratedJoint(pr.joint, weakestTier([confidenceLabel(pr.a),confidenceLabel(pr.b)])),_dec);
+  const _evTxt = _ev==null ? '—' : ((_ev>=0?'+':'')+(_ev*100).toFixed(1)+'%');
+  const _evCls = _ev==null ? '' : (_ev>=0?'ev-pos':'ev-neg');
+  const _ctier = weakestTier([confidenceLabel(pr.a),confidenceLabel(pr.b)]);
+  const _cj = calibratedJoint(pr.joint, _ctier);
+  const _stk = _dec ? suggestStake(_cj,_dec) : null;
+  const _stkTxt = (_stk && _stk.stake>0) ? ('$'+_stk.stake.toFixed(2)+' · '+(STAKE.kelly*100).toFixed(0)+'% Kelly') : 'No bet (−EV)';
+  const _wk = weakestTier([confidenceLabel(pr.a),confidenceLabel(pr.b)]);
+  const _reasons = Array.from(new Set([].concat(confidenceReasons(pr.a), confidenceReasons(pr.b)))).join(' · ');
+  const _wkCol = tierColor(_wk);
+  return `<div class="parlay-card r${rank}"><span class="rank">#${rank}</span>
+    <h4>
+      <span class="nameRow">
+        ${aImg?`<img class="avatar" src="${aImg}" alt="" onerror="this.style.display='none'">`:''}
+        ${pr.a.name}
+        <span class="notion-faint">+</span>
+        ${bImg?`<img class="avatar" src="${bImg}" alt="" onerror="this.style.display='none'">`:''}
+        ${pr.b.name}
+      </span>
+    </h4>
+    <div class="parlay-stat"><span class="lbl">Game (A)</span><span class="val">${pr.aGame}${tA?` · ${tA}`:''}</span></div>
+    <div class="parlay-stat"><span class="lbl">Game (B)</span><span class="val">${pr.bGame}${tB?` · ${tB}`:''}</span></div>
+    <div class="parlay-stat"><span class="lbl">${pr.a.name}</span><span class="val">${fmtPct(pr.a.p)}</span></div>
+    <div class="parlay-stat"><span class="lbl">${pr.b.name}</span><span class="val">${fmtPct(pr.b.p)}</span></div>
+    <div class="parlay-stat"><span class="lbl">Combined (independent)</span><span class="val">${fmtPct(pr.joint)}</span></div>
+    <div class="parlay-stat"><span class="lbl">Calibrated win %</span><span class="val">${fmtPct(_cj)}${_cj!==pr.joint?' <span class="notion-faint">(tuned)</span>':''}</span></div>
+    <div class="parlay-stat"><span class="lbl">Fair parlay odds</span><span class="val">${decToAmerican(pr.fairDec)}</span></div>
+    <div class="parlay-stat"><span class="lbl">Best same-book</span><span class="val">${bookLine}</span></div>
+    <div class="parlay-stat"><span class="lbl">Expected value</span><span class="val ${_evCls}">${_evTxt}</span></div>
+    <div class="parlay-stat"><span class="lbl">Suggested stake</span><span class="val">${_stkTxt}</span></div>
+    <div class="parlay-stat"><span class="lbl">Confidence</span><span class="val"><span class="chip" style="background:${_wkCol}22;color:${_wkCol}" title="${_reasons||'No standout factors'}">${_wk}</span> <span class="notion-faint">weakest leg</span></span></div>
+    <div class="parlay-stat"><span class="lbl">Add to betslip</span><span class="val"><button class="ghost" style="padding:2px 10px" onclick="addSlipGP('${pr.aGameObj.id}','${encodeURIComponent(pr.a.name)}'); addSlipGP('${pr.bGameObj.id}','${encodeURIComponent(pr.b.name)}');">Add both</button></span></div>
+  </div>`;
+}
+
+function gameCardHTML(g,gi){
+  const e=g.env;const wx=g.wx||{};
+  const pairs=bestPairs(g).slice(0,3);
+  const top=pairs.map((pr,k)=>parlayCardHTML(pr,k+1)).join('');
+  // players table sorted by prob
+  const sorted=[...g.players].sort((a,b)=>b.p-a.p);
+  const rows=sorted.map(p=>playerRowHTML(p,g)).join('');
+  const roofTxt=e.roof==='dome'?'Dome':(e.roof==='retractable'?(e.roofClosed?'Roof closed':'Retractable (open)'):'Open air');
+  return `<div class="game-card ${gi===0?'open':''}">
+    <div class="game-head">
+      <span class="caret">▶</span>
+      <div><div class="game-matchup">${g.away} @ ${g.home}</div>
+      <div class="game-meta">
+        <span class="chip">🏟️ ${e.park}</span>
+        <span class="chip">PF ${e.parkHR}</span>
+        <span class="chip">🌡️ ${wx.temp!=null?wx.temp+'°F':'n/a'}</span>
+        <span class="chip">💨 ${wx.wind!=null?wx.wind+'mph':'n/a'}</span>
+        <span class="chip">${e.dayNight==='day'?'☀️ Day':'🌙 Night'}</span>
+        <span class="chip">${roofTxt}</span>
+      </div></div>
+    </div>
+    <div class="game-body">
+      <div class="env-grid">
+        <div class="env-cell"><div class="k">Park HR factor</div><div class="v">${e.parkHR}</div><div class="s">${e.parkHR>=105?'Hitter-friendly':e.parkHR<=96?'Pitcher-friendly':'Neutral'}</div></div>
+        <div class="env-cell"><div class="k">Temperature</div><div class="v">${wx.temp!=null?wx.temp+'°F':'—'}</div><div class="s">${wx.temp>=80?'Ball carries':wx.temp<=55?'Dead air':'Average'}</div></div>
+        <div class="env-cell"><div class="k">Wind</div><div class="v">${wx.wind!=null?wx.wind+' mph':'—'}</div><div class="s">${windDesc(e,wx)}</div></div>
+        <div class="env-cell"><div class="k">Humidity</div><div class="v">${wx.humidity!=null?wx.humidity+'%':'—'}</div><div class="s">&nbsp;</div></div>
+        <div class="env-cell"><div class="k">Away SP faced by home</div><div class="v" style="font-size:13px">${g.awayPitcher?g.awayPitcher.name:'TBD'}</div><div class="s">${g.awayPitcher?g.awayPitcher.hr9.toFixed(2)+' HR/9':''}</div></div>
+        <div class="env-cell"><div class="k">Home SP faced by away</div><div class="v" style="font-size:13px">${g.homePitcher?g.homePitcher.name:'TBD'}</div><div class="s">${g.homePitcher?g.homePitcher.hr9.toFixed(2)+' HR/9':''}</div></div>
+      </div>
+
+      <div class="section-title">🏆 Top parlay pairs — most likely to both homer</div>
+      <div class="parlay-grid">${top||'<div class="help-note">Add at least two hitters to see pairs.</div>'}</div>
+      <div class="legend">Combined % = joint probability both homer (Gaussian-copula, ρ=${g.players.some(p=>true)?CFG.corrTeammates:''} teammates / ${CFG.corrOpponents} opponents). Fair odds = 1 / combined %. EV shown only when both hitters have prop odds entered.</div>
+
+      <div class="section-title">Individual hitter probabilities</div>
+      <table class="players"><thead><tr>
+        <th>Hitter</th><th>Team</th><th class="num">Spot</th><th class="num">HR/PA</th><th class="num">HR%</th><th class="num">Fair</th><th class="num">DK</th><th class="num">Fanatics</th><th class="num">Best</th><th class="num">Edge</th><th></th><th></th>
+      </tr></thead><tbody>${rows}</tbody></table>
+    </div>
+  </div>`;
+}
+
+function windDesc(e,wx){
+  if(e.roof==='dome'||e.roofClosed)return'Indoors';
+  if(wx.wind==null||e.cf==null||wx.windDir==null)return'—';
+  const ang=Math.cos(toRad(wx.windDir-e.cf));const out=wx.wind*ang;
+  if(out>3)return'Blowing out ↑';if(out<-3)return'Blowing in ↓';return'Crosswind';
+}
+
+function parlayCardHTML(pr,rank){
+  const evTxt=pr.ev!=null?`<span class="${pr.ev>0?'ev-pos':'ev-neg'}">${pr.ev>0?'+':''}${(pr.ev*100).toFixed(1)}%</span>`:'—';
+  const bookTxt=pr.bookDec?decToAmerican(pr.bookDec):'—';
+  const aBook=(pr.a && pr.a._oddsBooks && pr.a._oddsBooks.autoBest)?pr.a._oddsBooks.autoBest:null;
+  const bBook=(pr.b && pr.b._oddsBooks && pr.b._oddsBooks.autoBest)?pr.b._oddsBooks.autoBest:null;
+  const aLine=(pr.a && pr.a.odds!=null)?(pr.a.odds>0?`+${pr.a.odds}`:`${pr.a.odds}`):'—';
+  const bLine=(pr.b && pr.b.odds!=null)?(pr.b.odds>0?`+${pr.b.odds}`:`${pr.b.odds}`):'—';
+  const aBookTxt=aBook?`(${aBook === 'draftkings' ? 'DK' : 'Fanatics'} ${aLine})`:'';
+  const bBookTxt=bBook?`(${bBook === 'draftkings' ? 'DK' : 'Fanatics'} ${bLine})`:'';
+
+  // Same-book parlay comparison (what you'd get if you must place both legs in one app)
+  const aDK=pr.a && pr.a._oddsBooks ? pr.a._oddsBooks.draftkings : null;
+  const bDK=pr.b && pr.b._oddsBooks ? pr.b._oddsBooks.draftkings : null;
+  const aFAN=pr.a && pr.a._oddsBooks ? pr.a._oddsBooks.fanatics : null;
+  const bFAN=pr.b && pr.b._oddsBooks ? pr.b._oddsBooks.fanatics : null;
+
+  const dkDec = (aDK!=null && bDK!=null) ? (amToDecimal(aDK)*amToDecimal(bDK)) : null;
+  const fanDec = (aFAN!=null && bFAN!=null) ? (amToDecimal(aFAN)*amToDecimal(bFAN)) : null;
+  const dkPar = dkDec ? decToAmerican(dkDec) : '—';
+  const fanPar = fanDec ? decToAmerican(fanDec) : '—';
+  let bestSameBook = '—';
+  if(dkDec && fanDec) bestSameBook = dkDec>=fanDec ? `DK ${dkPar}` : `Fanatics ${fanPar}`;
+  else if(dkDec) bestSameBook = `DK ${dkPar}`;
+  else if(fanDec) bestSameBook = `Fanatics ${fanPar}`;
+
+  return `<div class="parlay-card r${rank}"><span class="rank">#${rank}</span>
+    <h4>${pr.a.name} <span class="notion-faint">+</span> ${pr.b.name}</h4>
+    <div class="parlay-stat"><span class="lbl">${pr.a.name}</span><span class="val">${fmtPct(pr.a.p)}</span></div>
+    <div class="parlay-stat"><span class="lbl">${pr.b.name}</span><span class="val">${fmtPct(pr.b.p)}</span></div>
+    <div class="parlay-stat"><span class="lbl">Best books used</span><span class="val">${aBookTxt} + ${bBookTxt}</span></div>
+    <div class="parlay-stat"><span class="lbl">Combined (both HR)</span><span class="val">${fmtPct(pr.joint)}</span></div>
+    <div class="parlay-stat"><span class="lbl">Fair parlay odds</span><span class="val">${pr.fairDec?decToAmerican(pr.fairDec):'—'}</span></div>
+    <div class="parlay-stat"><span class="lbl">Book parlay odds</span><span class="val">${bookTxt}</span></div>
+    <div class="parlay-stat"><span class="lbl">Same-book parlay</span><span class="val">${bestSameBook}</span></div>
+    <div class="parlay-stat"><span class="lbl">Expected value</span><span class="val">${evTxt}</span></div>
+    <div class="parlay-stat"><span class="lbl">Type</span><span class="val">${pr.sameTeam?'Teammates':'Opponents'}</span></div>
+  </div>`;
+}
+
+function playerRowHTML(p,g){
+  const c=p.calc;const f=c.factors;
+  const dk = p._oddsBooks && p._oddsBooks.draftkings!=null ? p._oddsBooks.draftkings : null;
+  const fan = p._oddsBooks && p._oddsBooks.fanatics!=null ? p._oddsBooks.fanatics : null;
+  const best = p.odds!=null ? p.odds : null;
+  const impl=best?amToImplied(best):null;
+  const edge=impl!=null?p.p-impl:null;
+  const fairAm=decToAmerican(1/p.p);
+  const fb=k=>`<div class="factor-row"><span>${k.label}</span><span class="mult ${k.v>1.001?'up':k.v<0.999?'down':''}">×${k.v.toFixed(3)}</span></div>`;
+  const factorsHTML=[
+    {label:'Park',v:f.park},{label:'Opposing pitcher',v:f.pitcher},{label:'Handedness/platoon',v:f.platoon},
+    {label:'Temperature',v:f.temp},{label:'Wind',v:f.wind},{label:'Humidity',v:f.humidity},{label:'Day/Night',v:f.daynight}
+  ].map(fb).join('');
+  return `<tr>
+    <td>${p.name} <span class="handed">(${p.bats})</span></td>
+    <td>${p.side==='home'?g.homeAbbr||g.home:g.awayAbbr||g.away}</td>
+    <td class="num">${p.spot}</td>
+    <td class="num">${(c.perPA*100).toFixed(2)}%</td>
+    <td class="num"><span class="prob-pill" style="background:${probColor(p.p)}22;color:${probColor(p.p)}">${fmtPct(p.p)}</span><div class="bar-mini"><span style="width:${clamp(p.p/0.30*100,3,100)}%"></span></div></td>
+    <td class="num">${fairAm}</td>
+    <td class="num">${dk!=null?(dk>0?'+'+dk:dk):'—'}</td>
+    <td class="num">${fan!=null?(fan>0?'+'+fan:fan):'—'}</td>
+    <td class="num">${best!=null?(best>0?'+'+best:best):'—'}</td>
+    <td class="num">${edge!=null?`<span class="${edge>0?'ev-pos':'ev-neg'}">${edge>0?'+':''}${(edge*100).toFixed(1)}%</span>`:'—'}</td>
+    <td><details class="breakdown"><summary>factors</summary>${factorsHTML}</details></td>
+    <td class="num"><button class="ghost" style="padding:2px 10px" onclick="addSlipGP('${g.id}','${encodeURIComponent(p.name)}')">Add</button></td>
+  </tr>`;
+}
+
+/* ============================ Manual game ============================ */
+function buildManualGame(){
+  const m=MANUAL.meta;
+  return {id:'manual',away:m.away||'Away',home:m.home||'Home',awayAbbr:m.away||'AWAY',homeAbbr:m.home||'HOME',
+    env:m.env, wx:{temp:m.env.temp,wind:m.env.windSpeed,windDir:m.env.windDir,humidity:m.env.humidity,summary:''},
+    homePitcher:m.homePitcher,awayPitcher:m.awayPitcher,players:MANUAL.players};
+}
+
+function refreshManualMeta(){
+  const pid=$('#mPark').value;const pk=PARKS[pid]||{hr:100,cf:0,roof:'open',park:'Custom'};
+  const env={park:pk.park,parkHR:pk.hr,cf:pk.cf,roof:pk.roof,
+    temp:Number($('#mTemp').value),windSpeed:Number($('#mWind').value),windDir:Number($('#mWindDir').value),
+    humidity:Number($('#mHum').value),dayNight:$('#mDayNight').value,roofClosed:false};
+  MANUAL.meta={away:$('#mAway').value,home:$('#mHome').value,env,
+    homePitcher:{name:'(away SP)',hr9:LEAGUE_HR9,hand:'R'},awayPitcher:{name:'(home SP)',hr9:LEAGUE_HR9,hand:'R'}};
+  // recompute existing players against new env
+  MANUAL.players.forEach(p=>{const e2=Object.assign({},env,{oppHand:p.oppHand,oppHR9:p.oppHR9});p._env=e2;p.calc=playerHRProb(p,e2);p.p=p.calc.p;});
+}
+
+function renderManualRoster(){
+  const c=$('#manualRoster');
+  if(!MANUAL.players.length){c.innerHTML='<div class="help-note">No hitters added yet.</div>';return;}
+  c.innerHTML='<table class="players"><thead><tr><th>Hitter</th><th>Side</th><th>Bats</th><th class="num">HR/PA</th><th class="num">HR%</th><th class="num">Odds</th><th></th></tr></thead><tbody>'+
+    MANUAL.players.map((p,i)=>`<tr><td>${p.name}</td><td>${p.side}</td><td>${p.bats}</td><td class="num">${(p.calc.perPA*100).toFixed(2)}%</td><td class="num">${fmtPct(p.p)}</td><td class="num">${p.odds||'—'}</td><td><button class="ghost" data-del="${i}" style="padding:2px 8px">✕</button></td></tr>`).join('')+'</tbody></table>';
+  $$('#manualRoster [data-del]').forEach(b=>b.onclick=()=>{MANUAL.players.splice(Number(b.dataset.del),1);renderManualRoster();renderGames();});
+}
+
+/* ============================ Parks & methodology tabs ============================ */
+function renderParks(){
+  const rows=Object.values(PARKS).sort((a,b)=>b.hr-a.hr).map(p=>`<tr><td>${p.park}</td><td>${p.team}</td><td class="num">${p.hr}</td><td>${p.roof}</td><td class="num">${p.elev}</td></tr>`).join('');
+  $('#parkTable').innerHTML='<table class="players"><thead><tr><th>Ballpark</th><th>Team</th><th class="num">HR factor</th><th>Roof</th><th class="num">Elev (ft)</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+function renderMethod(){
+  $('#methodBody').innerHTML=`
+  <div class="section-title">How the model works</div>
+  <p class="help-note">Each hitter's per-plate-appearance HR rate is built in four steps, then converted to a game probability and combined into parlays.</p>
+  <ol style="font-size:13.5px;line-height:1.6">
+    <li><b>Baseline (Bayesian shrinkage).</b> Season HR/PA is regressed toward the league mean (${CFG.leagueHRperPA} HR/PA) with a ${CFG.regressionPA}-PA prior, so small samples don't dominate.</li>
+    <li><b>Recent form.</b> Last-15-game rate is blended in at ${Math.round(CFG.recentWeight*100)}% weight to capture hot/cold streaks.</li>
+    <li><b>Matchup &amp; environment multipliers.</b> Park factor, opposing pitcher HR/9 vs league, platoon (handedness), temperature, wind component blowing out to center, humidity and day/night each scale the rate.</li>
+    <li><b>Game probability (Poisson).</b> perPA × expected plate appearances (by lineup spot) = λ. P(≥1 HR) = 1 − e^−λ.</li>
+  </ol>
+  <div class="section-title">Pairs &amp; parlays</div>
+  <p class="help-note">Two hitters in the same game share conditions, so their HR outcomes are positively correlated. We model the joint probability with a first-order Gaussian copula: P(both) ≈ Pₐ·Pᵇ + ρ·φ(zₐ)φ(zᵇ), using ρ=${CFG.corrTeammates} for teammates and ρ=${CFG.corrOpponents} for opponents. Fair odds = 1 / P(both).</p>
+  <div class="section-title">Value detection</div>
+  <p class="help-note">Enter sportsbook prop odds per hitter. Edge = model probability − implied probability. A standard parlay multiplies the two decimal prices; EV = P(both)×(payout−1) − (1−P(both)). Positive EV is highlighted green.</p>
+  <div class="notion-callout" data-tone="orange" style="margin-top:14px"><div>⚠️</div><div><strong>Reality check</strong><p>HR props are high-variance. Even the best pair rarely exceeds ~5–8% combined. Use this as a value-finding aid, not a crystal ball.</p></div></div>`;
+}
+
+/* ============================ Settings panel ============================ */
+const SETTINGS=[
+  {k:'leagueHRperPA',label:'League HR/PA',min:0.02,max:0.05,step:0.001,fmt:v=>v.toFixed(3)},
+  {k:'regressionPA',label:'Regression prior (PA)',min:50,max:400,step:5,fmt:v=>v},
+  {k:'recentWeight',label:'Recent-form weight',min:0,max:0.6,step:0.05,fmt:v=>Math.round(v*100)+'%'},
+  {k:'tempPerDeg',label:'Temp effect /°F',min:0,max:0.015,step:0.0005,fmt:v=>(v*100).toFixed(2)+'%'},
+  {k:'windPerMph',label:'Wind effect /mph',min:0,max:0.03,step:0.001,fmt:v=>(v*100).toFixed(1)+'%'},
+  {k:'platoonEdge',label:'Platoon edge',min:0,max:0.2,step:0.01,fmt:v=>(v*100).toFixed(0)+'%'},
+  {k:'corrTeammates',label:'Corr ρ (teammates)',min:0,max:0.3,step:0.01,fmt:v=>v.toFixed(2)},
+  {k:'corrOpponents',label:'Corr ρ (opponents)',min:0,max:0.3,step:0.01,fmt:v=>v.toFixed(2)}
+];
+function renderSettings(){
+  $('#settingsGrid').innerHTML=SETTINGS.map(s=>`<div class="slider-field"><label>${s.label}<span class="sval" id="sv_${s.k}">${s.fmt(CFG[s.k])}</span></label><input type="range" min="${s.min}" max="${s.max}" step="${s.step}" value="${CFG[s.k]}" data-k="${s.k}"></div>`).join('');
+  $$('#settingsGrid input').forEach(inp=>inp.oninput=()=>{const k=inp.dataset.k;CFG[k]=Number(inp.value);const s=SETTINGS.find(x=>x.k===k);$('#sv_'+k).textContent=s.fmt(CFG[k]);recomputeAll();renderGames();});
+}
+function recomputeAll(){
+  GAMES.forEach(g=>g.players.forEach(p=>{p.calc=playerHRProb(p,p._env);p.p=p.calc.p;}));
+  if(MANUAL.players.length)MANUAL.players.forEach(p=>{p.calc=playerHRProb(p,p._env);p.p=p.calc.p;});
+}
+
+/* ============================ Sample game ============================ */
+function loadSample(){
+  const pk=PARKS[147]; // Yankee Stadium
+  const env={park:pk.park,parkHR:pk.hr,cf:pk.cf,roof:pk.roof,temp:84,windSpeed:11,windDir:30,humidity:55,dayNight:'night',roofClosed:false};
+  const wx={temp:84,wind:11,windDir:30,humidity:55,summary:'84°F, wind 11mph out'};
+  const homeP={name:'Carlos Rodón (away faces)',hr9:1.35,hand:'L'};
+  const awayP={name:'Tarik Skubal (home faces)',hr9:0.95,hand:'L'};
+  const mk=(name,side,bats,HR,PA,recHR,recPA,spot,oppHand,oppHR9,odds)=>makePlayer({name,side,bats,HR,PA,recHR,recPA,spot,oppHand,oppHR9,odds},env);
+  const players=[
+    mk('Aaron Judge','home','R',54,680,6,70,2,'L',0.95,260),
+    mk('Juan Soto','home','L',41,700,4,72,3,'L',0.95,330),
+    mk('Giancarlo Stanton','home','R',27,400,3,55,5,'L',0.95,330),
+    mk('Anthony Volpe','home','R',12,560,1,60,7,'L',0.95,650),
+    mk('Riley Greene','away','L',24,620,3,66,3,'L',1.35,420),
+    mk('Kerry Carpenter','away','L',18,420,2,50,4,'L',1.35,460),
+    mk('Spencer Torkelson','away','R',25,610,2,64,5,'L',1.35,430),
+    mk('Colt Keith','away','L',13,580,1,58,6,'L',1.35,700)
+  ];
+  GAMES=[{id:'sample',away:'Tigers',home:'Yankees',awayAbbr:'DET',homeAbbr:'NYY',env,wx,homePitcher:awayP,awayPitcher:homeP,players}];
+  activeTab='games';switchTab('games');renderGames();
+  setStatus('Sample game loaded (Tigers @ Yankees, warm night, wind blowing out). Open the card to explore.');
+}
+
+/* ============================ Wiring ============================ */
+function populateParkSelect(){
+  const opts=Object.entries(PARKS).sort((a,b)=>a[1].park.localeCompare(b[1].park)).map(([id,p])=>`<option value="${id}">${p.park} (${p.team})</option>`).join('');
+  $('#mPark').innerHTML=opts;$('#mPark').value=147;
+}
+function switchTab(t){
+  activeTab=t;
+  $$('.tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
+  $$('[data-panel]').forEach(p=>p.style.display=(p.dataset.panel===t)?'':'none');
+  if(t==='parks')renderParks();if(t==='method')renderMethod();
+  if(t==='track')renderTracking();
+}
+
+// Clipboard helper (works without fiddly escaping in onclick handlers)
+function copySlip(b64){
+  try{
+    const txt = decodeURIComponent(escape(atob(b64)));
+    navigator.clipboard.writeText(txt);
+    toast('Copied', 'Bet slip copied to clipboard.', '📋');
+  }catch(e){
+    console.error(e);
+    toast('Copy failed', 'Your browser blocked clipboard access.', '⚠️');
+  }
+}
+
+function init(){
+  const today=new Date();$('#dateInput').value=today.toISOString().slice(0,10);
+  populateParkSelect();renderSettings();renderManualRoster();
+  $$('.tabbar button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+  $('#btnSettings').onclick=()=>{const p=$('#settingsPanel');p.style.display=p.style.display==='none'?'':'none';};
+  const go=()=>loadSlate($('#dateInput').value);
+  $('#btnLoad').onclick=go;$('#btnLoad2').onclick=go;
+  $('#btnDemo').onclick=loadSample;
+
+  // Toast
+  $('#toastClose').onclick=()=>$('#toast').classList.remove('show');
+
+  // Betslip drawer
+  $('#btnCloseSlip').onclick=closeSlip;
+  $('#btnClearSlip').onclick=()=>{clearSlip(); toast('Cleared','Betslip cleared.','🧹');};
+  $('#btnCopySlip').onclick=()=>{
+    const txt=slipText();
+    if(!txt){ toast('Empty','Add legs to your betslip first.','ℹ️'); return; }
+    navigator.clipboard.writeText(txt);
+    toast('Copied','Full betslip copied.','📋');
+  };
+  $('#btnClearSaved').onclick=()=>{
+    if(confirm('Clear all saved parlays?')){ localStorage.removeItem(TRACK_KEY); renderTracking(); }
+  };
+  ['#trackStatus','#trackLegs','#trackSearch'].forEach(sel=>{
+    const el=$(sel);
+    if(!el) return;
+    el.oninput=()=>renderTracking();
+    el.onchange=()=>renderTracking();
+  });
+  $('#btnBuildGlobal').onclick=()=>{
+    if(GAMES.length<2){$('#builderResults').innerHTML='<div class="help-note">Load a slate first.</div>';return;}
+    const legs=Number($('#legCount').value);
+    const mode=$('#optMode').value;
+    window.DL_CORR_MULT = readCorrMult();
+    readStakeCfg();
+    const evOnly = !!($('#evOnly') && $('#evOnly').checked);
+    const buildMode = (mode==='ev') ? 'mix' : mode;
+    const priceMode=$('#priceMode').value;
+    const topLegs=Number($('#shortlistSize').value);
+    const confSel=$('#confFilter').value;
+    const minConf = confSel==='high' ? 2 : confSel==='med' ? 1 : 0;
+    const maxSel=$('#maxPerGame').value;
+    const maxOnePerGame = (maxSel==='on') ? true : (maxSel==='off') ? false : (legs>=4);
+    let minLegP=Number($('#minLegP').value)/100;
+    let minComboP=Number($('#minComboP').value)/100;
+
+    // Auto-relax for 4+ legs: probabilities get tiny fast.
+    // If no results, progressively relax Min combined % and Min leg HR% until we find something.
+    const attempts=[];
+    let res=[];
+    for(let k=0;k<8;k++){
+      res=buildCrossGameParlays(GAMES,{legs,mode:buildMode,topLegs,minLegP,minComboP,priceMode,minConf,maxOnePerGame,outN:12});
+      attempts.push({minLegP, minComboP, found: res.length});
+      if(res.length) break;
+      if(legs>=4){
+        // relax combined first, then leg threshold
+        minComboP = Math.max(minComboP*0.6, 0.0002); // floor 0.02%
+        if(k%2===1) minLegP = Math.max(minLegP-0.02, 0.06); // down to 6%
+      } else {
+        // for 2-3 legs, mild relaxation
+        minComboP = Math.max(minComboP*0.7, 0.001);
+        if(k%2===1) minLegP = Math.max(minLegP-0.01, 0.08);
+      }
+    }
+
+    if(evOnly){ res = res.filter(function(b){ var e=nLegEV(b); return e!=null && e>0; }); }
+    if(mode==='ev'){ res = res.slice().sort(function(x,y){ var ex=nLegEV(x), ey=nLegEV(y); return (ey==null?-1:ey)-(ex==null?-1:ex); }); }
+    if(!res.length){
+      const hint = legs>=4
+        ? 'No results even after auto-relax. Increase Shortlist size and/or load odds again.'
+        : 'No parlays found. Try lowering Min leg HR% or Min combined %.';
+      $('#builderResults').innerHTML=`<div class="help-note">${hint}</div>`;
+      return;
+    }
+
+    // If we auto-relaxed, update inputs so you can see what worked.
+    $('#minLegP').value = (minLegP*100).toFixed(0);
+    $('#minComboP').value = (minComboP*100).toFixed(2);
+
+    $('#builderResults').innerHTML=`<div class="help-note">Auto-tuned to Min leg HR% = <b>${$('#minLegP').value}%</b>, Min combined = <b>${$('#minComboP').value}%</b>.</div>`+
+      `<div class="parlay-grid">${res.map((b,i)=>globalNLegCardHTML(b,i+1)).join('')}</div>`;
+  };
+  $('#btnLoadOdds').onclick=async()=>{
+    try{
+      setStatus('Fetching OddsBlaze HR odds (DraftKings + Fanatics)…',true);
+      clearLog();
+      logln('OddsBlaze: requesting MLB Player Home Runs (Over 0.5) from DraftKings + Fanatics…');
+      const merged = await loadOddsBlazeHrMerged();
+      logln(`OddsBlaze: received ${merged.size} HR player-legs (merged).`);
+      const res = applyOddsToLoadedGames(merged);
+      logln(`Applied odds to ${res.applied}/${res.total} loaded hitters.`);
+      setStatus(`Odds loaded. Applied to ${res.applied}/${res.total} hitters. Open a game card to see EV.`,false);
+      renderGames();
+    }catch(e){
+      console.error(e);
+      setStatus('Odds load failed: '+e.message);
+      logln('ERROR: '+e.message);
+      logln('If this is a CORS error, OddsBlaze must be called from a local backend (cannot be pure HTML).');
+    }
+  };
+  ['#mPark','#mTemp','#mWind','#mWindDir','#mHum','#mDayNight','#mAway','#mHome'].forEach(s=>{$(s).addEventListener('change',()=>{refreshManualMeta();renderManualRoster();renderGames();});});
+  $('#btnAddHitter').onclick=()=>{
+    refreshManualMeta();
+    const env=MANUAL.meta.env;
+    const p=makePlayer({name:$('#hName').value||'Hitter '+(MANUAL.players.length+1),side:$('#hSide').value,bats:$('#hBats').value,
+      HR:Number($('#hHR').value),PA:Number($('#hPA').value),recHR:Number($('#hRecHR').value),recPA:Number($('#hRecPA').value),
+      spot:Number($('#hSpot').value),oppHand:$('#hOppHand').value,oppHR9:Number($('#hOppHR9').value),odds:Number($('#hOdds').value)||null},env);
+    MANUAL.players.push(p);renderManualRoster();renderGames();$('#hName').value='';
+  };
+  $('#btnBuildManual').onclick=()=>{refreshManualMeta();renderManualRoster();switchTab('games');renderGames();setStatus('Manual game built. See the Games tab.');};
+  switchTab('games');
+}
+
+function globalNLegCardHTML(b,rank){
+  const legs=b.picks.map(x=>x.p);
+  const games=b.picks.map(x=>`${x.g.away} @ ${x.g.home}`);
+  const sameBookLine = b.sameBookBestDec ? `${b.sameBookBest==='draftkings'?'DK':'Fanatics'} ${decToAmerican(b.sameBookBestDec)}` : '—';
+  const mixedLine = b.mixedDec ? decToAmerican(b.mixedDec) : '—';
+  const fairLine = decToAmerican(1/b.joint);
+  const _ev = nLegEV(b);
+  const _evTxt = _ev==null ? '—' : ((_ev>=0?'+':'')+(_ev*100).toFixed(1)+'%');
+  const _evCls = _ev==null ? '' : (_ev>=0?'ev-pos':'ev-neg');
+  const _bd = nLegBestDec(b);
+  const _ctier = weakestTier(b.picks.map(function(x){return confidenceLabel(x.p);}));
+  const _cj = calibratedJoint(b.joint, _ctier);
+  const _stk = _bd ? suggestStake(_cj,_bd) : null;
+  const _stkTxt = (_stk && _stk.stake>0) ? ('$'+_stk.stake.toFixed(2)+' · '+(STAKE.kelly*100).toFixed(0)+'% Kelly') : 'No bet (−EV)';
+  const _wk = weakestTier(b.picks.map(function(x){return confidenceLabel(x.p);}));
+  const _reasons = Array.from(new Set([].concat.apply([], b.picks.map(function(x){return confidenceReasons(x.p);})))).join(' · ');
+  const _wkCol = tierColor(_wk);
+  const txt = legs.map(p=>{
+    // Prefer per-book odds if present; otherwise fall back to best.
+    const dk=p._oddsBooks&&p._oddsBooks.draftkings!=null ? (p._oddsBooks.draftkings>0?`+${p._oddsBooks.draftkings}`:`${p._oddsBooks.draftkings}`) : '—';
+    const fan=p._oddsBooks&&p._oddsBooks.fanatics!=null ? (p._oddsBooks.fanatics>0?`+${p._oddsBooks.fanatics}`:`${p._oddsBooks.fanatics}`) : '—';
+    const best=p.odds!=null ? (p.odds>0?`+${p.odds}`:`${p.odds}`) : '—';
+    const bestBook=p._oddsBooks&&p._oddsBooks.autoBest ? (p._oddsBooks.autoBest==='draftkings'?'DK':'Fanatics') : '—';
+    return `${p.name} HR | DK ${dk} | Fanatics ${fan} | Best ${bestBook} ${best}`;
+  }).join('\n');
+  const b64 = btoa(unescape(encodeURIComponent(txt)));
+  const bestSameBook = b.sameBookBestDec ? `${b.sameBookBest==='draftkings'?'DK':'Fanatics'} ${decToAmerican(b.sameBookBestDec)}` : '—';
+  return `<div class="parlay-card r${rank}"><span class="rank">#${rank}</span>
+    <h4><span class="nameRow">${legs.map(p=>{const im=headshotUrl(p.mlbId);return `${im?`<img class=\"avatar\" src=\"${im}\" alt=\"\" onerror=\"this.style.display='none'\">`:''}<span>${p.name}</span>`;}).join('<span class="notion-faint" style="margin:0 2px">+</span>')}</span></h4>
+    ${legs.map((p,idx)=>`<div class="parlay-stat"><span class="lbl">Leg ${idx+1}</span><span class="val">${p.name} · ${fmtPct(p.p)} · ${games[idx]}</span></div>`).join('')}
+    <div class="parlay-stat"><span class="lbl">Combined (independent)</span><span class="val">${fmtPct(b.joint)}</span></div>
+    <div class="parlay-stat"><span class="lbl">Calibrated win %</span><span class="val">${fmtPct(_cj)}${_cj!==b.joint?' <span class="notion-faint">(tuned)</span>':''}</span></div>
+    <div class="parlay-stat"><span class="lbl">Expected value</span><span class="val ${_evCls}">${_evTxt}</span></div>
+    <div class="parlay-stat"><span class="lbl">Suggested stake</span><span class="val">${_stkTxt}</span></div>
+    <div class="parlay-stat"><span class="lbl">Confidence</span><span class="val"><span class="chip" style="background:${_wkCol}22;color:${_wkCol}" title="${_reasons||'No standout factors'}">${_wk}</span> <span class="notion-faint">weakest leg</span></span></div>
+    <div class="parlay-stat"><span class="lbl">Fair odds</span><span class="val">${fairLine}</span></div>
+    <div class="parlay-stat"><span class="lbl">Best same-book</span><span class="val">${sameBookLine}</span></div>
+    <div class="parlay-stat"><span class="lbl">Mixed-books (best legs)</span><span class="val">${mixedLine}</span></div>
+    <div class="parlay-stat"><span class="lbl">Copy bet slip</span><span class="val"><button class="ghost" style="padding:2px 10px" onclick="copySlip('${b64}')">Copy</button></span></div>
+    <div class="parlay-stat"><span class="lbl">Save</span><span class="val"><button class="ghost" style="padding:2px 10px" onclick="saveParlay('${b64}', ${legs.length}, ${(b.joint*100).toFixed(4)}, '${bestSameBook.replace(/'/g,"\\'")}', ${_bd||'null'}, '${_wk}', ${_ev==null?'null':_ev.toFixed(4)}, ${b.joint.toFixed(6)})">Save</button></span></div>
+  </div>`;
+}
+document.addEventListener('DOMContentLoaded',init);
+</script>
+</body>
+</html>
