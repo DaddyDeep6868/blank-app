@@ -623,8 +623,7 @@ tr.flash{animation:flash 1.2s ease}
   <span class="pill-tag">MLB Home-Run Parlay Model</span>
   <div class="spacer"></div>
   <button class="ghost" id="btnDemo">Load sample game</button>
-  <button id="btnLoad">Load MLB slate</button> <button id="btnConfirmLineups" class="ghost">&#x2705; Confirm lineups + weather</button>
-  <button class="ghost" id="btnLoadOdds">Load HR odds (DK+Fanatics)</button>
+  <button id="btnLoad">Load slate + HR odds</button> <button id="btnConfirmLineups" class="ghost">&#x2705; Confirm lineups + weather</button>
 </header>
 
 <main class="app-wrap">
@@ -2442,8 +2441,25 @@ function init(){
   populateParkSelect();renderSettings();renderManualRoster();
   $$('.tabbar button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   $('#btnSettings').onclick=()=>{const p=$('#settingsPanel');p.style.display=p.style.display==='none'?'':'none';};
-  const go=()=>loadSlate($('#dateInput').value);
-  $('#btnLoad').onclick=go;$('#btnLoad2').onclick=go;
+  const loadAll=async()=>{
+    await loadSlate($('#dateInput').value);
+    try{
+      setStatus('Fetching OddsBlaze HR odds (DraftKings + Fanatics)\u2026',true);
+      logln('OddsBlaze: requesting MLB Player Home Runs (Over 0.5) from DraftKings + Fanatics\u2026');
+      const merged = await loadOddsBlazeHrMerged();
+      logln('OddsBlaze: received '+merged.size+' HR player-legs (merged).');
+      const res = applyOddsToLoadedGames(merged);
+      logln('Applied odds to '+res.applied+'/'+res.total+' loaded hitters.');
+      setStatus('Slate + odds loaded. Applied to '+res.applied+'/'+res.total+' hitters. Open a game card to see EV.',false);
+      renderGames();
+    }catch(e){
+      console.error(e);
+      setStatus('Odds load failed: '+e.message);
+      logln('ERROR: '+e.message);
+      logln('If this is a CORS error, OddsBlaze must be served from a backend (or use the Streamlit deploy).');
+    }
+  };
+  $('#btnLoad').onclick=loadAll;$('#btnLoad2').onclick=loadAll;
   if($('#btnConfirmLineups')) $('#btnConfirmLineups').onclick=()=>{ confirmLineups(); };
   $('#btnDemo').onclick=loadSample;
 
@@ -2526,24 +2542,6 @@ function init(){
 
     $('#builderResults').innerHTML=`<div class="help-note">Auto-tuned to Min leg HR% = <b>${$('#minLegP').value}%</b>, Min combined = <b>${$('#minComboP').value}%</b>.</div>`+
       `<div class="parlay-grid">${res.map((b,i)=>globalNLegCardHTML(b,i+1)).join('')}</div>`;
-  };
-  $('#btnLoadOdds').onclick=async()=>{
-    try{
-      setStatus('Fetching OddsBlaze HR odds (DraftKings + Fanatics)…',true);
-      clearLog();
-      logln('OddsBlaze: requesting MLB Player Home Runs (Over 0.5) from DraftKings + Fanatics…');
-      const merged = await loadOddsBlazeHrMerged();
-      logln(`OddsBlaze: received ${merged.size} HR player-legs (merged).`);
-      const res = applyOddsToLoadedGames(merged);
-      logln(`Applied odds to ${res.applied}/${res.total} loaded hitters.`);
-      setStatus(`Odds loaded. Applied to ${res.applied}/${res.total} hitters. Open a game card to see EV.`,false);
-      renderGames();
-    }catch(e){
-      console.error(e);
-      setStatus('Odds load failed: '+e.message);
-      logln('ERROR: '+e.message);
-      logln('If this is a CORS error, OddsBlaze must be called from a local backend (cannot be pure HTML).');
-    }
   };
   ['#mPark','#mTemp','#mWind','#mWindDir','#mHum','#mDayNight','#mAway','#mHome'].forEach(s=>{$(s).addEventListener('change',()=>{refreshManualMeta();renderManualRoster();renderGames();});});
   $('#btnAddHitter').onclick=()=>{
