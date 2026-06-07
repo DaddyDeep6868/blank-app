@@ -623,7 +623,7 @@ tr.flash{animation:flash 1.2s ease}
   <span class="pill-tag">MLB Home-Run Parlay Model</span>
   <div class="spacer"></div>
   <button class="ghost" id="btnDemo">Load sample game</button>
-  <button id="btnLoad">Load slate + HR odds</button> <button id="btnConfirmLineups" class="ghost">&#x2705; Confirm lineups + weather</button>
+  <button id="btnLoad">Load slate + all-market odds</button> <button id="btnConfirmLineups" class="ghost">&#x2705; Confirm lineups + weather</button>
 </header>
 
 <main class="app-wrap">
@@ -665,6 +665,16 @@ tr.flash{animation:flash 1.2s ease}
 
   <!-- TAB: GAMES -->
   <div data-panel="games">
+    <div class="game-card open" id="marketBar"><div class="game-body" style="display:block;padding:14px 18px">
+      <div class="section-title">&#x1F3AF; Prop market</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">
+        <button class="mktbtn" data-mkt="hr" style="padding:7px 14px;border-radius:9px;border:1px solid #2d7ff9;background:#2d7ff9;color:#fff;cursor:pointer;font-weight:600">&#x1F4A3; Home Run</button>
+        <button class="mktbtn" data-mkt="hits" style="padding:7px 14px;border-radius:9px;border:1px solid #d7d7d4;background:#ececec;color:#333;cursor:pointer;font-weight:600">&#x1F3CF; 1+ Hit</button>
+        <button class="mktbtn" data-mkt="tb" style="padding:7px 14px;border-radius:9px;border:1px solid #d7d7d4;background:#ececec;color:#333;cursor:pointer;font-weight:600">&#x1F4D0; 2+ Total Bases</button>
+        <button class="mktbtn" data-mkt="rbi" style="padding:7px 14px;border-radius:9px;border:1px solid #d7d7d4;background:#ececec;color:#333;cursor:pointer;font-weight:600">&#x1F3C3; 1+ RBI</button>
+      </div>
+      <div class="help-note" style="margin-top:8px">Switch the market to instantly re-rank every hitter, parlay pair, cross-game build, and round-robin by that prop. All four markets load together from each book.</div>
+    </div></div>
     <div class="game-card open" id="builderCard" style="display:none"><div class="game-body" style="display:block;padding:18px">
       <div class="section-title">🧩 Cross-game parlay builder</div>
       <p class="help-note">Build parlays across <b>different games</b> for higher true win probability (near-independent legs). Choose leg count and whether to prioritize win chance or payout.</p>
@@ -721,6 +731,7 @@ tr.flash{animation:flash 1.2s ease}
         <div class="field"><label>Correlation model</label><select id="corrMode"><option value="standard" selected>Standard</option><option value="boosted">Boosted</option><option value="off">Independent</option></select></div>
         <div class="field"><label>Value filter</label><label style="display:flex;align-items:center;gap:6px;font-weight:400;text-transform:none;letter-spacing:0"><input id="evOnly" type="checkbox"> +EV only</label></div>
         <div class="field"><label>&nbsp;</label><button id="btnBuildGlobal">Build parlays</button></div>
+        <div class="field"><label>&nbsp;</label><button id="btnRoundRobin" class="ghost">&#x1F3B2; Round robin</button></div>
       </div>
       <div class="legend">Tips: raise <b>Min leg HR%</b> to increase win chance; increase legs to increase payout; use <b>Chance × payout</b> for a balanced list.</div>
       <div id="builderResults" style="margin-top:10px"></div>
@@ -908,6 +919,19 @@ const LEAGUE_HR9 = 1.25;   // league avg pitcher HR allowed per 9 IP
 const PA_BY_SPOT = {1:4.65,2:4.55,3:4.45,4:4.32,5:4.20,6:4.08,7:3.96,8:3.84,9:3.72};
 const DEFAULT_STARTER_IP = 5.3; // simple leash estimate for bullpen blending
 
+/* ---------- Multi-market (Hits / Total Bases / RBI) baselines ---------- */
+const LG_HIT_PA=0.215, LG_RBI_PA=0.110;
+const LG_1B_PA=0.150, LG_2B_PA=0.045, LG_3B_PA=0.004;
+const REG_HIT=150, REG_TB=150, REG_RBI=150;
+const RBI_SPOT={1:0.85,2:0.92,3:1.18,4:1.25,5:1.12,6:0.98,7:0.90,8:0.82,9:0.78};
+let ACTIVE_MARKET='hr';
+const MARKET_META={
+  hr:{label:'Home Run',short:'HR',rateLabel:'HR/PA',probLabel:'HR%',leg:'HR',cap:30},
+  hits:{label:'1+ Hit',short:'Hit',rateLabel:'Hit/PA',probLabel:'1+ Hit%',leg:'1+ Hit',cap:80},
+  tb:{label:'2+ Total Bases',short:'TB',rateLabel:'Bases/PA',probLabel:'2+ TB%',leg:'2+ TB',cap:65},
+  rbi:{label:'1+ RBI',short:'RBI',rateLabel:'RBI/PA',probLabel:'1+ RBI%',leg:'1+ RBI',cap:55}
+};
+
 /* ---------- Math helpers ---------- */
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const toRad=d=>d*Math.PI/180;
@@ -1074,6 +1098,89 @@ function playerHRProb(pl, env){
   const lambda=perPA*paAdj;            // expected HR in game (Poisson mean)
   const p=1-Math.exp(-lambda);      // P(>=1 HR)
   return {p,lambda,perPA,base,factors:f,pa:paAdj};
+}
+
+/* ---------- Multi-market models (per-PA rates, binomial over expected PA) ---------- */
+function _platoonMult(pl,env,edge){
+  if(pl.bats==='S')return 1+edge*0.4;
+  return (pl.bats!==env.oppHand)?1+edge:1-edge*0.75;
+}
+function _expPA(pl,env){const pa=PA_BY_SPOT[pl.spot]||4.2;return env.lineupsConfirmed?pa:pa*0.95;}
+function playerHitsProb(pl,env){
+  const PA=pl.PA||0,H=pl.H||0;
+  const r=(PA>0&&H>0)?((H+REG_HIT*LG_HIT_PA)/(PA+REG_HIT)):LG_HIT_PA;
+  const platoon=_platoonMult(pl,env,CFG.platoonEdge*0.5);
+  const perPA=clamp(r*platoon,0.02,0.55);
+  const n=_expPA(pl,env);
+  const p=clamp(1-Math.pow(1-perPA,n),0,0.99);
+  return {p,perPA,lambda:perPA*n,factors:{Platoon:platoon}};
+}
+function playerTBProb(pl,env){
+  const PA=pl.PA||0,HR=pl.HR||0,_2B=pl._2B||0,_3B=pl._3B||0,H=pl.H||0;
+  const have=(PA>0&&H>0);
+  const _1B=Math.max(0,H-_2B-_3B-HR);
+  const sh=(made,lg)=>have?((made+REG_TB*lg)/(PA+REG_TB)):lg;
+  let r1=sh(_1B,LG_1B_PA),r2=sh(_2B,LG_2B_PA),r3=sh(_3B,LG_3B_PA),rHR=sh(HR,CFG.leagueHRperPA);
+  const closed=(env.roof==='dome')||(env.roof==='retractable'&&env.roofClosed);
+  let wx=1;if(!closed){wx=clamp(1+(env.temp-70)*CFG.tempPerDeg*0.6,0.85,1.2);}
+  const sp=(env.oppHR9!=null?env.oppHR9:LEAGUE_HR9);
+  const pitch=clamp(sp/LEAGUE_HR9,0.7,1.5);
+  const park=env.parkHR/100;
+  const powerMult=clamp(Math.sqrt(park)*wx*Math.sqrt(pitch),0.7,1.6);
+  r2*=powerMult;r3*=powerMult;rHR*=powerMult;
+  const platoon=_platoonMult(pl,env,CFG.platoonEdge*0.6);
+  r1*=platoon;r2*=platoon;r3*=platoon;rHR*=platoon;
+  const hitRate=clamp(r1+r2+r3+rHR,0.02,0.62);
+  const pNo=1-hitRate;
+  const n=_expPA(pl,env);
+  const p0=Math.pow(pNo,n);
+  const p1=n*clamp(r1,0,0.62)*Math.pow(pNo,Math.max(0,n-1));
+  const p=clamp(1-p0-p1,0,0.99);
+  const perTB=r1+2*r2+3*r3+4*rHR;
+  return {p,perPA:perTB,lambda:perTB*n,factors:{Park:Math.sqrt(park),'Opp pitcher':Math.sqrt(pitch),Weather:wx,Platoon:platoon}};
+}
+function playerRBIProb(pl,env){
+  const PA=pl.PA||0,RBI=pl.RBI||0;
+  const r=(PA>0&&RBI>0)?((RBI+REG_RBI*LG_RBI_PA)/(PA+REG_RBI)):LG_RBI_PA;
+  const spotMult=RBI_SPOT[pl.spot]||1;
+  const park=clamp(Math.sqrt(env.parkHR/100),0.85,1.15);
+  const perPA=clamp(r*spotMult*park,0.01,0.45);
+  const n=_expPA(pl,env);
+  const p=clamp(1-Math.pow(1-perPA,n),0,0.99);
+  return {p,perPA,lambda:perPA*n,factors:{'Lineup spot':spotMult,Park:park}};
+}
+function computeMarkets(pl,env){
+  return {hr:playerHRProb(pl,env),hits:playerHitsProb(pl,env),tb:playerTBProb(pl,env),rbi:playerRBIProb(pl,env)};
+}
+function applyMarketOddsToPlayer(p){
+  if(!p._mktOdds)return;
+  const mo=p._mktOdds[ACTIVE_MARKET];
+  if(mo){p.odds=mo.best;p._oddsBooks=Object.assign({},mo.books);p._mktProb=mo.mktProb;}
+  else {p.odds=null;p._oddsBooks=null;p._mktProb=null;}
+  p._lineMove=null;
+}
+function repointPlayer(p){
+  if(p._mkt&&p._mkt[ACTIVE_MARKET]){p.calc=p._mkt[ACTIVE_MARKET];p.p=p.calc.p;}
+  applyMarketOddsToPlayer(p);
+}
+function paintMarketButtons(){
+  $$('.mktbtn').forEach(function(b){
+    const on=b.dataset.mkt===ACTIVE_MARKET;
+    b.style.background=on?'#2d7ff9':'#ececec';
+    b.style.color=on?'#fff':'#333';
+    b.style.borderColor=on?'#2d7ff9':'#d7d7d4';
+  });
+}
+function setMarket(mk){
+  if(!MARKET_META[mk])return;
+  ACTIVE_MARKET=mk;
+  GAMES.forEach(g=>g.players.forEach(repointPlayer));
+  if(MANUAL.players&&MANUAL.players.length)MANUAL.players.forEach(repointPlayer);
+  paintMarketButtons();
+  if($('#globalPairsContainer'))$('#globalPairsContainer').innerHTML='';
+  if($('#builderResults'))$('#builderResults').innerHTML='';
+  if($('#bookValueContainer'))$('#bookValueContainer').innerHTML='';
+  renderGames();
 }
 
 /* ---------- Pair correlation (Gaussian copula, 1st-order) ---------- */
@@ -1469,6 +1576,29 @@ function addToSlip(p, g){
   openSlip();
 }
 
+function addAllLegs(ld64){
+  try{
+    const arr = JSON.parse(decodeURIComponent(escape(atob(ld64))));
+    let added=0;
+    arr.forEach(function(l){
+      const g=findGameById(l.gamePk);
+      if(!g) return;
+      const pl=g.players.find(function(x){return x.name===l.name;});
+      if(!pl) return;
+      const key=String((g&&g.id)||'g')+'::'+pl.name+'::'+pl.side;
+      if(SLIP.some(function(x){return x.id===key;})) return;
+      const teamAbbr=(pl.side==='home'?(g.homeAbbr||g.home):(g.awayAbbr||g.away))||'';
+      const dk=pl._oddsBooks?pl._oddsBooks.draftkings:null;
+      const fan=pl._oddsBooks?pl._oddsBooks.fanatics:null;
+      const autoBest=pl._oddsBooks?pl._oddsBooks.autoBest:null;
+      SLIP.push({id:key,name:pl.name,game:g.away+' @ '+g.home,team:teamAbbr,p:pl.p,odds:pl.odds,dk:dk,fan:fan,autoBest:autoBest});
+      added++;
+    });
+    renderSlip(); openSlip();
+    toast('Added', added+' leg'+(added===1?'':'s')+' added to your betslip.', '\u26a1');
+  }catch(e){ console.error(e); toast('Error','Could not add these legs.','\u26a0\ufe0f'); }
+}
+
 function removeFromSlip(id){
   const i=SLIP.findIndex(x=>x.id===id);
   if(i>=0){ SLIP.splice(i,1); renderSlip(); }
@@ -1593,36 +1723,38 @@ async function fetchOddsBlaze({sportsbook, league}){
   return r.json();
 }
 
-function isAnytimeHrLeg(o){
-  return (
-    o?.market === 'Player Home Runs' &&
-    o?.selection?.side === 'Over' &&
-    o?.selection?.line === 0.5 &&
-    o?.player?.name &&
-    o?.player?.team?.abbreviation &&
-    o?.price != null
-  );
+function detectMarket(o){
+  const m=((o&&o.market)||'').toLowerCase();
+  const side=o&&o.selection&&o.selection.side;
+  const line=o&&o.selection&&o.selection.line;
+  if(side!=='Over'&&side!=='Under')return null;
+  if(/home\s*run/.test(m))return line===0.5?'hr':null;
+  if(/total\s*bas/.test(m))return line===1.5?'tb':null;
+  if(/\brbis?\b|runs?\s*batted/.test(m))return line===0.5?'rbi':null;
+  if(/\bhits?\b/.test(m)&&!/allow|against|pitch/.test(m))return line===0.5?'hits':null;
+  return null;
 }
 
-function extractHrOddsByPlayer(payload, bookId){
-  // Map key: "eventId::TEAM::normalizedName" -> { price, sgp, links }
+function extractOddsByPlayer(payload, bookId){
   const out = new Map();
   for(const ev of (payload?.events||[])){
     const eventId = ev?.id;
     for(const o of (ev?.odds||[])){
-      const hrMkt = o?.market === 'Player Home Runs' && o?.selection?.line === 0.5 && o?.player?.name && o?.player?.team?.abbreviation && o?.price != null;
-      if(!hrMkt) continue;
-      const side = o?.selection?.side;
-      if(side !== 'Over' && side !== 'Under') continue;
+      const mk = detectMarket(o);
+      if(!mk) continue;
+      if(!o?.player?.name || !o?.player?.team?.abbreviation || o?.price==null) continue;
+      const side = o.selection.side;
       const teamAbbr = o.player.team.abbreviation;
       const nameKey = normalizeName(o.player.name);
       const key = `${eventId}::${teamAbbr}::${nameKey}`;
       const price = parseAmericanOdds(o.price);
       if(price==null) continue;
       let cur = out.get(key);
-      if(!cur){ cur = { price: null, under: null, sgp: null, links: null, rawName: o.player.name }; out.set(key, cur); }
-      if(side === 'Over'){ cur.price = price; cur.sgp = o.sgp||cur.sgp; cur.links = o.links||cur.links; cur.rawName = o.player.name; }
-      else { cur.under = price; }
+      if(!cur){ cur = { rawName: o.player.name, markets: {} }; out.set(key, cur); }
+      let mc = cur.markets[mk];
+      if(!mc){ mc = { price: null, under: null, sgp: null, links: null }; cur.markets[mk] = mc; }
+      if(side === 'Over'){ mc.price = price; mc.sgp = o.sgp||mc.sgp; mc.links = o.links||mc.links; cur.rawName = o.player.name; }
+      else { mc.under = price; }
     }
   }
   return out;
@@ -1637,12 +1769,12 @@ async function loadOddsBlazeHrMerged(){
   BOOKS.forEach(function(bk, i){
     if(!results[i]) return;
     let cnt=0;
-    const m = extractHrOddsByPlayer(results[i], bk);
+    const m = extractOddsByPlayer(results[i], bk);
     for(const [k,v] of m.entries()){
-      if(!merged.has(k)) merged.set(k, { draftkings:null, fanatics:null, betmgm:null, caesars:null });
-      merged.get(k)[bk] = v; cnt++;
+      if(!merged.has(k)) merged.set(k, { rawName: v.rawName, books: {} });
+      merged.get(k).books[bk] = v.markets; cnt++;
     }
-    try{ logln('OddsBlaze: '+bk+' → '+cnt+' HR legs.'); }catch(_e){}
+    try{ logln('OddsBlaze: '+bk+' → '+cnt+' player legs (all markets).'); }catch(_e){}
   });
   return merged;
 }
@@ -1655,7 +1787,7 @@ function checkLineMovement(){
   for(const g of GAMES){
     for(const p of g.players){
       if(p.odds==null) continue;
-      const key = normalizeName(p.name);
+      const key = ACTIVE_MARKET+'::'+normalizeName(p.name);
       now[key] = p.odds;
       if(prev[key]!=null && prev[key]!==p.odds){
         moved.push({ name: p.name, from: prev[key], to: p.odds, delta: p.odds - prev[key] });
@@ -1669,50 +1801,34 @@ function checkLineMovement(){
 }
 
 function applyOddsToLoadedGames(merged){
-  // Attach best available price to each hitter as p.odds (so EV math works immediately)
-  // Matching uses: gamePk -> event.id mismatch is possible across providers.
-  // To keep it simple, we match ONLY by team + player name across *all events*.
-  // If you run into collisions (rare), we can tighten by date/time.
-
-  // Flatten merged into: teamAbbr::normalizedName -> { dk, fan, bestPrice, bestBook }
-  // IMPORTANT: we keep the best DK and best Fanatics line seen (across events)
-  // instead of picking a single event's snapshot. This avoids accidentally
-  // dropping Fanatics (or DK) for a player when the "bestPrice" snapshot came
-  // from the other book.
+  // merged: "eventId::TEAM::name" -> { rawName, books: { [book]: { hr|hits|tb|rbi: {price,under,...} } } }
+  // Build per-player, per-market best lines across books & events.
+  const MK=['hr','hits','tb','rbi'];
+  const SHORT={draftkings:'dk',fanatics:'fan',betmgm:'mgm',caesars:'cae'};
   const byPlayer = new Map();
   for(const [k,obj] of merged.entries()){
-    // k = eventId::TEAM::nameKey
     const parts = k.split('::');
     const teamAbbr = parts[1];
     const nameKey = parts.slice(2).join('::');
     const key2 = `${teamAbbr}::${nameKey}`;
-    const dk = obj.draftkings?.price ?? null;
-    const fan = obj.fanatics?.price ?? null;
-    const mgm = obj.betmgm?.price ?? null;
-    const cae = obj.caesars?.price ?? null;
-    let _mktSum = 0, _mktN = 0;
-    [obj.draftkings, obj.fanatics, obj.betmgm, obj.caesars].forEach(function(v){
-      if(v && v.price!=null && v.under!=null){ const fp = novigProb(v.price, v.under); if(fp!=null){ _mktSum += fp; _mktN++; } }
+    let rec = byPlayer.get(key2);
+    if(!rec){ rec={}; MK.forEach(function(mk){ rec[mk]={dk:null,fan:null,mgm:null,cae:null,bestPrice:null,bestBook:null,mktSum:0,mktN:0}; }); byPlayer.set(key2,rec); }
+    const books = obj.books || {};
+    MK.forEach(function(mk){
+      const slot = rec[mk];
+      Object.keys(SHORT).forEach(function(bk){
+        const mc = books[bk] && books[bk][mk];
+        if(!mc) return;
+        const short = SHORT[bk];
+        if(mc.price!=null && betterAmerican(mc.price, slot[short])) slot[short]=mc.price;
+        if(mc.price!=null && mc.under!=null){ const fp=novigProb(mc.price, mc.under); if(fp!=null){ slot.mktSum+=fp; slot.mktN++; } }
+      });
+      let bestBook=null,bestPrice=null;
+      [['draftkings',slot.dk],['fanatics',slot.fan],['betmgm',slot.mgm],['caesars',slot.cae]].forEach(function(pr){
+        if(pr[1]!=null && betterAmerican(pr[1],bestPrice)){ bestPrice=pr[1]; bestBook=pr[0]; }
+      });
+      slot.bestBook=bestBook; slot.bestPrice=bestPrice;
     });
-
-    const cur = byPlayer.get(key2) || { dk: null, fan: null, mgm: null, cae: null, bestPrice: null, bestBook: null, mktSum: 0, mktN: 0 };
-    // keep best line per-book
-    if(dk!=null && betterAmerican(dk, cur.dk)) cur.dk = dk;
-    if(fan!=null && betterAmerican(fan, cur.fan)) cur.fan = fan;
-    if(mgm!=null && betterAmerican(mgm, cur.mgm)) cur.mgm = mgm;
-    if(cae!=null && betterAmerican(cae, cur.cae)) cur.cae = cae;
-    if(_mktN>0){ cur.mktSum += _mktSum; cur.mktN += _mktN; }
-
-    // recompute best across books
-    let bestBook = null;
-    let bestPrice = null;
-    [['draftkings',cur.dk],['fanatics',cur.fan],['betmgm',cur.mgm],['caesars',cur.cae]].forEach(function(pr){
-      if(pr[1]!=null && betterAmerican(pr[1], bestPrice)){ bestPrice = pr[1]; bestBook = pr[0]; }
-    });
-    cur.bestBook = bestBook;
-    cur.bestPrice = bestPrice;
-
-    if(cur.bestPrice!=null) byPlayer.set(key2, cur);
   }
 
   let applied=0, total=0;
@@ -1721,14 +1837,20 @@ function applyOddsToLoadedGames(merged){
       total++;
       const teamAbbr = (p.side==='home' ? g.homeAbbr : g.awayAbbr) || '';
       const nameKey = normalizeName(p.name);
-      const hit = byPlayer.get(`${teamAbbr}::${nameKey}`);
-      if(hit){
-        p.odds = hit.bestPrice; // existing UI shows "Book" as a single number
-        // optionally stash detail if you later want an odds board
-        p._oddsBooks = { draftkings: hit.dk, fanatics: hit.fan, betmgm: hit.mgm, caesars: hit.cae, autoBest: hit.bestBook };
-        p._mktProb = (hit.mktN>0) ? (hit.mktSum/hit.mktN) : null;
-        applied++;
+      const rec = byPlayer.get(`${teamAbbr}::${nameKey}`);
+      p._mktOdds = {};
+      let any=false;
+      if(rec){
+        MK.forEach(function(mk){
+          const sx = rec[mk];
+          if(sx && sx.bestPrice!=null){
+            p._mktOdds[mk] = { best: sx.bestPrice, books: { draftkings:sx.dk, fanatics:sx.fan, betmgm:sx.mgm, caesars:sx.cae, autoBest:sx.bestBook }, mktProb: (sx.mktN>0 ? sx.mktSum/sx.mktN : null) };
+            any=true;
+          }
+        });
       }
+      if(any) applied++;
+      applyMarketOddsToPlayer(p);
     }
   }
   const _moved = checkLineMovement();
@@ -1828,25 +1950,27 @@ async function teamHitters(teamId, side, oppPitcher, env){
       const per=r.person;
       const st=per.stats&&per.stats[0]&&per.stats[0].splits&&per.stats[0].splits[0]&&per.stats[0].splits[0].stat;
       if(!st)continue;
-      const PA=st.plateAppearances||0, HR=st.homeRuns||0;
+      const PA=st.plateAppearances||0, HR=st.homeRuns||0, H=st.hits||0, _2B=st.doubles||0, _3B=st.triples||0, RBI=st.rbi||0, AB=st.atBats||0;
       if(PA<30)continue; // ignore tiny samples
       spot++;
       const bats=(per.batSide&&per.batSide.code)||'R';
-      out.push(makePlayer({name:per.fullName,mlbId:per.id,side,bats,HR,PA,recHR:0,recPA:0,spot:Math.min(spot,9),
+      out.push(makePlayer({name:per.fullName,mlbId:per.id,side,bats,HR,PA,H,_2B,_3B,RBI,AB,recHR:0,recPA:0,spot:Math.min(spot,9),
         oppHand:oppPitcher.hand,oppHR9:oppPitcher.hr9},env));
     }
     // keep top 9 by projected probability per team (likely starters)
     out.sort((a,b)=>b.calc.perPA-a.calc.perPA);
-    out=out.slice(0,9).map((p,i)=>{p.spot=i+1;p.calc=playerHRProb(p,p._env);p.p=p.calc.p;return p;});
+    out=out.slice(0,9).map((p,i)=>{p.spot=i+1;p._mkt=computeMarkets(p,p._env);p.calc=p._mkt[ACTIVE_MARKET];p.p=p.calc.p;return p;});
   }catch(e){logln('  roster error team '+teamId+': '+e.message);}
   return out;
 }
 
 function makePlayer(o,env){
-  const pl={name:o.name,mlbId:o.mlbId||null,side:o.side,bats:o.bats,HR:o.HR,PA:o.PA,recHR:o.recHR||0,recPA:o.recPA||0,spot:o.spot||5,
+  const pl={name:o.name,mlbId:o.mlbId||null,side:o.side,bats:o.bats,HR:o.HR,PA:o.PA,
+    H:o.H||0,_2B:o._2B||0,_3B:o._3B||0,RBI:o.RBI||0,AB:o.AB||0,
+    recHR:o.recHR||0,recPA:o.recPA||0,spot:o.spot||5,
     oppHand:o.oppHand||'R',oppHR9:o.oppHR9||LEAGUE_HR9,odds:o.odds||null};
   const e2=Object.assign({},env,{oppHand:pl.oppHand,oppHR9:pl.oppHR9});
-  pl._env=e2;pl.calc=playerHRProb(pl,e2);pl.p=pl.calc.p;return pl;
+  pl._env=e2;pl._mkt=computeMarkets(pl,e2);pl.calc=pl._mkt[ACTIVE_MARKET];pl.p=pl.calc.p;return pl;
 }
 
 async function getWeather(park, gameDateISO){
@@ -2066,6 +2190,37 @@ function buildCrossGameParlays(allGames, {
   return out.slice(0, outN);
 }
 
+function kCombos(arr,k){
+  const out=[]; const n=arr.length;
+  (function rec(start,cur){
+    if(cur.length===k){ out.push(cur.slice()); return; }
+    for(let i=start;i<n;i++){ cur.push(arr[i]); rec(i+1,cur); cur.pop(); }
+  })(0,[]);
+  return out;
+}
+function rrBuild(picks, priceMode){
+  let joint=1, mixedDec=1, dkProd=1, fanProd=1, dkOkAll=true, fanOkAll=true, mixedOk=true;
+  picks.forEach(function(it){
+    joint*=it.p.p;
+    const dk=(it.p._oddsBooks&&it.p._oddsBooks.draftkings!=null)?amToDecimal(it.p._oddsBooks.draftkings):null;
+    const fan=(it.p._oddsBooks&&it.p._oddsBooks.fanatics!=null)?amToDecimal(it.p._oddsBooks.fanatics):null;
+    if(dk!=null) dkProd*=dk; else dkOkAll=false;
+    if(fan!=null) fanProd*=fan; else fanOkAll=false;
+    let legDec=null;
+    if(priceMode==='draftkings') legDec=dk;
+    else if(priceMode==='fanatics') legDec=fan;
+    else legDec=(it.p.odds!=null)?amToDecimal(it.p.odds):null;
+    if(legDec!=null) mixedDec*=legDec; else mixedOk=false;
+  });
+  let sameBookBestDec=null, sameBookBest=null;
+  if(dkOkAll&&fanOkAll){ sameBookBestDec=Math.max(dkProd,fanProd); sameBookBest=dkProd>=fanProd?'draftkings':'fanatics'; }
+  else if(dkOkAll){ sameBookBestDec=dkProd; sameBookBest='draftkings'; }
+  else if(fanOkAll){ sameBookBestDec=fanProd; sameBookBest='fanatics'; }
+  const md=mixedOk?mixedDec:null;
+  const payoutDec=sameBookBestDec!=null?sameBookBestDec:md;
+  return { picks:picks, joint:joint, mixedDec:md, dkProd:dkOkAll?dkProd:null, fanProd:fanOkAll?fanProd:null, sameBookBestDec:sameBookBestDec, sameBookBest:sameBookBest, score: payoutDec!=null?(joint*payoutDec):joint };
+}
+
 /* ============================ Renderers ============================ */
 function bookValueHtml(){
   const books=[["draftkings","DraftKings"],["fanatics","Fanatics"],["betmgm","BetMGM"],["caesars","Caesars"]];
@@ -2237,7 +2392,7 @@ function gameCardHTML(g,gi){
 
       <div class="section-title">Individual hitter probabilities</div>
       <table class="players"><thead><tr>
-        <th>Hitter</th><th>Team</th><th class="num">Spot</th><th class="num">HR/PA</th><th class="num">HR%</th><th class="num">Fair</th><th class="num">DK</th><th class="num">Fanatics</th><th class="num">Best</th><th class="num">Edge</th><th></th><th></th>
+        <th>Hitter</th><th>Team</th><th class="num">Spot</th><th class="num">${MARKET_META[ACTIVE_MARKET].rateLabel}</th><th class="num">${MARKET_META[ACTIVE_MARKET].probLabel}</th><th class="num">Fair</th><th class="num">DK</th><th class="num">Fanatics</th><th class="num">Best</th><th class="num">Edge</th><th></th><th></th>
       </tr></thead><tbody>${rows}</tbody></table>
     </div>
   </div>`;
@@ -2292,6 +2447,7 @@ function parlayCardHTML(pr,rank){
 function playerRowHTML(p,g){
   const c=p.calc;const f=c.factors;
   const _lu = (p._lineupStatus==="out") ? ' <span class="chip" style="background:#db443722;color:#db4437" title="Not in the posted starting lineup">\u26a0\ufe0f Out</span>' : (p._lineupStatus==="in" ? ` <span class="chip" style="background:#0f9d5822;color:#0f9d58" title="Confirmed in lineup">\u2705 #${p._lineupSpot||""}</span>` : "");
+  const _sm = (p._lineMove!=null && p._lineMove!==0) ? (' <span class="chip" style="background:'+(p._lineMove<0?'#0f9d5822;color:#0f9d58':'#db443722;color:#db4437')+'" title="Line moved '+(p._lineMove<0?'IN since last load (shortening = steam toward this bet)':'OUT since last load (drifting = market cooling)')+'">'+(p._lineMove<0?'\ud83d\udd25':'\u2744\ufe0f')+' '+(p._lineMove>0?'+':'')+p._lineMove+'</span>') : "";
   const dk = p._oddsBooks && p._oddsBooks.draftkings!=null ? p._oddsBooks.draftkings : null;
   const fan = p._oddsBooks && p._oddsBooks.fanatics!=null ? p._oddsBooks.fanatics : null;
   const best = p.odds!=null ? p.odds : null;
@@ -2299,16 +2455,14 @@ function playerRowHTML(p,g){
   const edge=impl!=null?p.p-impl:null;
   const fairAm=decToAmerican(1/p.p);
   const fb=k=>`<div class="factor-row"><span>${k.label}</span><span class="mult ${k.v>1.001?'up':k.v<0.999?'down':''}">×${k.v.toFixed(3)}</span></div>`;
-  const factorsHTML=[
-    {label:'Park',v:f.park},{label:'Opposing pitcher',v:f.pitcher},{label:'Handedness/platoon',v:f.platoon},
-    {label:'Temperature',v:f.temp},{label:'Wind',v:f.wind},{label:'Humidity',v:f.humidity},{label:'Day/Night',v:f.daynight}
-  ].map(fb).join('');
+  const FLABEL={park:'Park',pitcher:'Opposing pitcher',platoon:'Handedness/platoon',temp:'Temperature',wind:'Wind',humidity:'Humidity',daynight:'Day/Night'};
+  const factorsHTML=Object.keys(f||{}).map(k=>fb({label:FLABEL[k]||k,v:f[k]})).join('');
   return `<tr>
-    <td>${p.name} <span class="handed">(${p.bats})</span>${_lu}</td>
+    <td>${p.name} <span class="handed">(${p.bats})</span>${_lu}${_sm}</td>
     <td>${p.side==='home'?g.homeAbbr||g.home:g.awayAbbr||g.away}</td>
     <td class="num">${p.spot}</td>
-    <td class="num">${(c.perPA*100).toFixed(2)}%</td>
-    <td class="num"><span class="prob-pill" style="background:${probColor(p.p)}22;color:${probColor(p.p)}">${fmtPct(p.p)}</span><div class="bar-mini"><span style="width:${clamp(p.p/0.30*100,3,100)}%"></span></div></td>
+    <td class="num">${ACTIVE_MARKET==='tb'?c.perPA.toFixed(2):(c.perPA*100).toFixed(2)+'%'}</td>
+    <td class="num"><span class="prob-pill" style="background:${probColor(p.p)}22;color:${probColor(p.p)}">${fmtPct(p.p)}</span><div class="bar-mini"><span style="width:${clamp(p.p/(MARKET_META[ACTIVE_MARKET].cap/100)*100,3,100)}%"></span></div></td>
     <td class="num">${fairAm}</td>
     <td class="num">${dk!=null?(dk>0?'+'+dk:dk):'—'}</td>
     <td class="num">${fan!=null?(fan>0?'+'+fan:fan):'—'}</td>
@@ -2384,8 +2538,8 @@ function renderSettings(){
   $$('#settingsGrid input').forEach(inp=>inp.oninput=()=>{const k=inp.dataset.k;CFG[k]=Number(inp.value);const s=SETTINGS.find(x=>x.k===k);$('#sv_'+k).textContent=s.fmt(CFG[k]);recomputeAll();renderGames();});
 }
 function recomputeAll(){
-  GAMES.forEach(g=>g.players.forEach(p=>{p.calc=playerHRProb(p,p._env);p.p=p.calc.p;}));
-  if(MANUAL.players.length)MANUAL.players.forEach(p=>{p.calc=playerHRProb(p,p._env);p.p=p.calc.p;});
+  GAMES.forEach(g=>g.players.forEach(p=>{p._mkt=computeMarkets(p,p._env);repointPlayer(p);}));
+  if(MANUAL.players.length)MANUAL.players.forEach(p=>{p._mkt=computeMarkets(p,p._env);repointPlayer(p);});
 }
 
 /* ============================ Sample game ============================ */
@@ -2444,10 +2598,10 @@ function init(){
   const loadAll=async()=>{
     await loadSlate($('#dateInput').value);
     try{
-      setStatus('Fetching OddsBlaze HR odds (DraftKings + Fanatics)\u2026',true);
-      logln('OddsBlaze: requesting MLB Player Home Runs (Over 0.5) from DraftKings + Fanatics\u2026');
+      setStatus('Fetching OddsBlaze props \u2014 HR, Hits, Total Bases, RBI (4 books)\u2026',true);
+      logln('OddsBlaze: requesting MLB props (Home Runs, Hits, Total Bases, RBI) from 4 books\u2026');
       const merged = await loadOddsBlazeHrMerged();
-      logln('OddsBlaze: received '+merged.size+' HR player-legs (merged).');
+      logln('OddsBlaze: received '+merged.size+' player entries across markets (merged).');
       const res = applyOddsToLoadedGames(merged);
       logln('Applied odds to '+res.applied+'/'+res.total+' loaded hitters.');
       setStatus('Slate + odds loaded. Applied to '+res.applied+'/'+res.total+' hitters. Open a game card to see EV.',false);
@@ -2462,6 +2616,8 @@ function init(){
   $('#btnLoad').onclick=loadAll;$('#btnLoad2').onclick=loadAll;
   if($('#btnConfirmLineups')) $('#btnConfirmLineups').onclick=()=>{ confirmLineups(); };
   $('#btnDemo').onclick=loadSample;
+  $$('.mktbtn').forEach(function(b){ b.onclick=function(){ setMarket(b.dataset.mkt); }; });
+  paintMarketButtons();
 
   // Toast
   $('#toastClose').onclick=()=>$('#toast').classList.remove('show');
@@ -2543,6 +2699,30 @@ function init(){
     $('#builderResults').innerHTML=`<div class="help-note">Auto-tuned to Min leg HR% = <b>${$('#minLegP').value}%</b>, Min combined = <b>${$('#minComboP').value}%</b>.</div>`+
       `<div class="parlay-grid">${res.map((b,i)=>globalNLegCardHTML(b,i+1)).join('')}</div>`;
   };
+  if($('#btnRoundRobin')) $('#btnRoundRobin').onclick=()=>{
+    if(GAMES.length<1){$('#builderResults').innerHTML='<div class="help-note">Load a slate first.</div>';return;}
+    window.DL_CORR_MULT = readCorrMult(); readStakeCfg();
+    const K=Number($('#legCount').value);
+    const priceMode=$('#priceMode').value;
+    const minLegP=Number($('#minLegP').value)/100;
+    const cand=[]; const seen=new Set();
+    GAMES.forEach(function(g){ (g.players||[]).forEach(function(pp){
+      if(pp.p==null||pp.p<minLegP) return;
+      if(!pp._oddsBooks) return;
+      if(pp._oddsBooks.draftkings==null && pp._oddsBooks.fanatics==null) return;
+      cand.push({g:g,p:pp});
+    });});
+    cand.sort(function(a,b){return b.p.p-a.p.p;});
+    const pool=[];
+    cand.forEach(function(it){ if(seen.has(it.g.id)) return; seen.add(it.g.id); pool.push(it); });
+    const POOL=pool.slice(0,6);
+    if(POOL.length<K){ $('#builderResults').innerHTML='<div class="help-note">Not enough strong legs across different games for a round robin. Load odds, lower <b>Min leg HR%</b>, or choose a smaller leg count.</div>'; return; }
+    const combos=kCombos(POOL,K);
+    const built=combos.map(function(picks){ return rrBuild(picks, priceMode); });
+    built.sort(function(x,y){ return y.score-x.score; });
+    $('#builderResults').innerHTML='<div class="help-note">\ud83c\udfb2 <b>Round robin</b>: '+built.length+' separate '+K+'-leg parlays from your top '+POOL.length+' legs (one per game). Stake them all \u2014 if one leg misses, the parlays avoiding it still cash, so a single miss does not bust your whole card.</div>'+
+      '<div class="parlay-grid">'+built.map(function(b,i){return globalNLegCardHTML(b,i+1);}).join('')+'</div>';
+  };
   ['#mPark','#mTemp','#mWind','#mWindDir','#mHum','#mDayNight','#mAway','#mHome'].forEach(s=>{$(s).addEventListener('change',()=>{refreshManualMeta();renderManualRoster();renderGames();});});
   $('#btnAddHitter').onclick=()=>{
     refreshManualMeta();
@@ -2602,6 +2782,7 @@ function globalNLegCardHTML(b,rank){
     <div class="parlay-stat"><span class="lbl">Fair odds</span><span class="val">${fairLine}</span></div>
     <div class="parlay-stat"><span class="lbl">Best same-book</span><span class="val">${sameBookLine}</span></div>
     <div class="parlay-stat"><span class="lbl">Mixed-books (best legs)</span><span class="val">${mixedLine}</span></div>
+    <div class="parlay-stat"><span class="lbl">Add all legs</span><span class="val"><button class="ghost" style="padding:2px 10px" onclick="addAllLegs('${_ld64}')">\u26a1 Add all</button></span></div>
     <div class="parlay-stat"><span class="lbl">Copy bet slip</span><span class="val"><button class="ghost" style="padding:2px 10px" onclick="copySlip('${b64}')">Copy</button></span></div>
     <div class="parlay-stat"><span class="lbl">Save</span><span class="val"><button class="ghost" style="padding:2px 10px" onclick="saveParlay('${b64}', ${legs.length}, ${(b.joint*100).toFixed(4)}, '${bestSameBook.replace(/'/g,"\\'")}', ${_bd||'null'}, '${_wk}', ${_ev==null?'null':_ev.toFixed(4)}, ${b.joint.toFixed(6)}, '${_ld64}')">Save</button></span></div>
   </div>`;
