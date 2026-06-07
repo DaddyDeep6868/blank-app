@@ -623,7 +623,7 @@ tr.flash{animation:flash 1.2s ease}
   <span class="pill-tag">MLB Home-Run Parlay Model</span>
   <div class="spacer"></div>
   <button class="ghost" id="btnDemo">Load sample game</button>
-  <button id="btnLoad">Load MLB slate</button>
+  <button id="btnLoad">Load MLB slate</button> <button id="btnConfirmLineups" class="ghost">&#x2705; Confirm lineups + weather</button>
   <button class="ghost" id="btnLoadOdds">Load HR odds (DK+Fanatics)</button>
 </header>
 
@@ -727,6 +727,7 @@ tr.flash{animation:flash 1.2s ease}
       <div id="builderResults" style="margin-top:10px"></div>
     </div></div>
     <div id="globalPairsContainer"></div>
+    <div id="bookValueContainer"></div>
     <div id="gamesContainer"><div class="empty">No games loaded yet. Use <b>Load MLB slate</b> for live data, or <b>Load sample game</b> to explore.</div></div>
   </div>
 
@@ -792,7 +793,11 @@ tr.flash{animation:flash 1.2s ease}
           </select>
         </div>
         <div class="field"><label>Search</label><input id="trackSearch" placeholder="player name…"></div>
+        <div class="field"><label>&nbsp;</label><button class="ghost" id="btnGradePending">\ud83e\udd16 Grade pending</button></div>
+        <div class="field"><label>&nbsp;</label><button class="ghost" id="btnExportData">\u2b07\ufe0f Export</button></div>
+        <div class="field"><label>&nbsp;</label><button class="ghost" id="btnImportData">\u2b06\ufe0f Import</button></div>
         <div class="field"><label>&nbsp;</label><button class="ghost" id="btnClearSaved">Clear all</button></div>
+        <div class="field" id="syncPanel" style="display:none;flex:1 1 100%"><label>Sync data \u2014 copy to move to another device, or paste exported data and load</label><textarea id="syncBox" style="width:100%;min-height:64px;font-family:monospace;font-size:11px"></textarea><div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap"><button class="ghost" id="btnSyncCopy">\ud83d\udccb Copy</button><button class="ghost" id="btnSyncLoad">Load pasted data</button><button class="ghost" id="btnSyncClose">Close</button></div></div>
       </div>
       <div id="trackTable" style="margin-top:10px"></div>
     </div></div>
@@ -923,6 +928,7 @@ function normInv(p){
 /* American odds helpers */
 function amToDecimal(a){a=Number(a);if(!a)return null;return a>0?1+a/100:1+100/(-a);}
 function amToImplied(a){const d=amToDecimal(a);return d?1/d:null;}
+function novigProb(over, under){ const io=amToImplied(over), iu=amToImplied(under); if(!(io>0)||!(iu>0)) return null; return io/(io+iu); }
 function decToAmerican(d){if(!d||d<=1)return null;return d>=2?'+'+Math.round((d-1)*100):'-'+Math.round(100/(d-1));}
 function fmtPct(x){return(100*x).toFixed(1)+'%';}
 
@@ -1108,6 +1114,47 @@ function deleteSaved(id){
   saveSaved(arr);
 }
 
+function bankrollChartHtml(arr){
+  const settled = arr.filter(function(x){ return x.result==="win"||x.result==="loss"; }).slice().sort(function(a,b){ return (a.savedAt||0)-(b.savedAt||0); });
+  if(settled.length<2) return "";
+  var cum=0, pts=[], peak=0, maxDD=0, streak=0, sign=0;
+  settled.forEach(function(x){
+    var st=Number(x.stake||0), dec=Number(x.decOdds||0);
+    var pf=(x.result==="win") ? st*((dec>1?dec:1)-1) : -st;
+    cum+=pf; pts.push(cum);
+    if(cum>peak) peak=cum;
+    if(peak-cum>maxDD) maxDD=peak-cum;
+    var sg=(x.result==="win")?1:-1;
+    if(sg===sign) streak+=sg; else { streak=sg; sign=sg; }
+  });
+  var minV=Math.min.apply(null, pts.concat([0]));
+  var maxV=Math.max.apply(null, pts.concat([0]));
+  var W=640,H=170,pl=8,pr=12,pt=14,pb=14;
+  var iw=W-pl-pr, ih=H-pt-pb, n=pts.length, rng=(maxV-minV)||1;
+  var xAt=function(i){ return pl + (n<=1?0:(i/(n-1))*iw); };
+  var yAt=function(v){ return pt + ih - ((v-minV)/rng)*ih; };
+  var poly=pts.map(function(v,i){ return xAt(i).toFixed(1)+","+yAt(v).toFixed(1); }).join(" ");
+  var area="8,"+yAt(minV).toFixed(1)+" "+poly+" "+xAt(n-1).toFixed(1)+","+yAt(minV).toFixed(1);
+  var zeroY=yAt(0).toFixed(1);
+  var end=pts[n-1];
+  var col=end>=0?"#0f9d58":"#db4437";
+  var net=(end>=0?"+":"")+"$"+Math.abs(end).toFixed(2);
+  var streakTxt=(streak===0)?"\u2014":(Math.abs(streak)+(sign>0?"W":"L"));
+  return `<div class="notion-callout" data-tone="blue" style="margin:0 0 12px">
+    <div>\ud83d\udcb0</div>
+    <div style="flex:1">
+      <strong>Bankroll & ROI curve</strong>
+      <p class="notion-faint" style="margin:2px 0 8px">Cumulative profit/loss across settled bets (oldest \u2192 newest). Net <b style="color:${col}">${net}</b> \u00b7 Peak +$${peak.toFixed(2)} \u00b7 Max drawdown \u2212$${maxDD.toFixed(2)} \u00b7 Current streak <b>${streakTxt}</b></p>
+      <svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;background:#00000008;border-radius:8px">
+        <line x1="8" y1="${zeroY}" x2="${W-pr}" y2="${zeroY}" stroke="#8884" stroke-dasharray="4 4"/>
+        <polygon points="${area}" fill="${col}22" stroke="none"/>
+        <polyline points="${poly}" fill="none" stroke="${col}" stroke-width="2"/>
+        <circle cx="${xAt(n-1).toFixed(1)}" cy="${yAt(end).toFixed(1)}" r="3.5" fill="${col}"/>
+      </svg>
+    </div>
+  </div>`;
+}
+
 function renderTracking(){
   let arr=loadSaved();
 
@@ -1222,7 +1269,8 @@ function renderTracking(){
       </td>
     </tr>`;
   }).join('');
-  $('#trackTable').innerHTML=summaryHtml+btHtml+`<table class="players"><thead><tr>
+  const bankHtml=bankrollChartHtml(arr);
+  $('#trackTable').innerHTML=summaryHtml+bankHtml+btHtml+`<table class="players"><thead><tr>
     <th>Saved</th><th class="num">Legs</th><th>Bet slip</th><th class="num">Combined</th><th class="num">Best same-book</th><th class="num">Stake</th><th>Status</th><th></th>
   </tr></thead><tbody>${rows}</tbody></table>`;
 
@@ -1238,7 +1286,7 @@ function renderTracking(){
   });
 }
 
-function saveParlay(b64, legCount, combinedPct, bestSameBook, decOdds, stake, tier, ev, predProb){
+function saveParlay(b64, legCount, combinedPct, bestSameBook, decOdds, stake, tier, ev, predProb, ld64){
   const txt = decodeURIComponent(escape(atob(b64)));
   const legs = txt.split('\n').filter(Boolean);
   if(stake == null){ var _i = prompt('Stake for this parlay ($)?','10'); stake = (_i==null)?null:(parseFloat(_i)||null); }
@@ -1254,9 +1302,87 @@ function saveParlay(b64, legCount, combinedPct, bestSameBook, decOdds, stake, ti
     ev: (ev==null?null:Number(ev)),
     predProb: (predProb==null?null:Number(predProb)),
     legs,
+    legData: (function(){ if(!ld64) return null; try{ return JSON.parse(decodeURIComponent(escape(atob(ld64)))); }catch(e){ return null; } })(),
     result: 'pending'
   });
   setStatus('Saved parlay. See Tracking tab.');
+}
+
+async function gradePending(){
+  const all = loadSaved();
+  const pend = all.filter(function(x){ return (x.result||"pending")==="pending" && Array.isArray(x.legData) && x.legData.length; });
+  if(!pend.length){ toast("Auto-grade","No pending parlays can be auto-graded yet. Parlays saved before this update don't store player/game IDs, so settle those by hand.","\u2139\ufe0f"); return; }
+  setStatus("Grading\u2026 fetching final box scores from MLB.");
+  const dates = {}, pks = {};
+  pend.forEach(function(pp){ pp.legData.forEach(function(l){ if(l && l.date) dates[l.date]=1; if(l && l.gamePk) pks[l.gamePk]=1; }); });
+  const status = {};
+  for(const d of Object.keys(dates)){
+    try{
+      const sch = await jget("https://statsapi.mlb.com/api/v1/schedule?sportId=1&date="+encodeURIComponent(d));
+      (sch.dates||[]).forEach(function(dd){ (dd.games||[]).forEach(function(g){ status[g.gamePk] = g.status && g.status.abstractGameState; }); });
+    }catch(e){ try{ console.warn("grade schedule", d, e); }catch(_e){} }
+  }
+  const hr = {};
+  for(const pk of Object.keys(pks)){
+    if(status[pk] !== "Final") continue;
+    try{
+      const bs = await jget("https://statsapi.mlb.com/api/v1/game/"+encodeURIComponent(pk)+"/boxscore");
+      const set = {};
+      ["home","away"].forEach(function(side){
+        const pl = (bs.teams && bs.teams[side] && bs.teams[side].players) || {};
+        Object.keys(pl).forEach(function(key){
+          const prx = pl[key];
+          const id = prx && prx.person && prx.person.id;
+          const h = prx && prx.stats && prx.stats.batting && prx.stats.batting.homeRuns;
+          if(id!=null) set[id] = Number(h||0);
+        });
+      });
+      hr[pk] = set;
+    }catch(e){ try{ console.warn("grade boxscore", pk, e); }catch(_e){} }
+  }
+  let graded = 0, waiting = 0;
+  pend.forEach(function(pp){
+    let ready = true, win = true;
+    for(const l of pp.legData){
+      if(status[l.gamePk] !== "Final"){ ready = false; break; }
+      const set = hr[l.gamePk];
+      if(!set || l.mlbId==null || set[l.mlbId]===undefined){ ready = false; break; }
+      if(!(set[l.mlbId] >= 1)) win = false;
+    }
+    if(!ready){ waiting++; return; }
+    pp.result = win ? "win" : "loss";
+    graded++;
+  });
+  if(graded){ try{ localStorage.setItem(TRACK_KEY, JSON.stringify(all)); }catch(e){} }
+  renderTracking();
+  setStatus(graded ? ("Auto-graded "+graded+" parlay(s).") : "Nothing to grade yet \u2014 games not final.");
+  toast("Auto-grade", graded ? ("Settled "+graded+" parlay(s) from final box scores."+(waiting?(" "+waiting+" still waiting on final scores."):"")) : "No parlays ready \u2014 their games aren't final yet.", "\ud83e\udd16");
+}
+function exportSaved(){
+  const panel = $("#syncPanel"); if(panel) panel.style.display = "";
+  const box = $("#syncBox");
+  if(box){ box.value = JSON.stringify(loadSaved()); box.focus(); box.select(); }
+}
+function showImport(){
+  const panel = $("#syncPanel"); if(panel) panel.style.display = "";
+  const box = $("#syncBox");
+  if(box){ box.value = ""; box.setAttribute("placeholder","Paste exported data here, then click 'Load pasted data'"); box.focus(); }
+}
+function importSaved(){
+  const box = $("#syncBox"); if(!box) return;
+  let data;
+  try{ data = JSON.parse((box.value||"").trim()); }
+  catch(e){ toast("Import failed","That doesn't look like valid exported data.","\u26a0\ufe0f"); return; }
+  if(!Array.isArray(data)){ toast("Import failed","Expected a list of saved parlays.","\u26a0\ufe0f"); return; }
+  try{ localStorage.setItem(TRACK_KEY, JSON.stringify(data)); }catch(e){ toast("Import failed","Couldn't save to this browser.","\u26a0\ufe0f"); return; }
+  renderTracking();
+  const panel = $("#syncPanel"); if(panel) panel.style.display = "none";
+  toast("Imported","Loaded "+data.length+" saved parlay(s) onto this device.","\u2b06\ufe0f");
+}
+function copySync(){
+  const box = $("#syncBox"); if(!box) return;
+  try{ navigator.clipboard.writeText(box.value||""); toast("Copied","Sync data copied. Paste it into Import on your other device.","\ud83d\udccb"); }
+  catch(e){ box.focus(); box.select(); toast("Select & copy","Couldn't auto-copy \u2014 the text is selected, press Ctrl/Cmd+C.","\ud83d\udccb"); }
 }
 
 /* ============================ UI helpers ============================ */
@@ -1485,13 +1611,19 @@ function extractHrOddsByPlayer(payload, bookId){
   for(const ev of (payload?.events||[])){
     const eventId = ev?.id;
     for(const o of (ev?.odds||[])){
-      if(!isAnytimeHrLeg(o)) continue;
+      const hrMkt = o?.market === 'Player Home Runs' && o?.selection?.line === 0.5 && o?.player?.name && o?.player?.team?.abbreviation && o?.price != null;
+      if(!hrMkt) continue;
+      const side = o?.selection?.side;
+      if(side !== 'Over' && side !== 'Under') continue;
       const teamAbbr = o.player.team.abbreviation;
       const nameKey = normalizeName(o.player.name);
       const key = `${eventId}::${teamAbbr}::${nameKey}`;
       const price = parseAmericanOdds(o.price);
       if(price==null) continue;
-      out.set(key, { price, sgp: o.sgp||null, links: o.links||null, rawName: o.player.name });
+      let cur = out.get(key);
+      if(!cur){ cur = { price: null, under: null, sgp: null, links: null, rawName: o.player.name }; out.set(key, cur); }
+      if(side === 'Over'){ cur.price = price; cur.sgp = o.sgp||cur.sgp; cur.links = o.links||cur.links; cur.rawName = o.player.name; }
+      else { cur.under = price; }
     }
   }
   return out;
@@ -1559,13 +1691,18 @@ function applyOddsToLoadedGames(merged){
     const fan = obj.fanatics?.price ?? null;
     const mgm = obj.betmgm?.price ?? null;
     const cae = obj.caesars?.price ?? null;
+    let _mktSum = 0, _mktN = 0;
+    [obj.draftkings, obj.fanatics, obj.betmgm, obj.caesars].forEach(function(v){
+      if(v && v.price!=null && v.under!=null){ const fp = novigProb(v.price, v.under); if(fp!=null){ _mktSum += fp; _mktN++; } }
+    });
 
-    const cur = byPlayer.get(key2) || { dk: null, fan: null, mgm: null, cae: null, bestPrice: null, bestBook: null };
+    const cur = byPlayer.get(key2) || { dk: null, fan: null, mgm: null, cae: null, bestPrice: null, bestBook: null, mktSum: 0, mktN: 0 };
     // keep best line per-book
     if(dk!=null && betterAmerican(dk, cur.dk)) cur.dk = dk;
     if(fan!=null && betterAmerican(fan, cur.fan)) cur.fan = fan;
     if(mgm!=null && betterAmerican(mgm, cur.mgm)) cur.mgm = mgm;
     if(cae!=null && betterAmerican(cae, cur.cae)) cur.cae = cae;
+    if(_mktN>0){ cur.mktSum += _mktSum; cur.mktN += _mktN; }
 
     // recompute best across books
     let bestBook = null;
@@ -1590,6 +1727,7 @@ function applyOddsToLoadedGames(merged){
         p.odds = hit.bestPrice; // existing UI shows "Book" as a single number
         // optionally stash detail if you later want an odds board
         p._oddsBooks = { draftkings: hit.dk, fanatics: hit.fan, betmgm: hit.mgm, caesars: hit.cae, autoBest: hit.bestBook };
+        p._mktProb = (hit.mktN>0) ? (hit.mktSum/hit.mktN) : null;
         applied++;
       }
     }
@@ -1655,7 +1793,7 @@ async function teamPitchingHR9(teamId){
   // Uses MLB team season pitching totals as a simple bullpen proxy.
   // It's not perfect, but better than ignoring bullpen completely.
   try{
-    const data=await jget(`{{https://statsapi.mlb.com/api/v1/teams/${teamId}/stats}}?stats=season&group=pitching`);
+    const data=await jget(`https://statsapi.mlb.com/api/v1/teams/${teamId}/stats?stats=season&group=pitching`);
     const split=data.stats&&data.stats[0]&&data.stats[0].splits&&data.stats[0].splits[0];
     if(!split||!split.stat) return LEAGUE_HR9;
     const ip=parseFloat(split.stat.inningsPitched||'0');
@@ -1706,7 +1844,7 @@ async function teamHitters(teamId, side, oppPitcher, env){
 }
 
 function makePlayer(o,env){
-  const pl={name:o.name,side:o.side,bats:o.bats,HR:o.HR,PA:o.PA,recHR:o.recHR||0,recPA:o.recPA||0,spot:o.spot||5,
+  const pl={name:o.name,mlbId:o.mlbId||null,side:o.side,bats:o.bats,HR:o.HR,PA:o.PA,recHR:o.recHR||0,recPA:o.recPA||0,spot:o.spot||5,
     oppHand:o.oppHand||'R',oppHR9:o.oppHR9||LEAGUE_HR9,odds:o.odds||null};
   const e2=Object.assign({},env,{oppHand:pl.oppHand,oppHR9:pl.oppHR9});
   pl._env=e2;pl.calc=playerHRProb(pl,e2);pl.p=pl.calc.p;return pl;
@@ -1930,6 +2068,60 @@ function buildCrossGameParlays(allGames, {
 }
 
 /* ============================ Renderers ============================ */
+function bookValueHtml(){
+  const books=[["draftkings","DraftKings"],["fanatics","Fanatics"],["betmgm","BetMGM"],["caesars","Caesars"]];
+  const stat={}; books.forEach(function(b){ stat[b[0]]={n:0,best:0,edgeSum:0,edgeN:0,decSum:0}; });
+  var any=false;
+  GAMES.forEach(function(g){ (g.players||[]).forEach(function(p){
+    const ob=p._oddsBooks; if(!ob) return;
+    var bestDec=-1, bestKey=null;
+    books.forEach(function(b){ var v=ob[b[0]]; if(v==null) return; any=true; var dec=amToDecimal(v); var st=stat[b[0]]; st.n++; st.decSum+=dec; var im=amToImplied(v); if(im!=null && p.p!=null){ st.edgeSum+=(p.p-im); st.edgeN++; } if(dec>bestDec){ bestDec=dec; bestKey=b[0]; } });
+    if(bestKey) stat[bestKey].best++;
+  }); });
+  if(!any) return "";
+  var rows=books.map(function(b){ var st=stat[b[0]]; if(!st.n) return ""; var avgEdge=st.edgeN?st.edgeSum/st.edgeN:null; var avgDec=st.decSum/st.n; var eTxt=(avgEdge==null)?"\u2014":((avgEdge>=0?"+":"")+(avgEdge*100).toFixed(1)+"%"); return `<tr><td>${b[1]}</td><td class="num">${st.n}</td><td class="num">${st.best}</td><td class="num">${decToAmerican(avgDec)}</td><td class="num"><span class="${avgEdge==null?"":(avgEdge>=0?"ev-pos":"ev-neg")}">${eTxt}</span></td></tr>`; }).join("");
+  return `<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">\ud83c\udfe6 Book value scoreboard</div><p class="help-note">Across every loaded hitter, which sportsbook gives the best home-run prices. <b>Best price</b> = legs that book wins outright on payout. <b>Avg edge</b> = your model probability minus that book\u2019s no-vig implied probability (green = value).</p><table class="players"><thead><tr><th>Sportsbook</th><th class="num">Legs priced</th><th class="num">Best price</th><th class="num">Avg price</th><th class="num">Avg edge</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+
+async function confirmLineups(){
+  const real = GAMES.filter(function(g){ return g && g.id!=null && /^\d+$/.test(String(g.id)); });
+  if(!real.length){ toast("Lineups","Load a live MLB slate first \u2014 sample/manual games have no live feed.","\u2139\ufe0f"); return; }
+  setStatus("Fetching confirmed lineups + live weather\u2026", true);
+  let lineupsFound=0, wxFound=0;
+  for(const g of real){
+    try{
+      const feed = await jget("https://statsapi.mlb.com/api/v1/game/"+encodeURIComponent(g.id)+"/feed/live");
+      const bs = feed && feed.liveData && feed.liveData.boxscore;
+      const gd = feed && feed.gameData;
+      if(gd && gd.weather && (gd.weather.temp || gd.weather.wind)){
+        g._liveWx = { condition: gd.weather.condition||"", temp: gd.weather.temp||"", wind: gd.weather.wind||"" };
+        g._windOut = /out to/i.test(g._liveWx.wind||"");
+        wxFound++;
+        var t=parseInt(g._liveWx.temp,10); if(!isNaN(t) && g.env){ g.env.temp=t; }
+      }
+      var inIds={};
+      ["home","away"].forEach(function(side){
+        var tm = bs && bs.teams && bs.teams[side];
+        var order = (tm && tm.battingOrder) || [];
+        order.forEach(function(pid, idx){ inIds[pid]=idx+1; });
+      });
+      var posted = Object.keys(inIds).length>0;
+      if(posted) lineupsFound++;
+      (g.players||[]).forEach(function(pp){
+        if(!posted){ pp._lineupStatus="unknown"; return; }
+        if(pp.mlbId!=null && inIds[pp.mlbId]){ pp._lineupStatus="in"; pp._lineupSpot=inIds[pp.mlbId]; }
+        else { pp._lineupStatus="out"; }
+      });
+    }catch(e){ try{ console.warn("lineup fetch", g.id, e); }catch(_e){} }
+  }
+  window.DL_LINEUPS_CONFIRMED = true;
+  GAMES.forEach(function(g){ if(g.env) g.env.lineupsConfirmed=true; });
+  recomputeAll();
+  renderGames();
+  setStatus("Lineups checked \u2014 "+lineupsFound+" game(s) posted, weather on "+wxFound+".");
+  toast("Lineups + weather", lineupsFound ? ("Confirmed lineups for "+lineupsFound+" game(s). Hitters not in the posted lineup are flagged \u26a0\ufe0f.") : "No lineups posted yet \u2014 check back closer to first pitch. Live weather updated where available.", "\u2705");
+}
+
 function renderGames(){
   const all=[...GAMES];
   if(MANUAL.meta&&MANUAL.players.length)all.unshift(buildManualGame());
@@ -1937,6 +2129,7 @@ function renderGames(){
 
   // Global cross-game suggestions (only for real slate, not manual/sample-only)
   const gc=$('#globalPairsContainer');
+  const _bv=$('#bookValueContainer'); if(_bv) _bv.innerHTML=bookValueHtml();
   const bc=$('#builderCard');
   if(GAMES.length>=2){
     bc.style.display='';
@@ -1967,6 +2160,9 @@ function globalParlayCardHTML(pr,rank){
   const tB = pr.bGameObj && pr.bGameObj.gameDate ? fmtLocalTime(pr.bGameObj.gameDate) : '';
   const aImg = headshotUrl(pr.a && pr.a.mlbId);
   const bImg = headshotUrl(pr.b && pr.b.mlbId);
+  const _pmkt = (pr.a._mktProb!=null && pr.b._mktProb!=null) ? (pr.a._mktProb * pr.b._mktProb) : null;
+  const _pedge = (_pmkt!=null) ? (pr.joint - _pmkt) : null;
+  const _pedgeTxt = (_pedge==null) ? '\u2014' : ((_pedge>=0?'+':'')+(_pedge*100).toFixed(1)+' pts');
   const _dec = pr.sameBookBestDec || null;
   const _ev = parlayEV(calibratedJoint(pr.joint, weakestTier([confidenceLabel(pr.a),confidenceLabel(pr.b)])),_dec);
   const _evTxt = _ev==null ? '—' : ((_ev>=0?'+':'')+(_ev*100).toFixed(1)+'%');
@@ -1994,6 +2190,8 @@ function globalParlayCardHTML(pr,rank){
     <div class="parlay-stat"><span class="lbl">${pr.b.name}</span><span class="val">${fmtPct(pr.b.p)}</span></div>
     <div class="parlay-stat"><span class="lbl">Combined (independent)</span><span class="val">${fmtPct(pr.joint)}</span></div>
     <div class="parlay-stat"><span class="lbl">Calibrated win %</span><span class="val">${fmtPct(_cj)}${_cj!==pr.joint?' <span class="notion-faint">(tuned)</span>':''}</span></div>
+    <div class="parlay-stat"><span class="lbl">Market fair %</span><span class="val">${_pmkt==null?'\u2014':fmtPct(_pmkt)}</span></div>
+    <div class="parlay-stat"><span class="lbl">Model edge vs market</span><span class="val ${_pedge==null?'':(_pedge>=0?'ev-pos':'ev-neg')}">${_pedgeTxt}</span></div>
     <div class="parlay-stat"><span class="lbl">Fair parlay odds</span><span class="val">${decToAmerican(pr.fairDec)}</span></div>
     <div class="parlay-stat"><span class="lbl">Best same-book</span><span class="val">${bookLine}</span></div>
     <div class="parlay-stat"><span class="lbl">Expected value</span><span class="val ${_evCls}">${_evTxt}</span></div>
@@ -2017,7 +2215,7 @@ function gameCardHTML(g,gi){
       <div><div class="game-matchup">${g.away} @ ${g.home}</div>
       <div class="game-meta">
         <span class="chip">🏟️ ${e.park}</span>
-        <span class="chip">PF ${e.parkHR}</span>
+        <span class="chip">PF ${e.parkHR}</span>${g._liveWx?` <span class="chip" style="background:${g._windOut?"#0f9d5822":"#8881"};color:${g._windOut?"#0f9d58":"inherit"}" title="Live weather">\ud83c\udf2c\ufe0f ${g._liveWx.temp?g._liveWx.temp+"\u00b0F":""} ${g._liveWx.wind||""}${g._windOut?" \u2022 wind out":""}</span>`:""}
         <span class="chip">🌡️ ${wx.temp!=null?wx.temp+'°F':'n/a'}</span>
         <span class="chip">💨 ${wx.wind!=null?wx.wind+'mph':'n/a'}</span>
         <span class="chip">${e.dayNight==='day'?'☀️ Day':'🌙 Night'}</span>
@@ -2094,6 +2292,7 @@ function parlayCardHTML(pr,rank){
 
 function playerRowHTML(p,g){
   const c=p.calc;const f=c.factors;
+  const _lu = (p._lineupStatus==="out") ? ' <span class="chip" style="background:#db443722;color:#db4437" title="Not in the posted starting lineup">\u26a0\ufe0f Out</span>' : (p._lineupStatus==="in" ? ` <span class="chip" style="background:#0f9d5822;color:#0f9d58" title="Confirmed in lineup">\u2705 #${p._lineupSpot||""}</span>` : "");
   const dk = p._oddsBooks && p._oddsBooks.draftkings!=null ? p._oddsBooks.draftkings : null;
   const fan = p._oddsBooks && p._oddsBooks.fanatics!=null ? p._oddsBooks.fanatics : null;
   const best = p.odds!=null ? p.odds : null;
@@ -2106,7 +2305,7 @@ function playerRowHTML(p,g){
     {label:'Temperature',v:f.temp},{label:'Wind',v:f.wind},{label:'Humidity',v:f.humidity},{label:'Day/Night',v:f.daynight}
   ].map(fb).join('');
   return `<tr>
-    <td>${p.name} <span class="handed">(${p.bats})</span></td>
+    <td>${p.name} <span class="handed">(${p.bats})</span>${_lu}</td>
     <td>${p.side==='home'?g.homeAbbr||g.home:g.awayAbbr||g.away}</td>
     <td class="num">${p.spot}</td>
     <td class="num">${(c.perPA*100).toFixed(2)}%</td>
@@ -2245,6 +2444,7 @@ function init(){
   $('#btnSettings').onclick=()=>{const p=$('#settingsPanel');p.style.display=p.style.display==='none'?'':'none';};
   const go=()=>loadSlate($('#dateInput').value);
   $('#btnLoad').onclick=go;$('#btnLoad2').onclick=go;
+  if($('#btnConfirmLineups')) $('#btnConfirmLineups').onclick=()=>{ confirmLineups(); };
   $('#btnDemo').onclick=loadSample;
 
   // Toast
@@ -2262,6 +2462,12 @@ function init(){
   $('#btnClearSaved').onclick=()=>{
     if(confirm('Clear all saved parlays?')){ localStorage.removeItem(TRACK_KEY); renderTracking(); }
   };
+  if($('#btnGradePending')) $('#btnGradePending').onclick=()=>{ gradePending(); };
+  if($('#btnExportData')) $('#btnExportData').onclick=()=>{ exportSaved(); };
+  if($('#btnImportData')) $('#btnImportData').onclick=()=>{ showImport(); };
+  if($('#btnSyncCopy')) $('#btnSyncCopy').onclick=()=>{ copySync(); };
+  if($('#btnSyncLoad')) $('#btnSyncLoad').onclick=()=>{ importSaved(); };
+  if($('#btnSyncClose')) $('#btnSyncClose').onclick=()=>{ const _p=$('#syncPanel'); if(_p) _p.style.display='none'; };
   ['#trackStatus','#trackLegs','#trackSearch'].forEach(sel=>{
     const el=$(sel);
     if(!el) return;
@@ -2378,12 +2584,20 @@ function globalNLegCardHTML(b,rank){
     return `${p.name} HR | DK ${dk} | Fanatics ${fan} | Best ${bestBook} ${best}`;
   }).join('\n');
   const b64 = btoa(unescape(encodeURIComponent(txt)));
+  const _legData = b.picks.map(function(x){ return { name:x.p.name, mlbId:(x.p.mlbId||null), gamePk:(x.g.id||null), date:(x.g.gameDate? String(x.g.gameDate).slice(0,10):null) }; });
+  const _ld64 = btoa(unescape(encodeURIComponent(JSON.stringify(_legData))));
+  const _mktArr = b.picks.map(function(x){ return x.p._mktProb; });
+  const _mkt = _mktArr.every(function(v){ return v!=null; }) ? _mktArr.reduce(function(a,v){ return a*v; }, 1) : null;
+  const _edge = (_mkt!=null) ? (b.joint - _mkt) : null;
+  const _edgeTxt = (_edge==null) ? '\u2014' : ((_edge>=0?'+':'')+(_edge*100).toFixed(1)+' pts');
   const bestSameBook = b.sameBookBestDec ? `${b.sameBookBest==='draftkings'?'DK':'Fanatics'} ${decToAmerican(b.sameBookBestDec)}` : '—';
   return `<div class="parlay-card r${rank}"><span class="rank">#${rank}</span>
     <h4><span class="nameRow">${legs.map(p=>{const im=headshotUrl(p.mlbId);return `${im?`<img class=\"avatar\" src=\"${im}\" alt=\"\" onerror=\"this.style.display='none'\">`:''}<span>${p.name}</span>`;}).join('<span class="notion-faint" style="margin:0 2px">+</span>')}</span></h4>
     ${legs.map((p,idx)=>`<div class="parlay-stat"><span class="lbl">Leg ${idx+1}</span><span class="val">${p.name} · ${fmtPct(p.p)} · ${games[idx]}</span></div>`).join('')}
     <div class="parlay-stat"><span class="lbl">Combined (independent)</span><span class="val">${fmtPct(b.joint)}</span></div>
     <div class="parlay-stat"><span class="lbl">Calibrated win %</span><span class="val">${fmtPct(_cj)}${_cj!==b.joint?' <span class="notion-faint">(tuned)</span>':''}</span></div>
+    <div class="parlay-stat"><span class="lbl">Market fair %</span><span class="val">${_mkt==null?'\u2014':fmtPct(_mkt)}</span></div>
+    <div class="parlay-stat"><span class="lbl">Model edge vs market</span><span class="val ${_edge==null?'':(_edge>=0?'ev-pos':'ev-neg')}">${_edgeTxt}</span></div>
     <div class="parlay-stat"><span class="lbl">Expected value</span><span class="val ${_evCls}">${_evTxt}</span></div>
     <div class="parlay-stat"><span class="lbl">Suggested stake</span><span class="val">${_stkTxt}</span></div>
     <div class="parlay-stat"><span class="lbl">Confidence</span><span class="val"><span class="chip" style="background:${_wkCol}22;color:${_wkCol}" title="${_reasons||'No standout factors'}">${_wk}</span> <span class="notion-faint">weakest leg</span></span></div>
@@ -2391,7 +2605,7 @@ function globalNLegCardHTML(b,rank){
     <div class="parlay-stat"><span class="lbl">Best same-book</span><span class="val">${sameBookLine}</span></div>
     <div class="parlay-stat"><span class="lbl">Mixed-books (best legs)</span><span class="val">${mixedLine}</span></div>
     <div class="parlay-stat"><span class="lbl">Copy bet slip</span><span class="val"><button class="ghost" style="padding:2px 10px" onclick="copySlip('${b64}')">Copy</button></span></div>
-    <div class="parlay-stat"><span class="lbl">Save</span><span class="val"><button class="ghost" style="padding:2px 10px" onclick="saveParlay('${b64}', ${legs.length}, ${(b.joint*100).toFixed(4)}, '${bestSameBook.replace(/'/g,"\\'")}', ${_bd||'null'}, '${_wk}', ${_ev==null?'null':_ev.toFixed(4)}, ${b.joint.toFixed(6)})">Save</button></span></div>
+    <div class="parlay-stat"><span class="lbl">Save</span><span class="val"><button class="ghost" style="padding:2px 10px" onclick="saveParlay('${b64}', ${legs.length}, ${(b.joint*100).toFixed(4)}, '${bestSameBook.replace(/'/g,"\\'")}', ${_bd||'null'}, '${_wk}', ${_ev==null?'null':_ev.toFixed(4)}, ${b.joint.toFixed(6)}, '${_ld64}')">Save</button></span></div>
   </div>`;
 }
 document.addEventListener('DOMContentLoaded',init);
