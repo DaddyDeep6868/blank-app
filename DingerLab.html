@@ -1010,8 +1010,8 @@ body.mobile-layout .drawer-b{padding:10px}
 </div>
 
 <script>
-const APP_VERSION = 'v1.24';
-const APP_UPDATED = 'Updated Jun 8, 2026 3:00 AM ET';
+const APP_VERSION = 'v1.25';
+const APP_UPDATED = 'Updated Jun 8, 2026 3:10 AM ET';
 const APP_PASSWORD = 'adi11';
 {
   const av=document.getElementById('appVersion');
@@ -3063,7 +3063,7 @@ function init(){
   applyMobileLayout();
   const today=new Date();$('#dateInput').value=today.toISOString().slice(0,10);
   populateParkSelect();renderSettings();renderManualRoster();
-  $('.tabbar button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+  $$('.tabbar button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   $('#btnSettings').onclick=()=>{const p=$('#settingsPanel');p.style.display=p.style.display==='none'?'':'none';};
   if($('#btnMobileMode')) $('#btnMobileMode').onclick=()=>{ var enabled=currentMobileLayoutEnabled(); localStorage.setItem(MOBILE_LAYOUT_KEY, enabled ? 'off' : 'on'); applyMobileLayout(); };
   window.addEventListener('resize', ()=>{ if(localStorage.getItem(MOBILE_LAYOUT_KEY)==null) applyMobileLayout(); });
