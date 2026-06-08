@@ -734,6 +734,7 @@ body.mobile-layout .drawer-b{padding:10px}
 
   <div class="tabbar">
     <button class="active" data-tab="games">Games &amp; Parlays</button>
+    <button data-tab="allinone">All-in-one</button>
     <button data-tab="insights">Insights</button>
     <button data-tab="command">Command Center</button>
     <button data-tab="portfolio">Portfolio</button>
@@ -846,6 +847,15 @@ body.mobile-layout .drawer-b{padding:10px}
     <div id="globalPairsContainer"></div>
     <div id="bookValueContainer"></div>
     <div id="gamesContainer"><div class="empty">No games loaded yet. Use <b>Load slate + all-market odds</b> for live data.</div></div>
+  </div>
+
+  <!-- TAB: ALL IN ONE -->
+  <div data-panel="allinone" style="display:none">
+    <div class="game-card open"><div class="game-body" style="display:block;padding:18px">
+      <div class="section-title">🧭 All-in-one HQ</div>
+      <p class="help-note">One faster-scanning command tab that combines the best picks, best visuals, and the most actionable slate data in one place.</p>
+      <div id="allInOneResults" style="margin-top:10px"></div>
+    </div></div>
   </div>
 
   <!-- TAB: INSIGHTS -->
@@ -1022,8 +1032,8 @@ body.mobile-layout .drawer-b{padding:10px}
 </div>
 
 <script>
-const APP_VERSION = 'v1.32';
-const APP_UPDATED = 'Updated Jun 8, 2026 5:43 PM ET';
+const APP_VERSION = 'v1.33';
+const APP_UPDATED = 'Updated Jun 8, 2026 7:24 PM ET';
 const APP_PASSWORD = 'adi11';
 {
   const av=document.getElementById('appVersion');
@@ -2932,6 +2942,7 @@ async function confirmLineups(){
   renderGames();
   renderSlip();
   if(activeTab==='command') renderCommandCenter();
+  if(activeTab==='allinone') renderAllInOne();
   setStatus("Lineups checked — "+lineupsFound+" game(s) posted, weather on "+wxFound+".");
   var shockBits=[];
   if(shockReport && shockReport.counts){
@@ -3277,6 +3288,7 @@ function switchTab(t){
   $$('[data-panel]').forEach(p=>p.style.display=(p.dataset.panel===t)?'':'none');
   if(t==='parks')renderParks();if(t==='method')renderMethod();
   if(t==='track')renderTracking();
+  if(t==='allinone')renderAllInOne();
   if(t==='insights')renderInsights();
   if(t==='command')renderCommandCenter();
   if(t==='portfolio')renderPortfolio();
@@ -3320,6 +3332,7 @@ function init(){
       logln('Applied odds to '+res.applied+'/'+res.total+' loaded hitters.');
       setStatus('Slate + odds loaded. Applied to '+res.applied+'/'+res.total+' hitters. Open a game card to see EV.',false);
       renderGames();
+      if(activeTab==='allinone') renderAllInOne();
       if(activeTab==='insights') renderInsights();
       if(activeTab==='command') renderCommandCenter();
       if(activeTab==='portfolio') renderPortfolio();
@@ -3638,6 +3651,95 @@ function insightHeatCell(prob){
   var bg=p>=0.55?'#16a34a':(p>=0.35?'#84cc16':(p>=0.20?'#facc15':'#fb923c'));
   var fg=p>=0.35?'#052e16':'#111827';
   return '<span style="display:inline-block;min-width:62px;text-align:center;padding:6px 8px;border-radius:8px;background:'+bg+'22;color:'+fg+';font-weight:800">'+fmtPct(p)+'</span>';
+}
+
+function renderAllInOne(){
+  var wrap=$('#allInOneResults');
+  if(!wrap) return;
+  if(GAMES.length<1){ wrap.innerHTML='<div class="help-note">Load a slate first.</div>'; return; }
+  window.DL_CORR_MULT=readCorrMult();
+  readStakeCfg();
+  var all=collectPortfolioCandidates();
+  if(!all.length){ wrap.innerHTML='<div class="help-note">No priced candidates yet. Load all-market odds first.</div>'; return; }
+
+  function availableBooks(x){
+    return ['draftkings','fanatics','betmgm','caesars'].filter(function(book){ return x && x.books && x.books[book]!=null; });
+  }
+  function explain(x){
+    var notes=[];
+    if(x.readyNow) notes.push('confirmed lineup');
+    else notes.push('projected lineup');
+    if((x.edge||0)>=0.05) notes.push('strong edge');
+    if((x.ev||0)>=0.10) notes.push('premium EV');
+    else if((x.ev||0)>0) notes.push('positive EV');
+    if((x.tier||'')==='Great') notes.push('top confidence');
+    if(x.booksAvailable>=3) notes.push('multi-book coverage');
+    if(x.p && x.p._env && x.p._env.parkHR!=null && Number(x.p._env.parkHR)>=1.05) notes.push('park boost');
+    return notes.slice(0,4);
+  }
+  var radar=all.map(function(x){
+    var move=(x.p&&x.p._mktMove&&x.p._mktMove[x.mk]!=null)?Number(x.p._mktMove[x.mk]):0;
+    var readyNow=!!(x.g&&x.g.env&&x.g.env.lineupsConfirmed);
+    var books=availableBooks(x);
+    var confN=x.tier==='Great'?1:(x.tier==='Good'?0.72:0.4);
+    var evN=Math.max(0, clamp((x.ev||0)/0.20, 0, 1));
+    var edgeN=Math.max(0, clamp((x.edge||0)/0.08, 0, 1));
+    var probN=clamp((x.prob||0)/0.65, 0, 1);
+    var lineN=readyNow?1:0.55;
+    var routeN=clamp(books.length/4, 0, 1);
+    var moveN=move>0?clamp(move/0.03, 0, 1):0;
+    var volatility=(x.tier==='Low'?1:(readyNow?0.18:0.42));
+    var score=Math.round(clamp(50 + evN*18 + edgeN*16 + probN*12 + lineN*10 + routeN*6 + confN*6 + moveN*4 - volatility*6, 35, 99));
+    var enriched=Object.assign({}, x, {move:move, readyNow:readyNow, booksAvailable:books.length, radarScore:score});
+    enriched.reasons=explain(enriched);
+    return enriched;
+  });
+  radar.sort(function(a,b){
+    if((b.radarScore||0)!==(a.radarScore||0)) return (b.radarScore||0)-(a.radarScore||0);
+    if(Math.abs((b.ev||0)-(a.ev||0))>1e-9) return (b.ev||0)-(a.ev||0);
+    if(Math.abs((b.edge||0)-(a.edge||0))>1e-9) return (b.edge||0)-(a.edge||0);
+    return (b.prob||0)-(a.prob||0);
+  });
+  var ready=radar.filter(function(x){ return x.readyNow && (x.ev||0)>0; });
+  var positive=radar.filter(function(x){ return (x.ev||0)>0; });
+  var avgEdge=ready.length ? ready.reduce(function(a,x){ return a+(x.edge||0); },0)/ready.length : (positive.length ? positive.reduce(function(a,x){ return a+(x.edge||0); },0)/positive.length : null);
+  var architectPlans=buildArchitectPlans(radar).slice(0,4);
+  var hrRows=insightRows().filter(function(r){ return r.mk==='hr'; }).map(function(r){ return Object.assign({power:cheatSheetPowerScore(r)}, r); });
+  hrRows.sort(function(a,b){ return (b.power-a.power) || (b.prob-a.prob) || (b.edge-a.edge); });
+  hrRows=hrRows.slice(0,6);
+  var shock=loadLineupShockReport();
+  var sameBookDepth=buildPortfolioPairs(choosePortfolioSingles(radar,{singles:Math.min(6, radar.length), maxGame:2}), {pairs:6}).filter(function(x){ return x.sameBookBestDec!=null; }).length;
+
+  var summary='<div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:12px">'
+    +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Best picks live</div><div style="font-size:28px;font-weight:800;line-height:1">'+radar.length+'</div><div class="help-note" style="margin-top:8px">Ranked playable prices</div></div>'
+    +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Confirmed fire</div><div style="font-size:28px;font-weight:800;line-height:1">'+ready.length+'</div><div class="help-note" style="margin-top:8px">Confirmed +EV plays</div></div>'
+    +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Command read</div><div style="font-size:28px;font-weight:800;line-height:1">'+(avgEdge==null?'—':((avgEdge>=0?'+':'')+(avgEdge*100).toFixed(1)+'%'))+'</div><div class="help-note" style="margin-top:8px">Average edge on top plays</div></div>'
+    +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Same-book depth</div><div style="font-size:28px;font-weight:800;line-height:1">'+sameBookDepth+'</div><div class="help-note" style="margin-top:8px">Clean routing paths available</div></div>'
+  +'</div>';
+
+  var architectHtml='<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">🏗️ Architect picks</div><div class="help-note" style="margin-bottom:12px">Your fastest four ways to attack the slate without tab-hopping.</div><div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">'+architectPlans.map(function(plan){ var b64=architectPayload(plan.picks); return '<div class="game-card open" style="padding:14px 16px"><div class="section-title">'+plan.title+'</div><div style="font-size:18px;font-weight:800;line-height:1.2">'+plan.picks.map(function(x){ return x.p.name; }).join(' + ')+'</div><div class="help-note" style="margin-top:8px">'+plan.note+'</div><div class="help-note" style="margin-top:10px">'+plan.picks.length+' leg'+(plan.picks.length===1?'':'s')+' · Win '+fmtPct(plan.joint)+' · Odds '+(plan.payoutDec?decToAmerican(plan.payoutDec):'—')+'</div><div style="margin-top:12px"><button onclick="loadArchitectSlip(\''+b64+'\')">Load this slip</button></div></div>'; }).join('')+'</div></div></div>';
+
+  var radarHtml='<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">📡 Fast-scan best picks</div><table class="players"><thead><tr><th>Play</th><th>Market</th><th class="num">Radar</th><th class="num">Model</th><th class="num">Edge</th><th>Why it stands out</th></tr></thead><tbody>'
+    +radar.slice(0,8).map(function(x){
+      return '<tr><td><b>'+x.p.name+'</b><div style="font-size:12px;color:#888">'+x.g.away+' @ '+x.g.home+'</div></td><td>'+MARKET_META[x.mk].leg+'</td><td class="num"><span class="chip" style="min-width:52px;justify-content:center;background:#11182712;color:#111827;font-weight:800">'+x.radarScore+'</span></td><td class="num">'+fmtPct(x.prob)+'</td><td class="num" style="color:'+(x.edge>=0?'#16a34a':'#db4437')+'">'+(x.edge>=0?'+':'')+(x.edge*100).toFixed(1)+'%</td><td><div style="font-size:12px;color:#4b5563">'+(x.reasons.join(' · ')||'priced and playable')+'</div></td></tr>';
+    }).join('')+'</tbody></table></div></div>';
+
+  var powerHtml='<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">🔥 Visual power board</div><div class="help-note" style="margin-bottom:12px">The most glanceable HR targets from the slate.</div><div class="parlay-grid">'
+    +(hrRows.length?hrRows.map(function(r,idx){ return '<div class="parlay-card" style="background:linear-gradient(180deg,#d9770612, rgba(255,255,255,0.92));border-color:#d9770633"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-size:28px;font-weight:900;line-height:1">#'+(idx+1)+'</div><div class="section-title" style="margin:4px 0 0;color:#d97706">'+r.name+'</div></div><div style="text-align:right"><div style="font-size:22px;font-weight:900;color:#d97706">'+r.power+'</div><div style="font-size:11px;color:#6b7280">PWR</div></div></div><div class="help-note" style="margin-top:8px">'+r.team+' · '+r.game+'</div><div class="parlay-stat" style="margin-top:10px"><span class="lbl">Model HR%</span><span class="val">'+fmtPct(r.prob)+'</span></div><div class="parlay-stat"><span class="lbl">Best odds</span><span class="val">'+(r.bestBook?shortBookLabel(r.bestBook)+' ':'')+fmtAmerican(r.best)+'</span></div><div class="parlay-stat"><span class="lbl">Edge</span><span class="val" style="color:'+(r.edge>=0?'#16a34a':'#dc2626')+'">'+(r.edge>=0?'+':'')+(r.edge*100).toFixed(1)+'%</span></div></div>'; }).join(''):'<div class="help-note">No HR board yet. Load all-market odds first.</div>')
+    +'</div></div></div>';
+
+  var shockHtml='';
+  if(shock && shock.counts){
+    shockHtml='<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">⚡ Lineup shock snapshot</div><div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:12px">'
+      +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Games posted</div><div style="font-size:28px;font-weight:800;line-height:1">'+(shock.counts.posted||0)+'</div><div class="help-note" style="margin-top:8px">'+(shock.headline||'Latest lineup read')+'</div></div>'
+      +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Upgrades</div><div style="font-size:28px;font-weight:800;line-height:1">'+(shock.counts.promotions||0)+'</div><div class="help-note" style="margin-top:8px">Biggest boosts from lineup confirmation</div></div>'
+      +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Key outs</div><div style="font-size:28px;font-weight:800;line-height:1">'+(shock.counts.out||0)+'</div><div class="help-note" style="margin-top:8px">Relevant bats removed from play</div></div>'
+    +'</div>'
+    +((shock.promotions&&shock.promotions.length)?('<table class="players"><thead><tr><th>Top upgrade</th><th>Change</th><th class="num">Radar</th></tr></thead><tbody>'+shock.promotions.slice(0,4).map(function(x){ var delta=(x.fromSpot!=null&&x.toSpot!=null)?('#'+x.fromSpot+' → #'+x.toSpot):'Now confirmed'; return '<tr><td><b>'+x.name+'</b><div style="font-size:12px;color:#888">'+x.game+' · '+x.market+'</div></td><td>'+delta+'</td><td class="num">'+(x.rankAfter!=null?('#'+x.rankAfter):'—')+'</td></tr>'; }).join('')+'</tbody></table>'):'<div class="help-note">No lineup shock events yet.</div>')
+    +'</div></div>';
+  }
+
+  wrap.innerHTML = summary + architectHtml + radarHtml + powerHtml + shockHtml;
 }
 
 function renderInsights(){
