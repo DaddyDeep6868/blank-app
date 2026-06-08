@@ -718,6 +718,7 @@ tr.flash{animation:flash 1.2s ease}
             <option value="high">High only</option>
           </select>
         </div>
+        <div class="field"><label>Lineups</label><label style="display:flex;align-items:center;gap:6px;font-weight:400;text-transform:none;letter-spacing:0"><input id="lineupOnly" type="checkbox"> Confirmed starters only</label></div>
         <div class="field"><label>Max 1 leg per game</label>
           <select id="maxPerGame">
             <option value="auto" selected>Auto (ON for 4+)</option>
@@ -1226,6 +1227,19 @@ function setMarket(mk){
   renderGames();
 }
 
+function lineupOnlyOn(){ return !!($('#lineupOnly') && $('#lineupOnly').checked); }
+function playerBuildAllowed(p,g){
+  if(g&&g.env&&g.env.lineupsConfirmed){
+    if(p._lineupStatus==='out') return false;
+    if(lineupOnlyOn()) return p._lineupStatus==='in';
+    return true;
+  }
+  return lineupOnlyOn() ? false : true;
+}
+function visiblePlayersForGame(g){
+  return (g.players||[]).filter(function(p){ return lineupOnlyOn() ? playerBuildAllowed(p,g) : true; });
+}
+
 /* ---------- Pair correlation (Gaussian copula, 1st-order) ---------- */
 function jointHRprob(pA,pB,sameTeam){
   pA=clamp(pA,1e-6,0.999);pB=clamp(pB,1e-6,0.999);
@@ -1662,9 +1676,10 @@ function slipLegsResolved(){
     var gid=parts[0];
     var g=findGameById(gid);
     var pl=g?(g.players.find(function(q){return q.name===x.name;})||null):null;
-    var prob=(x.p!=null)?x.p:((pl&&pl._mkt&&pl._mkt[mk])?pl._mkt[mk].p:0.1);
+    var prob=(pl&&pl._mkt&&pl._mkt[mk])?pl._mkt[mk].p:((x.p!=null)?x.p:0.1);
     var books=(pl&&pl._mktOdds&&pl._mktOdds[mk])?pl._mktOdds[mk].books:{draftkings:x.dk,fanatics:x.fan};
-    out.push({g:g,p:pl||{name:x.name,side:side},mk:mk,prob:clamp(prob,1e-9,0.999),american:x.odds,dec:(x.odds!=null?amToDecimal(x.odds):null),books:books,side:side});
+    var american=(pl&&pl._mktOdds&&pl._mktOdds[mk]&&pl._mktOdds[mk].best!=null)?pl._mktOdds[mk].best:x.odds;
+    out.push({id:x.id,g:g,p:pl||{name:x.name,side:side},mk:mk,prob:clamp(prob,1e-9,0.999),american:american,dec:(american!=null?amToDecimal(american):null),books:books,autoBest:(books&&books.autoBest)||x.autoBest||null,side:side});
   });
   return out;
 }
@@ -1697,23 +1712,35 @@ function renderSlip(){
   const body=$('#betslipBody');
   if(!sub||!body) return;
   sub.textContent=`${SLIP.length} leg${SLIP.length===1?'':'s'}`;
-  body.innerHTML=SLIP.length?SLIP.map(x=>{
-    const odds=x.odds!=null?(x.odds>0?`+${x.odds}`:`${x.odds}`):'—';
-    const bestBook=x.autoBest?(x.autoBest==='draftkings'?'DK':'Fanatics'):'—';
+  const legs=slipLegsResolved();
+  const bad=legs.filter(function(l){ return l.g&&l.g.env&&l.g.env.lineupsConfirmed&&l.p&&l.p._lineupStatus==='out'; });
+  const pending=legs.filter(function(l){ return l.g&&(!l.g.env||!l.g.env.lineupsConfirmed); });
+  const badIds=new Set(bad.map(function(l){ return String((l.g&&l.g.id)||'g')+'::'+l.p.name+'::'+l.side+'::'+l.mk; }));
+  const warnHtml = (!SLIP.length) ? '' : (
+    (bad.length ? '<div class="help-note" style="margin-bottom:8px;border-left:4px solid #db4437;padding-left:10px"><b>Lineup alert:</b> '+bad.length+' slip leg'+(bad.length===1?' is':'s are')+' not in the posted starting lineup.</div>' : '') +
+    (pending.length ? '<div class="help-note" style="margin-bottom:8px;border-left:4px solid #f59e0b;padding-left:10px"><b>Pending lineups:</b> '+pending.length+' leg'+(pending.length===1?' is':'s are')+' still using projected batting order.</div>' : '')
+  );
+  body.innerHTML=SLIP.length?(warnHtml + SLIP.map(function(x){
+    var l=legs.find(function(q){ return q.id===x.id; }) || null;
+    var odds=(l&&l.american!=null)?(l.american>0?`+${l.american}`:`${l.american}`):(x.odds!=null?(x.odds>0?`+${x.odds}`:`${x.odds}`):'—');
+    var bestBook=(l&&l.autoBest)?(l.autoBest==='draftkings'?'DK':'Fanatics'):(x.autoBest?(x.autoBest==='draftkings'?'DK':'Fanatics'):'—');
+    var prob=(l&&l.prob!=null)?fmtPct(l.prob):fmtPct(x.p);
+    var flag = badIds.has(x.id) ? ' <span class="chip" style="background:#db443722;color:#db4437">Out</span>' : ((l&&l.g&&l.g.env&&l.g.env.lineupsConfirmed) ? ' <span class="chip" style="background:#0f9d5822;color:#0f9d58">Confirmed</span>' : ' <span class="chip" style="background:#f59e0b22;color:#b45309">Projected</span>');
     return `<div class="leg"><div>
-      <div class="nm">${x.name} <span class="chip" style="background:#2d7ff922;color:#2d7ff9">${x.mkt||'HR'}</span></div>
-      <div class="meta">${x.game}<br>${x.team} · Model ${fmtPct(x.p)} · Best ${bestBook} ${odds}</div>
+      <div class="nm">${x.name} <span class="chip" style="background:#2d7ff922;color:#2d7ff9">${x.mkt||'HR'}</span>${flag}</div>
+      <div class="meta">${x.game}<br>${x.team} · Model ${prob} · Best ${bestBook} ${odds}</div>
     </div><button class="rm" data-rm="${x.id}" title="Remove">✕</button></div>`;
-  }).join(''):'<div class="help-note">Click <b>Add</b> next to a hitter to build a slip.</div>';
+  }).join('')):'<div class="help-note">Click <b>Add</b> next to a hitter to build a slip.</div>';
   $$('#betslipBody [data-rm]').forEach(b=>b.onclick=()=>removeFromSlip(b.dataset.rm));
 
   const st=slipStats();
   $('#slipProb').textContent = st.joint==null?'—':fmtPct(st.joint);
   $('#slipFair').textContent = st.fairDec==null?'—':decToAmerican(st.fairDec);
   $('#slipOdds').textContent = st.bookDec==null?'—':decToAmerican(st.bookDec);
-    $('#slipDiff').innerHTML = st.joint==null ? '&#x2014;' : ('<span class="badge"><strong>'+slipDifficulty(st.joint)+'</strong> &#xB7; '+fmtPct(st.joint)+(st.ev!=null?(' &#xB7; EV '+(st.ev>=0?'+':'&#x2212;')+(Math.abs(st.ev)*100).toFixed(1)+'%'):'')+(st.corr?' &#xB7; corr-adj':'')+'</span>');
-    (function(){ var ss=$('#slipStake'); if(!ss) return; if(st.joint==null||st.bookDec==null){ ss.textContent='—'; return; } var sug=suggestStake(st.joint, st.bookDec); ss.innerHTML = (sug&&sug.stake>0) ? ('$'+sug.stake.toFixed(2)+' <span style="color:#6b7280;font-size:11px">('+(sug.f*100).toFixed(1)+'% Kelly)</span>') : '<span style="color:#6b7280">No edge &#x2014; pass</span>'; })();
+  $('#slipDiff').innerHTML = st.joint==null ? '&#x2014;' : ('<span class="badge"><strong>'+slipDifficulty(st.joint)+'</strong> &#xB7; '+fmtPct(st.joint)+(st.ev!=null?(' &#xB7; EV '+(st.ev>=0?'+':'&#x2212;')+(Math.abs(st.ev)*100).toFixed(1)+'%'):'')+(st.corr?' &#xB7; corr-adj':'')+'</span>');
+  (function(){ var ss=$('#slipStake'); if(!ss) return; if(st.joint==null||st.bookDec==null){ ss.textContent='—'; return; } var sug=suggestStake(st.joint, st.bookDec); ss.innerHTML = (sug&&sug.stake>0) ? ('$'+sug.stake.toFixed(2)+' <span style="color:#6b7280;font-size:11px">('+(sug.f*100).toFixed(1)+'% Kelly)</span>') : '<span style="color:#6b7280">No edge &#x2014; pass</span>'; })();
 }
+
 
 /* ============================ Fetch layer ============================ */
 async function jget(url){const r=await fetch(url);if(!r.ok)throw new Error('HTTP '+r.status+' '+url);return r.json();}
@@ -2030,7 +2057,7 @@ async function teamHitters(teamId, side, oppPitcher, env){
 function makePlayer(o,env){
   const pl={name:o.name,mlbId:o.mlbId||null,side:o.side,bats:o.bats,HR:o.HR,PA:o.PA,
     H:o.H||0,_2B:o._2B||0,_3B:o._3B||0,RBI:o.RBI||0,AB:o.AB||0,
-    recHR:o.recHR||0,recPA:o.recPA||0,spot:o.spot||5,
+    recHR:o.recHR||0,recPA:o.recPA||0,spot:o.spot||5,_projectedSpot:o.spot||5,_lineupSpot:null,_lineupStatus:'projected',
     oppHand:o.oppHand||'R',oppHR9:o.oppHR9||LEAGUE_HR9,odds:o.odds||null};
   const e2=Object.assign({},env,{oppHand:pl.oppHand,oppHR9:pl.oppHR9});
   pl._env=e2;pl._mkt=computeMarkets(pl,e2);pl.calc=pl._mkt[ACTIVE_MARKET];pl.p=pl.calc.p;return pl;
@@ -2068,7 +2095,7 @@ function bestBookDecimalForTwoLeg(a,b){
 }
 
 function bestPairs(game){
-  const ps=game.players;const pairs=[];
+  const ps=(game.players||[]).filter(function(p){ return playerBuildAllowed(p,game); });const pairs=[];
   for(let i=0;i<ps.length;i++)for(let j=i+1;j<ps.length;j++){
     const a=ps[i],b=ps[j];const sameTeam=a.side===b.side;
     const joint=jointHRprob(a.p,b.p,sameTeam);
@@ -2103,7 +2130,8 @@ function bestPairs(game){
 function bestPairsAcrossSlate(allGames, topN=20){
   const legs=[];
   for(const g of allGames){
-    for(const p of g.players){
+    for(const p of (g.players||[])){
+      if(!playerBuildAllowed(p,g)) continue;
       // require odds on at least one book so payouts can be computed
       if(!p._oddsBooks) continue;
       if(p._oddsBooks.draftkings==null && p._oddsBooks.fanatics==null) continue;
@@ -2167,7 +2195,8 @@ function buildCrossGameParlays(allGames, {
 }={}){
   const candidates=[];
   for(const g of allGames){
-    for(const p of g.players){
+    for(const p of (g.players||[])){
+      if(!playerBuildAllowed(p,g)) continue;
       if(p.p==null) continue;
       if(p.p < minLegP) continue;
       if(confidenceRank(confidenceLabel(p)) < minConf) continue;
@@ -2302,8 +2331,8 @@ function bookValueHtml(){
 
 async function confirmLineups(){
   const real = GAMES.filter(function(g){ return g && g.id!=null && /^\d+$/.test(String(g.id)); });
-  if(!real.length){ toast("Lineups","Load a live MLB slate first \u2014 sample/manual games have no live feed.","\u2139\ufe0f"); return; }
-  setStatus("Fetching confirmed lineups + live weather\u2026", true);
+  if(!real.length){ toast("Lineups","Load a live MLB slate first — sample/manual games have no live feed.","ℹ️"); return; }
+  setStatus("Fetching confirmed lineups + live weather…", true);
   let lineupsFound=0, wxFound=0;
   for(const g of real){
     try{
@@ -2323,20 +2352,34 @@ async function confirmLineups(){
         order.forEach(function(pid, idx){ inIds[pid]=idx+1; });
       });
       var posted = Object.keys(inIds).length>0;
+      if(g.env) g.env.lineupsConfirmed = posted;
       if(posted) lineupsFound++;
       (g.players||[]).forEach(function(pp){
-        if(!posted){ pp._lineupStatus="unknown"; return; }
-        if(pp.mlbId!=null && inIds[pp.mlbId]){ pp._lineupStatus="in"; pp._lineupSpot=inIds[pp.mlbId]; }
-        else { pp._lineupStatus="out"; }
+        if(pp._projectedSpot==null) pp._projectedSpot = pp.spot || 5;
+        if(!posted){
+          pp._lineupStatus = 'projected';
+          pp._lineupSpot = null;
+          pp.spot = pp._projectedSpot;
+          return;
+        }
+        if(pp.mlbId!=null && inIds[pp.mlbId]){
+          pp._lineupStatus='in';
+          pp._lineupSpot=inIds[pp.mlbId];
+          pp.spot=pp._lineupSpot;
+        } else {
+          pp._lineupStatus='out';
+          pp._lineupSpot=null;
+          pp.spot=pp._projectedSpot;
+        }
       });
     }catch(e){ try{ console.warn("lineup fetch", g.id, e); }catch(_e){} }
   }
-  window.DL_LINEUPS_CONFIRMED = true;
-  GAMES.forEach(function(g){ if(g.env) g.env.lineupsConfirmed=true; });
+  window.DL_LINEUPS_CONFIRMED = real.some(function(g){ return g && g.env && g.env.lineupsConfirmed; });
   recomputeAll();
   renderGames();
-  setStatus("Lineups checked \u2014 "+lineupsFound+" game(s) posted, weather on "+wxFound+".");
-  toast("Lineups + weather", lineupsFound ? ("Confirmed lineups for "+lineupsFound+" game(s). Hitters not in the posted lineup are flagged \u26a0\ufe0f.") : "No lineups posted yet \u2014 check back closer to first pitch. Live weather updated where available.", "\u2705");
+  renderSlip();
+  setStatus("Lineups checked — "+lineupsFound+" game(s) posted, weather on "+wxFound+".");
+  toast("Lineups + weather", lineupsFound ? ("Confirmed lineups for "+lineupsFound+" game(s). Batting order is now locked into projections, and non-starters are downgraded/filtered.") : "No lineups posted yet — check back closer to first pitch. Live weather updated where available.", "✅");
 }
 
 var DL_AUTO_REFRESH=null;
@@ -2446,7 +2489,7 @@ function gameCardHTML(g,gi){
   const pairs=bestPairs(g).slice(0,3);
   const top=pairs.map((pr,k)=>parlayCardHTML(pr,k+1)).join('');
   // players table sorted by prob
-  const sorted=[...g.players].sort((a,b)=>b.p-a.p);
+  const sorted=[...visiblePlayersForGame(g)].sort((a,b)=>b.p-a.p);
   const rows=sorted.map(p=>playerRowHTML(p,g)).join('');
   const roofTxt=e.roof==='dome'?'Dome':(e.roof==='retractable'?(e.roofClosed?'Roof closed':'Retractable (open)'):'Open air');
   return `<div class="game-card ${gi===0?'open':''}">
@@ -2532,7 +2575,7 @@ function parlayCardHTML(pr,rank){
 
 function playerRowHTML(p,g){
   const c=p.calc;const f=c.factors;
-  const _lu = (p._lineupStatus==="out") ? ' <span class="chip" style="background:#db443722;color:#db4437" title="Not in the posted starting lineup">\u26a0\ufe0f Out</span>' : (p._lineupStatus==="in" ? ` <span class="chip" style="background:#0f9d5822;color:#0f9d58" title="Confirmed in lineup">\u2705 #${p._lineupSpot||""}</span>` : "");
+  const _lu = (p._lineupStatus==="out") ? ' <span class="chip" style="background:#db443722;color:#db4437" title="Not in the posted starting lineup">\u26a0\ufe0f Out</span>' : (p._lineupStatus==="in" ? ` <span class="chip" style="background:#0f9d5822;color:#0f9d58" title="Confirmed in lineup">\u2705 #${p._lineupSpot||p.spot||""}</span>` : ` <span class="chip" style="background:#f59e0b22;color:#b45309" title="Projected lineup spot until confirmed">⏳ Proj #${p._projectedSpot||p.spot||""}</span>`);
   const _sm = (p._lineMove!=null && p._lineMove!==0) ? (' <span class="chip" style="background:'+(p._lineMove<0?'#0f9d5822;color:#0f9d58':'#db443722;color:#db4437')+'" title="Line moved '+(p._lineMove<0?'IN since last load (shortening = steam toward this bet)':'OUT since last load (drifting = market cooling)')+'">'+(p._lineMove<0?'\ud83d\udd25':'\u2744\ufe0f')+' '+(p._lineMove>0?'+':'')+p._lineMove+'</span>') : "";
   const dk = p._oddsBooks && p._oddsBooks.draftkings!=null ? p._oddsBooks.draftkings : null;
   const fan = p._oddsBooks && p._oddsBooks.fanatics!=null ? p._oddsBooks.fanatics : null;
@@ -2546,7 +2589,7 @@ function playerRowHTML(p,g){
   return `<tr>
     <td>${p.name} <span class="handed">(${p.bats})</span>${_lu}${_sm}</td>
     <td>${p.side==='home'?g.homeAbbr||g.home:g.awayAbbr||g.away}</td>
-    <td class="num">${p.spot}</td>
+    <td class="num">${(p._lineupStatus==='in'&&p._lineupSpot)?p._lineupSpot:(p._projectedSpot||p.spot)}</td>
     <td class="num">${ACTIVE_MARKET==='tb'?c.perPA.toFixed(2):(c.perPA*100).toFixed(2)+'%'}</td>
     <td class="num"><span class="prob-pill" style="background:${probColor(p.p)}22;color:${probColor(p.p)}">${fmtPct(p.p)}</span><div class="bar-mini"><span style="width:${clamp(p.p/(MARKET_META[ACTIVE_MARKET].cap/100)*100,3,100)}%"></span></div></td>
     <td class="num">${fairAm}</td>
@@ -2677,7 +2720,7 @@ function copySlip(b64){
 }
 
 var PREF_KEY='dl_prefs_v1';
-var PREF_IDS=['devigMethod','priceMode','corrMode','legCount','optMode','minLegP','minComboP','shortlistSize','confFilter','maxPerGame','bankroll','kellyFrac','evOnly','boardEvOnly'];
+var PREF_IDS=['devigMethod','priceMode','corrMode','legCount','optMode','minLegP','minComboP','shortlistSize','confFilter','lineupOnly','maxPerGame','bankroll','kellyFrac','evOnly','boardEvOnly'];
 function savePrefs(){ try{ var o={}; PREF_IDS.forEach(function(id){ var el=document.getElementById(id); if(!el) return; o[id]=(el.type==='checkbox')?el.checked:el.value; }); localStorage.setItem(PREF_KEY, JSON.stringify(o)); }catch(e){} }
 function restorePrefs(){ try{ var o=JSON.parse(localStorage.getItem(PREF_KEY)||'null'); if(!o) return; PREF_IDS.forEach(function(id){ if(o[id]==null) return; var el=document.getElementById(id); if(!el) return; if(el.type==='checkbox') el.checked=!!o[id]; else el.value=o[id]; }); }catch(e){} }
 function wirePrefs(){ PREF_IDS.forEach(function(id){ var el=document.getElementById(id); if(!el) return; var h=function(){ savePrefs(); }; el.addEventListener('change',h); el.addEventListener('input',h); }); }
@@ -2708,6 +2751,7 @@ function init(){
   if($('#btnRefreshOdds')) $('#btnRefreshOdds').onclick=()=>{ refreshOdds(); };
   if($('#autoRefresh')) $('#autoRefresh').onchange=()=>{ toggleAutoRefresh(); };
   if($('#btnConfirmLineups')) $('#btnConfirmLineups').onclick=()=>{ confirmLineups(); };
+  if($('#lineupOnly')) $('#lineupOnly').onchange=()=>{ renderGames(); renderSlip(); if($('#builderResults')) $('#builderResults').innerHTML=''; };
   $('#btnDemo').onclick=loadSample;
   $$('.mktbtn').forEach(function(b){ b.onclick=function(){ setMarket(b.dataset.mkt); }; });
   paintMarketButtons();
@@ -2888,6 +2932,7 @@ function exportEdgesCSV(){
   if(GAMES.length<1){toast('No slate','Load a slate first.','!');return;}
   var rows=[['Player','Team','Game','Market','ModelProb%','BestPriceAmerican','FairAmerican','Edge%','EV%','Tier']];
   GAMES.forEach(function(g){ (g.players||[]).forEach(function(p){
+    if(!playerBuildAllowed(p,g)) return;
     Object.keys(MARKET_META).forEach(function(mk){
       var mc=p._mkt&&p._mkt[mk]; var mo=p._mktOdds&&p._mktOdds[mk];
       if(!mc||mc.p==null) return;
@@ -2913,6 +2958,7 @@ function slateSummary(){
   if(GAMES.length<1){$('#builderResults').innerHTML='<div class="help-note">Load a slate first.</div>';return;}
   var byMkt={}; var totalLegs=0; var posEV=0; var best=null;
   GAMES.forEach(function(g){ (g.players||[]).forEach(function(p){
+    if(!playerBuildAllowed(p,g)) return;
     Object.keys(MARKET_META).forEach(function(mk){
       var mc=p._mkt&&p._mkt[mk]; var mo=p._mktOdds&&p._mktOdds[mk];
       if(!mc||mc.p==null) return; var am=mo?mo.best:null; if(am==null) return;
@@ -2939,6 +2985,7 @@ function buildOnePerGame(){
   GAMES.forEach(function(g){
     var best=null;
     (g.players||[]).forEach(function(p){
+      if(!playerBuildAllowed(p,g)) return;
       Object.keys(MARKET_META).forEach(function(mk){
         var mc=p._mkt&&p._mkt[mk]; var mo=p._mktOdds&&p._mktOdds[mk];
         if(!mc||mc.p==null) return; var am=mo?mo.best:null; if(am==null) return;
@@ -2962,6 +3009,7 @@ function checkLineMovementAll(commit){
   var prev={}; try{prev=JSON.parse(localStorage.getItem(LINE_SNAP_ALL_KEY)||'{}');}catch(e){}
   var now={}; var moves=[];
   GAMES.forEach(function(g){ (g.players||[]).forEach(function(p){
+    if(!playerBuildAllowed(p,g)) return;
     Object.keys(MARKET_META).forEach(function(mk){
       var mo=p._mktOdds&&p._mktOdds[mk]; if(!mo||mo.best==null) return;
       var key=mk+'::'+normalizeName(p.name);
@@ -2995,6 +3043,7 @@ function buildBestBoard(){
   var rows=[];
   GAMES.forEach(function(g){
     (g.players||[]).forEach(function(p){
+      if(!playerBuildAllowed(p,g)) return;
       Object.keys(MARKET_META).forEach(function(mk){
         var mc=p._mkt&&p._mkt[mk]; var mo=p._mktOdds&&p._mktOdds[mk];
         if(!mc||mc.p==null) return;
@@ -3063,6 +3112,7 @@ function buildSgpCards(){
   GAMES.forEach(function(g){
     const legs=[];
     (g.players||[]).forEach(function(p){
+      if(!playerBuildAllowed(p,g)) return;
       if(confidenceRank(confidenceLabel(p))<minConf) return;
       MK.forEach(function(mk){
         const mc=p._mkt&&p._mkt[mk]; const mo=p._mktOdds&&p._mktOdds[mk];
