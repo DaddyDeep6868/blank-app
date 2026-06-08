@@ -577,9 +577,21 @@ details.breakdown summary:hover{background:transparent}
 .slider-field .hint{font-size:11.5px;color:var(--notion-text-faint);margin-top:2px}
 
 .manual-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.builder-meta{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 2px}
+.builder-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:14px;margin-top:14px}
+.builder-grid .field{background:color-mix(in srgb,var(--notion-bg-soft) 82%, transparent);border:1px solid var(--notion-border-soft);border-radius:14px;padding:12px;min-height:82px;justify-content:space-between}
+.builder-grid .field label{margin-bottom:8px;font-size:11px;letter-spacing:.07em;color:var(--notion-text-faint)}
+.builder-grid .field input,.builder-grid .field select{width:100%;min-width:0}
+.builder-grid .field.check-field{min-height:82px}
+.builder-grid .field.check-field .toggle-line{display:flex;align-items:center;gap:8px;line-height:1.35;color:var(--notion-text-soft);min-height:42px;font-size:13px}
+.builder-grid .field.check-field input{width:auto;min-width:auto}
+.builder-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:14px}
+.builder-actions .field{background:transparent;border:none;padding:0;min-height:auto}
+.builder-actions .field label{display:none}
+.builder-actions button{width:100%;min-height:44px;font-weight:700;border-radius:12px}
 .help-note{font-size:12.5px;color:var(--notion-text-soft)}
 .empty{text-align:center;color:var(--notion-text-faint);padding:50px 20px;font-size:14px}
-.legend{font-size:11.5px;color:var(--notion-text-faint);margin-top:6px}
+.legend{font-size:11.5px;color:var(--notion-text-faint);margin-top:10px}
 .pill-tag{display:inline-block;font-size:10.5px;padding:1px 6px;border-radius:5px;background:var(--notion-gray-bg);border:1px solid var(--notion-border-soft);color:var(--notion-text-soft);margin-left:4px}
 
 /* ===== Micro-interactions ===== */
@@ -711,7 +723,12 @@ tr.flash{animation:flash 1.2s ease}
     <div class="game-card open" id="builderCard" style="display:none"><div class="game-body" style="display:block;padding:18px">
       <div class="section-title">🧩 Cross-game parlay builder</div>
       <p class="help-note">Build parlays across <b>different games</b> for higher true win probability (near-independent legs). Choose leg count and whether to prioritize win chance or payout.</p>
-      <div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-top:10px">
+      <div class="builder-meta">
+        <span class="chip">Autonomous builder</span>
+        <span class="chip">Edge-aware</span>
+        <span class="chip">Cross-game focused</span>
+      </div>
+      <div class="builder-grid">
         <div class="field"><label>Legs</label>
           <select id="legCount">
             <option value="2">2-leg</option>
@@ -750,7 +767,7 @@ tr.flash{animation:flash 1.2s ease}
             <option value="high">Great only</option>
           </select>
         </div>
-        <div class="field"><label>Lineups</label><label style="display:flex;align-items:center;gap:6px;font-weight:400;text-transform:none;letter-spacing:0"><input id="lineupOnly" type="checkbox"> Confirmed starters only</label></div>
+        <div class="field check-field"><label>Lineups</label><label class="toggle-line"><input id="lineupOnly" type="checkbox"> Confirmed starters only</label></div>
         <div class="field"><label>Max 1 leg per game</label>
           <select id="maxPerGame">
             <option value="auto" selected>Auto (ON for 4+)</option>
@@ -763,18 +780,20 @@ tr.flash{animation:flash 1.2s ease}
         <div class="field"><label>Bankroll ($)</label><input id="bankroll" type="number" value="100" min="0" step="10"></div>
         <div class="field"><label>Kelly fraction</label><select id="kellyFrac"><option value="0.25" selected>Quarter Kelly</option><option value="0.5">Half Kelly</option><option value="1">Full Kelly</option><option value="0.1">Tenth Kelly</option></select></div>
         <div class="field"><label>Correlation model</label><select id="corrMode"><option value="standard" selected>Standard</option><option value="boosted">Boosted</option><option value="off">Independent</option></select></div>
-        <div class="field"><label>Value filter</label><label style="display:flex;align-items:center;gap:6px;font-weight:400;text-transform:none;letter-spacing:0"><input id="evOnly" type="checkbox"> +EV only</label></div>
-        <div class="field"><label>&nbsp;</label><button id="btnBuildGlobal">Build parlays</button></div>
         <div class="field"><label>Devig method</label><select id="devigMethod" title="How vig is removed to get fair no-vig probabilities"><option value="mult">Multiplicative</option><option value="add">Additive</option><option value="shin">Shin</option></select></div>
+        <div class="field check-field"><label>Value filter</label><label class="toggle-line"><input id="evOnly" type="checkbox"> Only show +EV builds</label></div>
+        <div class="field check-field"><label>Board filter</label><label class="toggle-line"><input type="checkbox" id="boardEvOnly" title="Show only positive expected-value plays in the board and per-game lists"> Best-bets board +EV only</label></div>
+      </div>
+      <div class="builder-actions">
+        <div class="field"><label>&nbsp;</label><button id="btnBuildGlobal">Build parlays</button></div>
+        <div class="field"><label>&nbsp;</label><button id="btnAutoCard" class="ghost">&#x1F916; Auto-suggest</button></div>
         <div class="field"><label>&nbsp;</label><button id="btnRoundRobin" class="ghost">&#x1F3B2; Round robin</button></div>
-        <div class="field"><label>&nbsp;</label><button id="btnAutoCard">&#x1F916; Auto-suggest</button></div>
         <div class="field"><label>&nbsp;</label><button id="btnSgp" class="ghost">&#x1F500; Same-game cross-market</button></div>
-        <div class="field"><label>+EV only</label><input type="checkbox" id="boardEvOnly" title="Show only positive expected-value plays in the board and per-game lists"></div>
         <div class="field"><label>&nbsp;</label><button id="btnBoard" class="ghost">&#x1F3C6; Best bets board</button></div>
-        <div class="field"><label>&nbsp;</label><button id="btnCsv" class="ghost">&#x1F4E5; Export edges CSV</button></div>
         <div class="field"><label>&nbsp;</label><button id="btnSummary" class="ghost">&#x1F4CA; Slate at a glance</button></div>
         <div class="field"><label>&nbsp;</label><button id="btnPerGame" class="ghost">&#x1F3DF; Best play / game</button></div>
         <div class="field"><label>&nbsp;</label><button id="btnMovement" class="ghost">&#x1F525; Line movement</button></div>
+        <div class="field"><label>&nbsp;</label><button id="btnCsv" class="ghost">&#x1F4E5; Export edges CSV</button></div>
       </div>
       <div class="legend">Tips: raise <b>Min leg HR%</b> to increase win chance; increase legs to increase payout; use <b>Chance × payout</b> for a balanced list.</div>
       <div id="builderResults" style="margin-top:10px"></div>
@@ -936,8 +955,8 @@ tr.flash{animation:flash 1.2s ease}
 </div>
 
 <script>
-const APP_VERSION = 'v1.19';
-const APP_UPDATED = 'Updated Jun 8, 2026 1:59 AM ET';
+const APP_VERSION = 'v1.20';
+const APP_UPDATED = 'Updated Jun 8, 2026 2:10 AM ET';
 const APP_PASSWORD = 'adi11';
 {
   const av=document.getElementById('appVersion');
