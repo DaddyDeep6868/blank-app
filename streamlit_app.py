@@ -44,37 +44,77 @@ def load_html():
 
 def show_login():
     st.markdown(
-        f"""
+        """
         <style>
-        [data-testid="stSidebar"], [data-testid="stSidebarNav"] 
+        [data-testid="stSidebar"], [data-testid="stSidebarNav"] {
             display: none !important;
-        
-        .stApp {{
-            background: linear-gradient(rgba(0,0,0,.48), rgba(0,0,0,.62)),
-                        url("data:image/png;base64,{WALLPAPER}") center/cover fixed no-repeat;
-        }}
-        .block-container 
+        }
+        .stApp {
+            background-image:
+                linear-gradient(rgba(0,0,0,.18), rgba(0,0,0,.42)),
+                url("data:image/png;base64,__WALLPAPER__");
+            background-position: center center;
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }
+        .stApp::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at 28% 18%, rgba(255,69,199,.18), transparent 30%),
+                radial-gradient(circle at 70% 76%, rgba(56,189,248,.16), transparent 32%);
+            z-index: 0;
+        }
+        .block-container {
             max-width: 520px;
-            padding-top: 12vh;
-        
-        div[data-testid="stForm"] 
-            background: rgba(20,22,24,.86);
-            border: 1px solid rgba(255,255,255,.22);
-            border-radius: 20px;
+            padding-top: 14vh;
+            position: relative;
+            z-index: 1;
+        }
+        div[data-testid="stForm"] {
+            background: rgba(5, 8, 14, .58);
+            border: 1px solid rgba(255,255,255,.25);
+            border-radius: 22px;
             padding: 30px 30px 24px;
-            box-shadow: 0 22px 70px rgba(0,0,0,.45);
-            backdrop-filter: blur(10px);
-        
+            box-shadow: 0 24px 80px rgba(0,0,0,.52);
+            backdrop-filter: blur(12px);
+            animation: loginCardIn .22s ease-out both;
+        }
+        div[data-testid="stForm"]:has(button:active) {
+            animation: loginCardOut .16s ease-out forwards;
+        }
         div[data-testid="stForm"] h1,
         div[data-testid="stForm"] p,
-        div[data-testid="stForm"] label 
-            color: #f5f5f5 !important;
-        
-        div[data-testid="stForm"] [data-testid="stCaptionContainer"] 
-            color: rgba(255,255,255,.72) !important;
-        
+        div[data-testid="stForm"] label {
+            color: #f8fafc !important;
+        }
+        div[data-testid="stForm"] [data-testid="stCaptionContainer"] {
+            color: rgba(248,250,252,.80) !important;
+        }
+        div[data-testid="stTextInput"] input {
+            background: rgba(255,255,255,.13) !important;
+            color: #fff !important;
+            border-color: rgba(255,255,255,.35) !important;
+        }
+        div[data-testid="stFormSubmitButton"] button {
+            transition: transform .12s ease, filter .12s ease, opacity .12s ease;
+        }
+        div[data-testid="stFormSubmitButton"] button:active {
+            transform: scale(.985);
+            filter: brightness(1.2);
+        }
+        @keyframes loginCardIn {
+            from { opacity: 0; transform: translateY(10px) scale(.985); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes loginCardOut {
+            to { opacity: 0; transform: translateY(-8px) scale(.985); filter: blur(6px); }
+        }
         </style>
-        """,
+        """.replace("__WALLPAPER__", WALLPAPER),
         unsafe_allow_html=True,
     )
     with st.form("login_form", clear_on_submit=False):
@@ -85,6 +125,7 @@ def show_login():
         if submitted:
             if pw == APP_PASSWORD:
                 st.session_state["dl_unlocked"] = True
+                st.session_state["dl_just_unlocked"] = True
                 st.rerun()
             else:
                 st.error("Wrong password. Try again.")
@@ -102,19 +143,24 @@ with st.sidebar:
         st.rerun()
     key = st.text_input("OddsBlaze API key", value=DEFAULT_KEY, type="password")
     league = st.selectbox("League", ["mlb"], index=0)
+    force_fetch = st.button("Refresh live odds", use_container_width=True)
 
-# Odds are auto-fetched server-side (cached) and injected into the app, so a
-# single in-app button ("Load slate + all-market odds") does everything.
+# First render after password skips the server-side odds calls so the login panel
+# disappears quickly. Use Refresh live odds or any later rerun to fetch/inject odds.
+just_unlocked = bool(st.session_state.pop("dl_just_unlocked", False))
 raw = {}
-for b in BOOKS:
-    try:
-        raw[b] = fetch_book(key, b, league)
-    except Exception as e:  # noqa: BLE001
-        st.sidebar.warning(f"{b}: {e}")
-n = len([1 for v in raw.values() if v])
-st.sidebar.caption(
-    f"Live odds ready: {n}/{len(BOOKS)} books. Click **Load slate + all-market odds** in the app."
-)
+if not just_unlocked or force_fetch:
+    for b in BOOKS:
+        try:
+            raw[b] = fetch_book(key, b, league)
+        except Exception as e:  # noqa: BLE001
+            st.sidebar.warning(f"{b}: {e}")
+    n = len([1 for v in raw.values() if v])
+    st.sidebar.caption(
+        f"Live odds ready: {n}/{len(BOOKS)} books. Click **Load slate + all-market odds** in the app."
+    )
+else:
+    st.sidebar.caption("Unlocked instantly. Click **Refresh live odds** when you want to pre-load sportsbook odds.")
 
 html = load_html()
 payload = json.dumps(raw).replace("</", "<\\/")
