@@ -670,6 +670,7 @@ tr.flash{animation:flash 1.2s ease}
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">
         <button class="mktbtn" data-mkt="hr" style="padding:7px 14px;border-radius:9px;border:1px solid #2d7ff9;background:#2d7ff9;color:#fff;cursor:pointer;font-weight:600">&#x1F4A3; Home Run</button>
         <button class="mktbtn" data-mkt="hits" style="padding:7px 14px;border-radius:9px;border:1px solid #d7d7d4;background:#ececec;color:#333;cursor:pointer;font-weight:600">&#x1F3CF; 1+ Hit</button>
+        <button class="mktbtn" data-mkt="hits2" style="padding:7px 14px;border-radius:9px;border:1px solid #d7d7d4;background:#ececec;color:#333;cursor:pointer;font-weight:600">&#x1F3CF; 2+ Hits</button>
         <button class="mktbtn" data-mkt="tb" style="padding:7px 14px;border-radius:9px;border:1px solid #d7d7d4;background:#ececec;color:#333;cursor:pointer;font-weight:600">&#x1F4D0; 2+ Total Bases</button>
         <button class="mktbtn" data-mkt="rbi" style="padding:7px 14px;border-radius:9px;border:1px solid #d7d7d4;background:#ececec;color:#333;cursor:pointer;font-weight:600">&#x1F3C3; 1+ RBI</button>
       </div>
@@ -938,22 +939,25 @@ let ACTIVE_MARKET='hr';
 const MARKET_META={
   hr:{label:'Home Run',short:'HR',rateLabel:'HR/PA',probLabel:'HR%',leg:'HR',cap:30},
   hits:{label:'1+ Hit',short:'Hit',rateLabel:'Hit/PA',probLabel:'1+ Hit%',leg:'1+ Hit',cap:80},
+  hits2:{label:'2+ Hits',short:'2H',rateLabel:'Hit/PA',probLabel:'2+ Hits%',leg:'2+ Hits',cap:60},
   tb:{label:'2+ Total Bases',short:'TB',rateLabel:'Bases/PA',probLabel:'2+ TB%',leg:'2+ TB',cap:65},
   rbi:{label:'1+ RBI',short:'RBI',rateLabel:'RBI/PA',probLabel:'1+ RBI%',leg:'1+ RBI',cap:55}
 };
 // Relative same-game correlation multiplier by market pair (1.0 = full HR-tuned rho).
 const CORR_MKT={
-  hr:{hr:1.0,hits:0.65,tb:0.85,rbi:0.80},
-  hits:{hr:0.65,hits:0.90,tb:0.85,rbi:0.72},
-  tb:{hr:0.85,hits:0.85,tb:0.95,rbi:0.80},
-  rbi:{hr:0.80,hits:0.72,tb:0.80,rbi:0.85}
+  hr:{hr:1.0,hits:0.65,hits2:0.65,tb:0.85,rbi:0.80},
+  hits:{hr:0.65,hits:0.90,hits2:0.90,tb:0.85,rbi:0.72},
+  hits2:{hr:0.65,hits:0.90,hits2:0.90,tb:0.85,rbi:0.72},
+  tb:{hr:0.85,hits:0.85,hits2:0.85,tb:0.95,rbi:0.80},
+  rbi:{hr:0.80,hits:0.72,hits2:0.72,tb:0.80,rbi:0.85}
 };
 // Same-player nesting overlap factor (how strongly one prop contains the other).
 const SAMEP_MKT={
-  hr:{hits:0.98,tb:0.97,rbi:0.98},
-  hits:{hr:0.98,tb:0.95,rbi:0.80},
-  tb:{hr:0.97,hits:0.95,rbi:0.82},
-  rbi:{hr:0.98,hits:0.80,tb:0.82}
+  hr:{hits:0.98,hits2:0.55,tb:0.97,rbi:0.98},
+  hits:{hr:0.98,hits2:0.99,tb:0.95,rbi:0.80},
+  hits2:{hr:0.55,hits:0.99,tb:0.60,rbi:0.50},
+  tb:{hr:0.97,hits:0.95,hits2:0.60,rbi:0.82},
+  rbi:{hr:0.98,hits:0.80,hits2:0.50,tb:0.82}
 };
 
 /* ---------- Math helpers ---------- */
@@ -1142,6 +1146,18 @@ function playerHitsProb(pl,env){
   const p=clamp(1-Math.pow(1-perPA,n),0,0.99);
   return {p,perPA,lambda:perPA*n,factors:{Platoon:platoon}};
 }
+function playerHits2Prob(pl,env){
+  const PA=pl.PA||0,H=pl.H||0;
+  const r=(PA>0&&H>0)?((H+REG_HIT*LG_HIT_PA)/(PA+REG_HIT)):LG_HIT_PA;
+  const platoon=_platoonMult(pl,env,CFG.platoonEdge*0.5);
+  const perPA=clamp(r*platoon,0.02,0.55);
+  const n=_expPA(pl,env);
+  const pNo=1-perPA;
+  const p0=Math.pow(pNo,n);
+  const p1=n*perPA*Math.pow(pNo,Math.max(0,n-1));
+  const p=clamp(1-p0-p1,0,0.95);
+  return {p,perPA,lambda:perPA*n,factors:{Platoon:platoon}};
+}
 function playerTBProb(pl,env){
   const PA=pl.PA||0,HR=pl.HR||0,_2B=pl._2B||0,_3B=pl._3B||0,H=pl.H||0;
   const have=(PA>0&&H>0);
@@ -1177,7 +1193,7 @@ function playerRBIProb(pl,env){
   return {p,perPA,lambda:perPA*n,factors:{'Lineup spot':spotMult,Park:park}};
 }
 function computeMarkets(pl,env){
-  return {hr:playerHRProb(pl,env),hits:playerHitsProb(pl,env),tb:playerTBProb(pl,env),rbi:playerRBIProb(pl,env)};
+  return {hr:playerHRProb(pl,env),hits:playerHitsProb(pl,env),hits2:playerHits2Prob(pl,env),tb:playerTBProb(pl,env),rbi:playerRBIProb(pl,env)};
 }
 function applyMarketOddsToPlayer(p){
   if(!p._mktOdds)return;
@@ -1777,7 +1793,7 @@ function detectMarket(o){
   if(/home\s*run/.test(m))return line===0.5?'hr':null;
   if(/total\s*bas/.test(m))return line===1.5?'tb':null;
   if(/\brbis?\b|runs?\s*batted/.test(m))return line===0.5?'rbi':null;
-  if(/\bhits?\b/.test(m)&&!/allow|against|pitch/.test(m))return line===0.5?'hits':null;
+  if(/\bhits?\b/.test(m)&&!/allow|against|pitch/.test(m))return line===0.5?'hits':(line===1.5?'hits2':null);
   return null;
 }
 
@@ -1849,7 +1865,7 @@ function checkLineMovement(){
 function applyOddsToLoadedGames(merged){
   // merged: "eventId::TEAM::name" -> { rawName, books: { [book]: { hr|hits|tb|rbi: {price,under,...} } } }
   // Build per-player, per-market best lines across books & events.
-  const MK=['hr','hits','tb','rbi'];
+  const MK=['hr','hits','hits2','tb','rbi'];
   const SHORT={draftkings:'dk',fanatics:'fan',betmgm:'mgm',caesars:'cae'};
   const byPlayer = new Map();
   for(const [k,obj] of merged.entries()){
@@ -2674,7 +2690,7 @@ function init(){
     await loadSlate($('#dateInput').value);
     try{
       setStatus('Fetching OddsBlaze props \u2014 HR, Hits, Total Bases, RBI (4 books)\u2026',true);
-      logln('OddsBlaze: requesting MLB props (Home Runs, Hits, Total Bases, RBI) from 4 books\u2026');
+      logln('OddsBlaze: requesting MLB props (Home Runs, Hits, 2+ Hits, Total Bases, RBI) from 4 books\u2026');
       const merged = await loadOddsBlazeHrMerged();
       logln('OddsBlaze: received '+merged.size+' player entries across markets (merged).');
       const res = applyOddsToLoadedGames(merged);
@@ -3042,7 +3058,7 @@ function buildSgpCards(){
   const K=Number($('#legCount').value)||3;
   const minComboP=Number($('#minComboP').value)/100;
   const confSel=$('#confFilter').value; const minConf=confSel==='high'?2:confSel==='med'?1:0;
-  const MK=['hr','hits','tb','rbi'];
+  const MK=['hr','hits','hits2','tb','rbi'];
   const allCards=[];
   GAMES.forEach(function(g){
     const legs=[];
