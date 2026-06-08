@@ -851,7 +851,16 @@ body.mobile-layout .drawer-b{padding:10px}
   <!-- TAB: INSIGHTS -->
   <div data-panel="insights" style="display:none">
     <div class="game-card open"><div class="game-body" style="display:block;padding:18px">
-      <div class="section-title">📈 Top edges</div>
+      <div class="section-title">🔥 HR props cheat sheet</div>
+      <p class="help-note">A faster scan board for the live slate: ranked home-run targets, matchup tags, recent power form, best available odds, and a simple power score so you can spot the board quickly.</p>
+      <div id="insightsCheatSheet" style="margin-top:10px"></div>
+      <div class="section-title" style="margin-top:20px">🎯 Top 5 home run targets</div>
+      <p class="help-note">Poster-style top targets for the slate, each with a different angle so you can see the strongest power plays without scanning the full board.</p>
+      <div id="insightsTopFive" style="margin-top:10px"></div>
+      <div class="section-title" style="margin-top:20px">🌡️ Live trend heatmap</div>
+      <p class="help-note">A quick-glance table showing which hitters are strongest across 1+ hit, 2+ total bases, and home-run probabilities right now.</p>
+      <div id="insightsTrendHeatmap" style="margin-top:10px"></div>
+      <div class="section-title" style="margin-top:20px">📈 Top edges</div>
       <p class="help-note">The strongest priced edges on the slate right now, ranked by model edge versus the market's no-vig probability. Use this as a fast shortlist before building a slip.</p>
       <div id="insightsTopEdges" style="margin-top:10px"></div>
     </div></div>
@@ -860,8 +869,8 @@ body.mobile-layout .drawer-b{padding:10px}
   <!-- TAB: COMMAND -->
   <div data-panel="command" style="display:none">
     <div class="game-card open"><div class="game-body" style="display:block;padding:18px">
-      <div class="section-title">🎛️ Betting command center</div>
-      <p class="help-note">Your control room for what is ready right now, what to watch for lineups, and the best same-book builds — without jumping between tools.</p>
+      <div class="section-title">🎛️ Betting command center + edge radar + slate DNA + lineup shock + slip architect</div>
+      <p class="help-note">A live decision layer that ranks the best actionable plays, explains why they stand out, reads the slate, flags lineup changes, and now architects a full slip based on the goal you want.</p>
       <div id="commandCenterResults" style="margin-top:10px"></div>
     </div></div>
   </div>
@@ -1006,12 +1015,15 @@ body.mobile-layout .drawer-b{padding:10px}
     <div class="row"><span class="lbl">Same-book check</span><span class="val" id="slipSameBook">—</span></div>
     <div class="row"><span class="lbl">Difficulty</span><span class="val" id="slipDiff">—</span></div>
     <div class="row"><span class="lbl">Suggested stake</span><span class="val" id="slipStake">—</span></div>
+    <div class="row"><span class="lbl">Wager ($)</span><span class="val"><input id="slipWager" type="number" min="0" step="1" value="10" style="width:92px;text-align:right"></span></div>
+    <div class="row"><span class="lbl">Potential payout</span><span class="val" id="slipPayout">—</span></div>
+    <div class="row"><span class="lbl">Potential profit</span><span class="val" id="slipProfit">—</span></div>
   </div>
 </div>
 
 <script>
-const APP_VERSION = 'v1.25';
-const APP_UPDATED = 'Updated Jun 8, 2026 3:10 AM ET';
+const APP_VERSION = 'v1.32';
+const APP_UPDATED = 'Updated Jun 8, 2026 5:43 PM ET';
 const APP_PASSWORD = 'adi11';
 {
   const av=document.getElementById('appVersion');
@@ -1438,6 +1450,187 @@ let GAMES=[];           // [{id,away,home,env,players:[...]}]
 let MANUAL={meta:null, players:[]};
 let activeTab='games';
 const TRACK_KEY='dingerlab_saved_parlays_v1';
+const LINEUP_SHOCK_KEY='dingerlab_lineup_shock_v1';
+const SLIP_WAGER_KEY='dingerlab_slip_wager_v1';
+
+
+function loadLineupShockReport(){
+  try{
+    if(window.DL_LINEUP_SHOCK) return window.DL_LINEUP_SHOCK;
+    var raw=localStorage.getItem(LINEUP_SHOCK_KEY);
+    if(!raw) return null;
+    window.DL_LINEUP_SHOCK=JSON.parse(raw);
+    return window.DL_LINEUP_SHOCK;
+  }catch(e){ return null; }
+}
+function saveLineupShockReport(report){
+  window.DL_LINEUP_SHOCK=report||null;
+  try{
+    if(report) localStorage.setItem(LINEUP_SHOCK_KEY, JSON.stringify(report));
+    else localStorage.removeItem(LINEUP_SHOCK_KEY);
+  }catch(e){}
+}
+function bestRadarSnapshotEntry(snap,gid,name){
+  if(!snap||!snap.radar) return null;
+  var best=null;
+  Object.keys(MARKET_META).forEach(function(mk){
+    var key=String(gid)+'::'+String(name||'')+'::'+mk;
+    var row=snap.radar[key];
+    if(!row) return;
+    if(!best || row.rank<best.rank) best=Object.assign({mk:mk}, row);
+  });
+  return best;
+}
+function lineupShockSnapshot(){
+  var snap={capturedAt:Date.now(), games:{}, radar:{}};
+  var candidates=[];
+  try{ candidates=collectPortfolioCandidates()||[]; }catch(e){ candidates=[]; }
+  candidates.slice(0,60).forEach(function(x,idx){
+    var gid=String((x.g&&x.g.id)||'g');
+    var key=gid+'::'+String((x.p&&x.p.name)||'')+'::'+String(x.mk||'hr');
+    snap.radar[key]={rank:idx+1, prob:Number(x.prob||0), edge:Number(x.edge||0), ev:Number(x.ev||0)};
+  });
+  (GAMES||[]).forEach(function(g){
+    var gid=String((g&&g.id)||((g&&g.away)||'')+'@'+((g&&g.home)||''));
+    var players={};
+    (g.players||[]).forEach(function(p){
+      var pkey=String(p.mlbId!=null ? p.mlbId : (p.name||''));
+      players[pkey]={
+        name:p.name,
+        mlbId:p.mlbId||null,
+        projectedSpot:p._projectedSpot!=null?Number(p._projectedSpot):((p.spot!=null)?Number(p.spot):null),
+        lineupSpot:p._lineupSpot!=null?Number(p._lineupSpot):null,
+        lineupStatus:p._lineupStatus||'projected',
+        prob:Number((p._mkt&&p._mkt.hr&&p._mkt.hr.p)||p.p||0)
+      };
+    });
+    snap.games[gid]={id:gid,label:(g.away||'?')+' @ '+(g.home||'?'),posted:!!(g.env&&g.env.lineupsConfirmed),players:players};
+  });
+  return snap;
+}
+function buildLineupShockReport(before, after){
+  if(!after||!after.games) return null;
+  if(!before||!before.games){
+    return {capturedAt:Date.now(),counts:{posted:0,promotions:0,drops:0,out:0},promotions:[],drops:[],out:[],stackable:[],headline:'No prior lineup snapshot yet.'};
+  }
+  var report={capturedAt:Date.now(),counts:{posted:0,promotions:0,drops:0,out:0},promotions:[],drops:[],out:[],stackable:[]};
+  Object.keys(after.games).forEach(function(gid){
+    var ag=after.games[gid]||{};
+    var bg=before.games[gid]||{posted:false,players:{}};
+    var newlyPosted=!!(ag.posted && !bg.posted);
+    if(newlyPosted) report.counts.posted++;
+    var gameCandidates=[];
+    Object.keys(ag.players||{}).forEach(function(pk){
+      var ap=ag.players[pk];
+      var bp=(bg.players&&bg.players[pk])||null;
+      var ar=bestRadarSnapshotEntry(after,gid,ap.name);
+      var br=bestRadarSnapshotEntry(before,gid,ap.name);
+      var fromSpot=bp?(bp.lineupSpot!=null?bp.lineupSpot:bp.projectedSpot):null;
+      var toSpot=ap.lineupSpot!=null?ap.lineupSpot:ap.projectedSpot;
+      var spotGain=(fromSpot!=null&&toSpot!=null)?(fromSpot-toSpot):0;
+      var rankGain=(br&&ar)?(br.rank-ar.rank):((ar&&!br)?6:0);
+      var rankLoss=(br&&ar)?(ar.rank-br.rank):((br&&!ar)?8:0);
+      if(ap.lineupStatus==='in' && (!bp || bp.lineupStatus!=='in')){
+        var impact=(spotGain>0?spotGain*7:0)+(rankGain>0?rankGain*2:0)+((toSpot!=null&&toSpot<=4)?8:0)+((ar&&ar.ev>0)?5:0);
+        report.promotions.push({
+          type:'confirmed', name:ap.name, game:ag.label, fromSpot:fromSpot, toSpot:toSpot,
+          rankBefore:br?br.rank:null, rankAfter:ar?ar.rank:null, rankGain:rankGain,
+          market:ar?MARKET_META[ar.mk].short:'—', impact:impact,
+          note:(toSpot!=null&&toSpot<=4)?'locked into the top of the order':'entered the confirmed lineup'
+        });
+      } else if(ap.lineupStatus==='out' && bp && bp.lineupStatus!=='out'){
+        report.out.push({
+          name:ap.name, game:ag.label, fromSpot:fromSpot, rankBefore:br?br.rank:null,
+          market:br?MARKET_META[br.mk].short:'—', impact:(br&&br.rank?Math.max(1,30-br.rank):6),
+          note:'fell out of the confirmed lineup'
+        });
+      } else if(ap.lineupStatus==='in' && bp && bp.lineupStatus==='in'){
+        if(spotGain>=2 || rankGain>=4){
+          report.promotions.push({
+            type:'moveUp', name:ap.name, game:ag.label, fromSpot:fromSpot, toSpot:toSpot,
+            rankBefore:br?br.rank:null, rankAfter:ar?ar.rank:null, rankGain:rankGain,
+            market:ar?MARKET_META[ar.mk].short:'—', impact:(spotGain>0?spotGain*7:0)+(rankGain>0?rankGain*2:0),
+            note:spotGain>=2?('moved up '+spotGain+' lineup spots'):'jumped up the radar'
+          });
+        } else if((-spotGain)>=2 || rankLoss>=6){
+          report.drops.push({
+            name:ap.name, game:ag.label, fromSpot:fromSpot, toSpot:toSpot,
+            rankBefore:br?br.rank:null, rankAfter:ar?ar.rank:null, rankLoss:rankLoss,
+            market:ar?MARKET_META[ar.mk].short:(br?MARKET_META[br.mk].short:'—'), impact:((-spotGain)>0?(-spotGain)*6:0)+(rankLoss>0?rankLoss:0),
+            note:(-spotGain)>=2?('slid down '+(-spotGain)+' lineup spots'):'lost radar position'
+          });
+        }
+      }
+      if(ap.lineupStatus==='in' && ar && ar.rank<=25){
+        gameCandidates.push({name:ap.name, rank:ar.rank, mk:ar.mk});
+      }
+    });
+    if(newlyPosted && gameCandidates.length>=2){
+      gameCandidates.sort(function(a,b){ return a.rank-b.rank; });
+      report.stackable.push({
+        game:ag.label,
+        count:gameCandidates.length,
+        names:gameCandidates.slice(0,3).map(function(x){ return x.name+' ('+MARKET_META[x.mk].short+')'; }).join(' · ')
+      });
+    }
+  });
+  report.promotions.sort(function(a,b){ return (b.impact||0)-(a.impact||0) || ((a.rankAfter||99)-(b.rankAfter||99)); });
+  report.drops.sort(function(a,b){ return (b.impact||0)-(a.impact||0) || ((a.rankBefore||99)-(b.rankBefore||99)); });
+  report.out.sort(function(a,b){ return (b.impact||0)-(a.impact||0) || ((a.rankBefore||99)-(b.rankBefore||99)); });
+  report.stackable.sort(function(a,b){ return (b.count||0)-(a.count||0); });
+  report.promotions=report.promotions.slice(0,6);
+  report.drops=report.drops.slice(0,5);
+  report.out=report.out.slice(0,5);
+  report.stackable=report.stackable.slice(0,4);
+  report.counts.promotions=report.promotions.length;
+  report.counts.drops=report.drops.length;
+  report.counts.out=report.out.length;
+  report.headline=(report.counts.posted?report.counts.posted+' game'+(report.counts.posted===1?'':'s')+' posted · ':'')+report.counts.promotions+' upgrades · '+report.counts.out+' outs';
+  return report;
+}
+function lineupShockHtml(report){
+  if(!report){
+    return '<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">⚡ Lineup shock detector</div><div class="help-note">Use <b>Check lineups + weather</b> after the slate loads. Once official lineups start posting, this panel will tell you who moved up, who fell out, and which games just became more playable.</div></div></div>';
+  }
+  var total=(report.counts&&((report.counts.posted||0)+(report.counts.promotions||0)+(report.counts.drops||0)+(report.counts.out||0)))||0;
+  if(!total){
+    return '<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">⚡ Lineup shock detector</div><div class="help-note">No meaningful lineup shock yet. Run another lineup check closer to first pitch to capture batting-order jumps, new starters, and late scratches.</div></div></div>';
+  }
+  var promos=report.promotions&&report.promotions.length ? '<table class="players"><thead><tr><th>Upgrade</th><th>Change</th><th class="num">Radar</th><th>Why it matters</th></tr></thead><tbody>'+
+    report.promotions.map(function(x){
+      var delta=(x.fromSpot!=null&&x.toSpot!=null)?('#'+x.fromSpot+' → #'+x.toSpot):'Now confirmed';
+      var radar=(x.rankAfter!=null?('#'+x.rankAfter):'—') + (x.rankGain>0?(' <span class="chip" style="background:#16a34a22;color:#16a34a">↑'+x.rankGain+'</span>'):'');
+      return '<tr><td><b>'+x.name+'</b><div style="font-size:12px;color:#888">'+x.game+' · '+x.market+'</div></td><td>'+delta+'</td><td class="num">'+radar+'</td><td><div style="font-size:12px;color:#4b5563">'+x.note+'</div></td></tr>';
+    }).join('')+'</tbody></table>' : '<div class="help-note">No major upgrades yet.</div>';
+  var downs=(report.drops&&report.drops.length) ? '<table class="players"><thead><tr><th>Downgrade</th><th>Change</th><th class="num">Radar</th><th>Why it matters</th></tr></thead><tbody>'+
+    report.drops.map(function(x){
+      var delta=(x.fromSpot!=null&&x.toSpot!=null)?('#'+x.fromSpot+' → #'+x.toSpot):'Weaker context';
+      var radar=(x.rankAfter!=null?('#'+x.rankAfter):'—') + (x.rankLoss>0?(' <span class="chip" style="background:#f59e0b22;color:#b45309">↓'+x.rankLoss+'</span>'):'');
+      return '<tr><td><b>'+x.name+'</b><div style="font-size:12px;color:#888">'+x.game+' · '+x.market+'</div></td><td>'+delta+'</td><td class="num">'+radar+'</td><td><div style="font-size:12px;color:#4b5563">'+x.note+'</div></td></tr>';
+    }).join('')+'</tbody></table>' : '<div class="help-note">No notable lineup downgrades yet.</div>';
+  var outs=(report.out&&report.out.length) ? '<table class="players"><thead><tr><th>Out</th><th>Last known spot</th><th class="num">Prior rank</th><th>Impact</th></tr></thead><tbody>'+
+    report.out.map(function(x){
+      return '<tr><td><b>'+x.name+'</b><div style="font-size:12px;color:#888">'+x.game+' · '+x.market+'</div></td><td>'+(x.fromSpot!=null?('#'+x.fromSpot):'Projected')+'</td><td class="num">'+(x.rankBefore!=null?('#'+x.rankBefore):'—')+'</td><td><div style="font-size:12px;color:#4b5563">'+x.note+'</div></td></tr>';
+    }).join('')+'</tbody></table>' : '<div class="help-note">No key scratches detected.</div>';
+  var stackable=(report.stackable&&report.stackable.length) ? '<table class="players"><thead><tr><th>New stackable game</th><th class="num">Playable bats</th><th>Quick read</th></tr></thead><tbody>'+
+    report.stackable.map(function(x){
+      return '<tr><td><b>'+x.game+'</b></td><td class="num">'+x.count+'</td><td><div style="font-size:12px;color:#4b5563">'+x.names+'</div></td></tr>';
+    }).join('')+'</tbody></table>' : '<div class="help-note">No newly stackable games yet.</div>';
+  return '<div class="game-card open"><div class="game-body" style="display:block;padding:18px">'
+    +'<div class="section-title">⚡ Lineup shock detector</div>'
+    +'<div class="help-note" style="margin-bottom:12px">Impact read from the latest lineup check: who moved up, who got knocked out, and which games became more playable because the order just locked.</div>'
+    +'<div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:12px">'
+      +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Games posted</div><div style="font-size:28px;font-weight:800;line-height:1">'+((report.counts&&report.counts.posted)||0)+'</div><div class="help-note" style="margin-top:8px">'+(report.headline||'Latest lineup read')+'</div></div>'
+      +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Upgrades</div><div style="font-size:28px;font-weight:800;line-height:1">'+((report.counts&&report.counts.promotions)||0)+'</div><div class="help-note" style="margin-top:8px">Hitters boosted by confirmation or order moves</div></div>'
+      +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Downgrades</div><div style="font-size:28px;font-weight:800;line-height:1">'+((report.counts&&report.counts.drops)||0)+'</div><div class="help-note" style="margin-top:8px">Plays that lost quality after the lineup update</div></div>'
+      +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Key outs</div><div style="font-size:28px;font-weight:800;line-height:1">'+((report.counts&&report.counts.out)||0)+'</div><div class="help-note" style="margin-top:8px">Previously relevant bats who are now out</div></div>'
+    +'</div>'
+    +'<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">Upgraded by lineups</div>'+promos+'</div></div>'
+    +'<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">Downgraded / slipped</div>'+downs+'</div></div>'
+    +'<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">Key outs</div>'+outs+'</div></div>'
+    +'<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">Newly stackable games</div>'+stackable+'</div></div>'
+    +'</div></div>';
+}
 
 function loadSaved(){
   try{ return JSON.parse(localStorage.getItem(TRACK_KEY)||'[]'); }catch(e){ return []; }
@@ -1945,6 +2138,36 @@ function shortBookLabel(book){
 function fmtAmerican(a){
   return a==null ? '—' : (Number(a)>0 ? `+${Number(a)}` : `${Number(a)}`);
 }
+function readSlipWager(){
+  try{
+    var raw=localStorage.getItem(SLIP_WAGER_KEY);
+    var n=raw==null?10:Number(raw);
+    return Number.isFinite(n) && n>=0 ? n : 10;
+  }catch(e){ return 10; }
+}
+function setSlipWager(v){
+  var n=Number(v);
+  if(!Number.isFinite(n) || n<0) n=0;
+  try{ localStorage.setItem(SLIP_WAGER_KEY, String(n)); }catch(e){}
+  return n;
+}
+function updateSlipPayoutOutputs(st){
+  var wagerInput=$('#slipWager');
+  var payoutEl=$('#slipPayout');
+  var profitEl=$('#slipProfit');
+  if(!wagerInput||!payoutEl||!profitEl) return;
+  var wager=setSlipWager(wagerInput.value);
+  if(String(wagerInput.value)!==String(wager)) wagerInput.value=String(wager);
+  if(st.bookDec==null || !Number.isFinite(st.bookDec) || wager<=0){
+    payoutEl.textContent = st.bookDec==null ? '—' : '$0.00';
+    profitEl.textContent = st.bookDec==null ? '—' : '$0.00';
+    return;
+  }
+  var payout=wager*st.bookDec;
+  var profit=payout-wager;
+  payoutEl.textContent='$'+payout.toFixed(2);
+  profitEl.innerHTML='<span style="color:'+(profit>=0?'#16a34a':'#db4437')+'">$'+profit.toFixed(2)+'</span>';
+}
 
 function slipAvailableBooks(legs){
   const candidates=['draftkings','fanatics','betmgm','caesars'];
@@ -2056,6 +2279,14 @@ function renderSlip(){
   })();
   $('#slipDiff').innerHTML = st.joint==null ? '&#x2014;' : ('<span class="badge"><strong>'+slipDifficulty(st.joint)+'</strong> &#xB7; '+fmtPct(st.joint)+(st.ev!=null?(' &#xB7; EV '+(st.ev>=0?'+':'&#x2212;')+(Math.abs(st.ev)*100).toFixed(1)+'%'):'')+(st.corr?' &#xB7; corr-adj':'')+'</span>');
   (function(){ var ss=$('#slipStake'); if(!ss) return; if(st.joint==null||st.bookDec==null){ ss.textContent='—'; return; } var sug=suggestStake(st.joint, st.bookDec); ss.innerHTML = (sug&&sug.stake>0) ? ('$'+sug.stake.toFixed(2)+' <span style="color:#6b7280;font-size:11px">('+(sug.f*100).toFixed(1)+'% Kelly)</span>') : '<span style="color:#6b7280">No edge &#x2014; pass</span>'; })();
+  (function(){
+    var wagerInput=$('#slipWager');
+    if(!wagerInput) return;
+    if(document.activeElement!==wagerInput) wagerInput.value=String(readSlipWager());
+    wagerInput.oninput=function(){ updateSlipPayoutOutputs(st); };
+    wagerInput.onchange=function(){ updateSlipPayoutOutputs(st); };
+    updateSlipPayoutOutputs(st);
+  })();
 }
 
 
@@ -2650,6 +2881,7 @@ function bookValueHtml(){
 async function confirmLineups(){
   const real = GAMES.filter(function(g){ return g && g.id!=null && /^\d+$/.test(String(g.id)); });
   if(!real.length){ toast("Lineups","Load a live MLB slate first — sample/manual games have no live feed.","ℹ️"); return; }
+  var beforeShock=lineupShockSnapshot();
   setStatus("Fetching confirmed lineups + live weather…", true);
   let lineupsFound=0, wxFound=0;
   for(const g of real){
@@ -2694,10 +2926,20 @@ async function confirmLineups(){
   }
   window.DL_LINEUPS_CONFIRMED = real.some(function(g){ return g && g.env && g.env.lineupsConfirmed; });
   recomputeAll();
+  var afterShock=lineupShockSnapshot();
+  var shockReport=buildLineupShockReport(beforeShock, afterShock);
+  saveLineupShockReport(shockReport);
   renderGames();
   renderSlip();
+  if(activeTab==='command') renderCommandCenter();
   setStatus("Lineups checked — "+lineupsFound+" game(s) posted, weather on "+wxFound+".");
-  toast("Lineups + weather", lineupsFound ? ("Confirmed lineups for "+lineupsFound+" game(s). Batting order is now locked into projections, and non-starters are downgraded/filtered.") : "No lineups posted yet — check back closer to first pitch. Live weather updated where available.", "✅");
+  var shockBits=[];
+  if(shockReport && shockReport.counts){
+    if(shockReport.counts.promotions) shockBits.push(shockReport.counts.promotions+' upgrade'+(shockReport.counts.promotions===1?'':'s'));
+    if(shockReport.counts.out) shockBits.push(shockReport.counts.out+' key out'+(shockReport.counts.out===1?'':'s'));
+    if(shockReport.counts.posted) shockBits.push(shockReport.counts.posted+' game'+(shockReport.counts.posted===1?'':'s')+' posted');
+  }
+  toast("Lineups + weather", lineupsFound ? ("Confirmed lineups for "+lineupsFound+" game(s). "+(shockBits.length?('Shock detector: '+shockBits.join(' · ')+'. '):'')+"Batting order is now locked into projections, and non-starters are downgraded/filtered.") : "No lineups posted yet — check back closer to first pitch. Live weather updated where available.", "✅");
 }
 
 var DL_AUTO_REFRESH=null;
@@ -3078,6 +3320,9 @@ function init(){
       logln('Applied odds to '+res.applied+'/'+res.total+' loaded hitters.');
       setStatus('Slate + odds loaded. Applied to '+res.applied+'/'+res.total+' hitters. Open a game card to see EV.',false);
       renderGames();
+      if(activeTab==='insights') renderInsights();
+      if(activeTab==='command') renderCommandCenter();
+      if(activeTab==='portfolio') renderPortfolio();
     }catch(e){
       console.error(e);
       setStatus('Odds load failed: '+e.message);
@@ -3316,10 +3561,7 @@ function slateSummary(){
   $('#builderResults').innerHTML=head+'<table class="players"><thead><tr><th>Market</th><th class="num">Priced</th><th class="num">+EV</th><th class="num">Avg edge</th><th>Best play</th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
 
-function renderInsights(){
-  var el=$('#insightsTopEdges');
-  if(!el) return;
-  if(GAMES.length<1){ el.innerHTML='<div class="help-note">Load a slate first.</div>'; return; }
+function insightRows(){
   var rows=[];
   GAMES.forEach(function(g){ (g.players||[]).forEach(function(p){
     if(!playerBuildAllowed(p,g)) return;
@@ -3327,9 +3569,21 @@ function renderInsights(){
       var mc=p._mkt&&p._mkt[mk]; var mo=p._mktOdds&&p._mktOdds[mk];
       if(!mc||mc.p==null||!mo||mo.best==null||mo.mktProb==null) return;
       var dec=amToDecimal(mo.best); if(!dec||dec<=1) return;
+      var pa=Math.max(1, Number(p.PA||0));
+      var ab=Math.max(1, Number(p.AB||0)||pa);
+      var h=Number(p.H||0), dbl=Number(p._2B||0), tr=Number(p._3B||0), hr=Number(p.HR||0);
+      var singles=Math.max(0, h-dbl-tr-hr);
+      var totalBases=singles + 2*dbl + 3*tr + 4*hr;
+      var ba=ab>0 ? (h/ab) : null;
+      var slg=ab>0 ? (totalBases/ab) : null;
+      var iso=(ba!=null&&slg!=null) ? (slg-ba) : null;
+      var seasonRate = mk==='hr' ? hr/pa : (mk==='hits' ? h/pa : (mk==='hits2' ? (dbl+tr+hr)/pa : (mk==='tb' ? totalBases/pa : Number(p.RBI||0)/pa)));
+      var recentRate=(Number(p.recPA||0)>0) ? (Number(p.recHR||0)/Number(p.recPA||0)) : null;
       var edge=mc.p-mo.mktProb;
-      var ev=parlayEV(calibratedJoint(mc.p,confidenceLabel(p)),dec);
+      var conf=confidenceLabel(p);
+      var ev=parlayEV(calibratedJoint(mc.p,conf),dec);
       rows.push({
+        mk:mk,
         name:p.name,
         game:g.away+' @ '+g.home,
         team:(p.side==='home'?(g.homeAbbr||g.home):(g.awayAbbr||g.away))||'',
@@ -3339,11 +3593,172 @@ function renderInsights(){
         ev:ev,
         best:mo.best,
         bestBook:mo.books&&mo.books.autoBest?mo.books.autoBest:null,
-        conf:confidenceLabel(p)
+        conf:conf,
+        oppHand:p.oppHand||'',
+        spot:(p._lineupSpot||p.spot||null),
+        parkHr:(p._env&&p._env.parkHR!=null)?Number(p._env.parkHR):null,
+        seasonRate:seasonRate,
+        recentRate:recentRate,
+        slg:slg,
+        iso:iso,
+        hr:hr
       });
     });
   }); });
+  return rows;
+}
+
+function cheatSheetPowerScore(r){
+  var probN=clamp((r.prob||0)/0.30,0,1);
+  var edgeN=clamp((r.edge||0)/0.08,0,1);
+  var recentN=clamp((r.recentRate||0)/0.12,0,1);
+  var parkN=clamp((((r.parkHr==null?1:r.parkHr)-1)*3)+0.5,0,1);
+  var confN=r.conf==='Great'?1:(r.conf==='Good'?0.72:0.45);
+  return Math.round(clamp(45 + probN*24 + edgeN*16 + recentN*8 + parkN*4 + confN*3, 45, 99));
+}
+
+function insightTopFiveCards(hrRows){
+  var used={};
+  function pick(sorter){
+    var choice=hrRows.slice().sort(sorter).find(function(r){ return !used[r.name+'|'+r.game]; });
+    if(choice) used[choice.name+'|'+choice.game]=1;
+    return choice || hrRows[0] || null;
+  }
+  return [
+    { title:'Best power', accent:'#d97706', note:'Highest power score', row:pick(function(a,b){ return (b.power-a.power) || (b.prob-a.prob); }) },
+    { title:'Best matchup', accent:'#2563eb', note:'Strongest edge vs market', row:pick(function(a,b){ return (b.edge-a.edge) || (b.power-a.power); }) },
+    { title:'Safest HR%', accent:'#0f766e', note:'Highest model home-run rate', row:pick(function(a,b){ return (b.prob-a.prob) || (b.power-a.power); }) },
+    { title:'Best value', accent:'#7c3aed', note:'Top EV profile', row:pick(function(a,b){ return (b.ev-a.ev) || (b.edge-a.edge); }) },
+    { title:'Best longshot', accent:'#be123c', note:'Biggest payout with upside', row:pick(function(a,b){ return (Number(b.best||-99999)-Number(a.best||-99999)) || (b.power-a.power); }) }
+  ].filter(function(x){ return !!x.row; });
+}
+
+function insightHeatCell(prob){
+  var p=Number(prob||0);
+  var bg=p>=0.55?'#16a34a':(p>=0.35?'#84cc16':(p>=0.20?'#facc15':'#fb923c'));
+  var fg=p>=0.35?'#052e16':'#111827';
+  return '<span style="display:inline-block;min-width:62px;text-align:center;padding:6px 8px;border-radius:8px;background:'+bg+'22;color:'+fg+';font-weight:800">'+fmtPct(p)+'</span>';
+}
+
+function renderInsights(){
+  var cheat=$('#insightsCheatSheet');
+  var topFive=$('#insightsTopFive');
+  var heat=$('#insightsTrendHeatmap');
+  var el=$('#insightsTopEdges');
+  if(!el) return;
+  if(GAMES.length<1){
+    if(cheat) cheat.innerHTML='<div class="help-note">Load a slate first.</div>';
+    if(topFive) topFive.innerHTML='';
+    if(heat) heat.innerHTML='';
+    el.innerHTML='';
+    return;
+  }
+  var rows=insightRows();
   rows.sort(function(a,b){ return (b.edge-a.edge) || (b.ev-a.ev); });
+  var hrRows=rows.filter(function(r){ return r.mk==='hr'; }).map(function(r){ return Object.assign({power:cheatSheetPowerScore(r)}, r); });
+  hrRows.sort(function(a,b){ return (b.power-a.power) || (b.prob-a.prob) || (b.edge-a.edge); });
+  if(cheat){
+    var boardRows=hrRows.slice(0,12);
+    if(!boardRows.length){
+      cheat.innerHTML='<div class="help-note">No HR prices yet. Load all-market odds first.</div>';
+    } else {
+      var bestProb=boardRows.slice().sort(function(a,b){ return (b.prob-a.prob); })[0];
+      var bestEdge=boardRows.slice().sort(function(a,b){ return (b.edge-a.edge); })[0];
+      var longshot=boardRows.slice().sort(function(a,b){ return (Number(b.best||-99999)-Number(a.best||-99999)); })[0];
+      var hotBat=boardRows.slice().sort(function(a,b){ return ((b.recentRate||0)-(a.recentRate||0)); })[0];
+      cheat.innerHTML=
+        '<div class="parlay-grid">'
+        +'<div class="parlay-card"><div class="section-title" style="margin-top:0">Best raw HR%</div><div style="font-size:24px;font-weight:800;line-height:1.05">'+bestProb.name+'</div><div class="help-note" style="margin-top:8px">Model '+fmtPct(bestProb.prob)+' · Best '+fmtAmerican(bestProb.best)+'</div></div>'
+        +'<div class="parlay-card"><div class="section-title" style="margin-top:0">Best edge</div><div style="font-size:24px;font-weight:800;line-height:1.05">'+bestEdge.name+'</div><div class="help-note" style="margin-top:8px">'+(bestEdge.edge>=0?'+':'')+(bestEdge.edge*100).toFixed(1)+'% vs market</div></div>'
+        +'<div class="parlay-card"><div class="section-title" style="margin-top:0">Best payout</div><div style="font-size:24px;font-weight:800;line-height:1.05">'+longshot.name+'</div><div class="help-note" style="margin-top:8px">'+fmtAmerican(longshot.best)+' at '+(longshot.bestBook?shortBookLabel(longshot.bestBook):'best book')+'</div></div>'
+        +'<div class="parlay-card"><div class="section-title" style="margin-top:0">Hottest recent form</div><div style="font-size:24px;font-weight:800;line-height:1.05">'+hotBat.name+'</div><div class="help-note" style="margin-top:8px">Recent HR/PA '+((hotBat.recentRate||0)*100).toFixed(1)+'%</div></div>'
+        +'</div>'
+        +'<table class="players" style="margin-top:12px"><thead><tr><th>#</th><th>Player</th><th class="num">HR</th><th class="num">HR/PA</th><th class="num">Recent</th><th class="num">SLG</th><th class="num">ISO</th><th class="num">Model</th><th class="num">Best</th><th class="num">PWR</th></tr></thead><tbody>'
+        +boardRows.map(function(r,idx){
+          var chips=[];
+          chips.push('<span class="chip" style="background:#2d7ff922;color:#2d7ff9">vs '+(r.oppHand||'?')+'</span>');
+          if(r.conf) chips.push('<span class="chip" style="background:'+(r.conf==='Great'?'#16a34a22':'#f59e0b22')+';color:'+(r.conf==='Great'?'#16a34a':'#b45309')+'">'+r.conf+'</span>');
+          if(r.recentRate!=null && r.seasonRate!=null && r.recentRate>r.seasonRate*1.2) chips.push('<span class="chip" style="background:#dc262622;color:#dc2626">Hot</span>');
+          if(r.parkHr!=null && r.parkHr>=1.05) chips.push('<span class="chip" style="background:#7c3aed22;color:#7c3aed">Park+</span>');
+          if(r.spot!=null) chips.push('<span class="chip" style="background:#11182710;color:#374151">L'+r.spot+'</span>');
+          return '<tr>'
+            +'<td class="num"><b>'+(idx+1)+'</b></td>'
+            +'<td><b>'+r.name+'</b><div style="font-size:12px;color:#888">'+r.team+' · '+r.game+'</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+chips.join('')+'</div></td>'
+            +'<td class="num">'+(r.hr||0)+'</td>'
+            +'<td class="num">'+((r.seasonRate||0)*100).toFixed(1)+'%</td>'
+            +'<td class="num">'+(r.recentRate==null?'—':((r.recentRate*100).toFixed(1)+'%'))+'</td>'
+            +'<td class="num">'+(r.slg==null?'—':r.slg.toFixed(3).replace(/^0/,''))+'</td>'
+            +'<td class="num">'+(r.iso==null?'—':r.iso.toFixed(3).replace(/^0/,''))+'</td>'
+            +'<td class="num">'+fmtPct(r.prob)+'</td>'
+            +'<td class="num">'+(r.bestBook?shortBookLabel(r.bestBook)+' ':'')+fmtAmerican(r.best)+'</td>'
+            +'<td class="num"><span class="chip" style="min-width:46px;justify-content:center;background:#0f766e22;color:#0f766e;font-weight:800">'+r.power+'</span></td>'
+            +'</tr>';
+        }).join('')
+        +'</tbody></table>';
+    }
+  }
+  if(topFive){
+    if(!hrRows.length){
+      topFive.innerHTML='<div class="help-note">No HR prices yet. Load all-market odds first.</div>';
+    } else {
+      var cards=insightTopFiveCards(hrRows).slice(0,5);
+      topFive.innerHTML='<div class="parlay-grid">'+cards.map(function(card,idx){
+        var r=card.row;
+        var chips=[];
+        chips.push('<span class="chip" style="background:'+card.accent+'22;color:'+card.accent+'">'+card.title+'</span>');
+        if(r.conf) chips.push('<span class="chip" style="background:'+(r.conf==='Great'?'#16a34a22':'#f59e0b22')+';color:'+(r.conf==='Great'?'#16a34a':'#b45309')+'">'+r.conf+'</span>');
+        if(r.parkHr!=null && r.parkHr>=1.05) chips.push('<span class="chip" style="background:#7c3aed22;color:#7c3aed">Park+</span>');
+        if(r.spot!=null) chips.push('<span class="chip" style="background:#11182710;color:#374151">L'+r.spot+'</span>');
+        return '<div class="parlay-card" style="background:linear-gradient(180deg,'+card.accent+'12, rgba(255,255,255,0.92));border-color:'+card.accent+'33">'
+          +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">'
+          +'<div><div style="font-size:30px;font-weight:900;line-height:1">#'+(idx+1)+'</div><div class="section-title" style="margin:6px 0 0;color:'+card.accent+'">'+card.title+'</div></div>'
+          +'<div style="text-align:right"><div style="font-size:22px;font-weight:900;color:'+card.accent+'">'+r.power+'</div><div style="font-size:11px;color:#6b7280">PWR</div></div>'
+          +'</div>'
+          +'<div style="margin-top:10px;font-size:24px;font-weight:800;line-height:1.05">'+r.name+'</div>'
+          +'<div class="help-note" style="margin-top:6px">'+r.team+' · '+r.game+'</div>'
+          +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">'+chips.join('')+'</div>'
+          +'<div class="parlay-stat" style="margin-top:12px"><span class="lbl">Model HR%</span><span class="val">'+fmtPct(r.prob)+'</span></div>'
+          +'<div class="parlay-stat"><span class="lbl">Best odds</span><span class="val">'+(r.bestBook?shortBookLabel(r.bestBook)+' ':'')+fmtAmerican(r.best)+'</span></div>'
+          +'<div class="parlay-stat"><span class="lbl">Edge</span><span class="val" style="color:'+(r.edge>=0?'#16a34a':'#dc2626')+'">'+(r.edge>=0?'+':'')+(r.edge*100).toFixed(1)+'%</span></div>'
+          +'<div class="parlay-stat"><span class="lbl">Recent HR/PA</span><span class="val">'+(r.recentRate==null?'—':((r.recentRate*100).toFixed(1)+'%'))+'</span></div>'
+          +'<div class="help-note" style="margin-top:10px">'+card.note+'</div>'
+          +'</div>';
+      }).join('')+'</div>';
+    }
+  }
+  if(heat){
+    var grouped={};
+    rows.forEach(function(r){
+      var key=r.name+'|'+r.team+'|'+r.game;
+      if(!grouped[key]) grouped[key]={ name:r.name, team:r.team, game:r.game, conf:r.conf, spot:r.spot, parkHr:r.parkHr, best:r.best, bestBook:r.bestBook, hrProb:0, hitProb:0, tbProb:0, power:0 };
+      if(r.mk==='hr'){ grouped[key].hrProb=r.prob; grouped[key].power=cheatSheetPowerScore(r); grouped[key].best=r.best; grouped[key].bestBook=r.bestBook; }
+      if(r.mk==='hits') grouped[key].hitProb=r.prob;
+      if(r.mk==='tb') grouped[key].tbProb=r.prob;
+    });
+    var heatRows=Object.keys(grouped).map(function(k){ return grouped[k]; }).filter(function(r){ return r.hitProb||r.tbProb||r.hrProb; });
+    heatRows.forEach(function(r){ r.combo=((r.hitProb||0)*0.34)+((r.tbProb||0)*0.33)+((r.hrProb||0)*0.33); });
+    heatRows.sort(function(a,b){ return (b.combo-a.combo) || (b.power-a.power) || (b.hrProb-a.hrProb); });
+    heatRows=heatRows.slice(0,12);
+    if(!heatRows.length){
+      heat.innerHTML='<div class="help-note">No market heatmap yet. Load all-market odds first.</div>';
+    } else {
+      heat.innerHTML='<table class="players"><thead><tr><th>Player</th><th class="num">1+ Hit</th><th class="num">2+ TB</th><th class="num">HR</th><th class="num">Heat</th><th class="num">Best HR</th></tr></thead><tbody>'+
+        heatRows.map(function(r){
+          var chips=[];
+          if(r.conf) chips.push('<span class="chip" style="background:'+(r.conf==='Great'?'#16a34a22':'#f59e0b22')+';color:'+(r.conf==='Great'?'#16a34a':'#b45309')+'">'+r.conf+'</span>');
+          if(r.parkHr!=null && r.parkHr>=1.05) chips.push('<span class="chip" style="background:#7c3aed22;color:#7c3aed">Park+</span>');
+          if(r.spot!=null) chips.push('<span class="chip" style="background:#11182710;color:#374151">L'+r.spot+'</span>');
+          return '<tr>'
+            +'<td><b>'+r.name+'</b><div style="font-size:12px;color:#888">'+r.team+' · '+r.game+'</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+chips.join('')+'</div></td>'
+            +'<td class="num">'+insightHeatCell(r.hitProb)+'</td>'
+            +'<td class="num">'+insightHeatCell(r.tbProb)+'</td>'
+            +'<td class="num">'+insightHeatCell(r.hrProb)+'</td>'
+            +'<td class="num"><span class="chip" style="min-width:48px;justify-content:center;background:#0f766e22;color:#0f766e;font-weight:800">'+Math.round((r.combo||0)*100)+'</span></td>'
+            +'<td class="num">'+(r.bestBook?shortBookLabel(r.bestBook)+' ':'')+(r.best!=null?fmtAmerican(r.best):'—')+'</td>'
+            +'</tr>';
+        }).join('')+'</tbody></table>';
+    }
+  }
   rows=rows.slice(0,25);
   if(!rows.length){ el.innerHTML='<div class="help-note">No priced edges yet. Load all-market odds first.</div>'; return; }
   el.innerHTML='<table class="players"><thead><tr><th>Player</th><th>Market</th><th class="num">Model</th><th class="num">Edge</th><th class="num">EV</th><th class="num">Best</th><th>Confidence</th></tr></thead><tbody>' +
@@ -3354,9 +3769,13 @@ function renderInsights(){
 }
 
 
-function addPortfolioLegs(b64){
+function architectPayload(legs){
+  return btoa(unescape(encodeURIComponent(JSON.stringify((legs||[]).map(function(x){ return {gamePk:(x.g&&x.g.id)||null, name:x.p.name, mk:x.mk}; })) )));
+}
+function applySlipPayload(b64, replaceExisting){
   try{
     const arr=JSON.parse(decodeURIComponent(escape(atob(b64))));
+    if(replaceExisting) SLIP.splice(0, SLIP.length);
     let added=0;
     arr.forEach(function(l){
       const g=findGameById(l.gamePk); if(!g) return;
@@ -3370,9 +3789,77 @@ function addPortfolioLegs(b64){
       added++;
     });
     renderSlip(); openSlip();
-    toast('Added', added+' leg'+(added===1?'':'s')+' added to your betslip.', '⚡');
-  }catch(e){ console.error(e); toast('Error','Could not add these legs.','⚠️'); }
+    toast(replaceExisting?'Architect loaded':'Added', added+' leg'+(added===1?'':'s')+(replaceExisting?' loaded into your betslip.':' added to your betslip.'), replaceExisting?'🏗️':'⚡');
+  }catch(e){ console.error(e); toast('Error','Could not load this slip.','⚠️'); }
 }
+function pickArchitectLegs(list, count, maxPerGame){
+  var out=[];
+  var seenPlayers=new Set();
+  var gameCounts={};
+  (list||[]).forEach(function(x){
+    if(out.length>=count) return;
+    if(!x||!x.p||!x.g) return;
+    var playerKey=(x.p.name||'')+'::'+String((x.g&&x.g.id)||'g');
+    var gameKey=String((x.g&&x.g.id)||'g');
+    if(seenPlayers.has(playerKey)) return;
+    if((gameCounts[gameKey]||0)>=maxPerGame) return;
+    out.push(x);
+    seenPlayers.add(playerKey);
+    gameCounts[gameKey]=(gameCounts[gameKey]||0)+1;
+  });
+  return out;
+}
+function architectPlanFromPicks(id, title, note, picks, meta){
+  if(!picks||!picks.length) return null;
+  var od;
+  var rawJoint;
+  if(picks.length===1){
+    rawJoint=clamp(picks[0].prob||0,1e-9,0.999);
+    od={ bestDec:picks[0].dec||null, mixedDec:picks[0].dec||null, bestBook:picks[0].bestBook||null };
+  }else{
+    rawJoint=legsJoint(picks);
+    od=sgpOdds(picks);
+  }
+  var payoutDec=(meta&&meta.payoutDec!=null)?meta.payoutDec:((od.bestDec!=null)?od.bestDec:od.mixedDec);
+  var book=(meta&&meta.bestBook!=null)?meta.bestBook:(od.bestBook||null);
+  var tier=weakestTier(picks.map(function(x){ return x.tier||'Good'; }));
+  var adj=calibratedJoint(rawJoint, tier);
+  var ev=(meta&&meta.ev!=null)?meta.ev:((payoutDec&&payoutDec>1)?parlayEV(adj,payoutDec):null);
+  return { id:id, title:title, note:note, picks:picks, joint:adj, payoutDec:payoutDec, bestBook:book, ev:ev, tags:(meta&&meta.tags)||[] };
+}
+function buildArchitectPlans(candidates){
+  const all=(candidates||[]).slice();
+  const ready=all.filter(function(x){ return x.readyNow; });
+  const readyPos=ready.filter(function(x){ return (x.ev||0)>0; });
+  const positive=all.filter(function(x){ return (x.ev||0)>0; });
+  const safePool=(readyPos.length?readyPos:all).filter(function(x){ return x.tier!=='Low'; }).slice().sort(function(a,b){ return (b.prob||0)-(a.prob||0) || (b.radarScore||0)-(a.radarScore||0); });
+  const valuePool=(positive.length?positive:all).slice().sort(function(a,b){ return (b.ev||0)-(a.ev||0) || (b.edge||0)-(a.edge||0) || (b.radarScore||0)-(a.radarScore||0); });
+  const payoutPool=all.filter(function(x){ return (x.edge||0)>0 || (x.ev||0)>-0.03; }).slice().sort(function(a,b){ return Number(b.american||-99999)-Number(a.american||-99999) || (b.radarScore||0)-(a.radarScore||0); });
+  const balancedPool=(readyPos.length?readyPos:(positive.length?positive:all)).slice().sort(function(a,b){ return (b.radarScore||0)-(a.radarScore||0) || (b.ev||0)-(a.ev||0); });
+  const singlePick=(readyPos[0]||positive[0]||all[0]) ? [readyPos[0]||positive[0]||all[0]] : [];
+  const hitRatePicks=pickArchitectLegs(safePool, 2, 1);
+  const valuePicks=pickArchitectLegs(valuePool, 3, 1);
+  const payoutPicks=pickArchitectLegs(payoutPool, 3, 1);
+  const balancedPicks=pickArchitectLegs(balancedPool, 3, 1);
+  const sameBookSeed=pickArchitectLegs((positive.length?positive:all).filter(function(x){ return x.bestBook; }).slice().sort(function(a,b){ return (b.ev||0)-(a.ev||0) || (b.booksAvailable||0)-(a.booksAvailable||0); }), 6, 2);
+  const sameBookPair=buildPortfolioPairs(sameBookSeed, {pairs:6}).filter(function(x){ return x.sameBookBestDec!=null; }).sort(function(a,b){ return (b._ev||0)-(a._ev||0) || (b.adjJoint||0)-(a.adjJoint||0); })[0] || null;
+  const plans=[];
+  plans.push(architectPlanFromPicks('balanced','Balanced card','Blends edge, confidence, lineup certainty, and cleaner routing into one default slip.', balancedPicks, {tags:['default','all-around']}));
+  plans.push(architectPlanFromPicks('value','Best value','Pushes the strongest price-vs-model mistakes across different games.', valuePicks, {tags:['EV','price mistakes']}));
+  plans.push(architectPlanFromPicks('hitRate','Highest hit rate','Keeps the slip tight with the cleanest win-rate profile.', hitRatePicks, {tags:['safer','cleanest hit rate']}));
+  plans.push(architectPlanFromPicks('payout','Max payout','Chases the biggest upside without fully ignoring edge support.', payoutPicks, {tags:['ceiling','bigger odds']}));
+  plans.push(architectPlanFromPicks('single','Best single','The cleanest standalone bet on the board right now.', singlePick, {tags:['straight bet','anchor']}));
+  if(sameBookPair){
+    plans.push(architectPlanFromPicks('sameBook','Same-book only','Optimized for the cleanest one-book placement path.', sameBookPair.picks, {payoutDec:sameBookPair.sameBookBestDec, bestBook:sameBookPair.sameBookBest, ev:sameBookPair._ev, tags:['same-book','fastest to place']}));
+  }
+  return plans.filter(function(x){ return x && x.picks && x.picks.length; });
+}
+function loadArchitectSlip(b64){ return applySlipPayload(b64, true); }
+
+function addPortfolioLegs(b64){
+  return applySlipPayload(b64, false);
+}
+
 
 function portfolioConfig(){
   const style=$('#portfolioStyle')?$('#portfolioStyle').value:'balanced';
@@ -3552,47 +4039,221 @@ function renderCommandCenter(){
   readStakeCfg();
   var all=collectPortfolioCandidates();
   if(!all.length){ wrap.innerHTML='<div class="help-note">No priced candidates yet. Load all-market odds first.</div>'; return; }
-  var ready=all.filter(function(x){ return x.g&&x.g.env&&x.g.env.lineupsConfirmed && (x.ev!=null&&x.ev>0); }).slice(0,8);
-  var waiting=all.filter(function(x){ return !x.g || !x.g.env || !x.g.env.lineupsConfirmed; }).slice(0,8);
-  var cfg=portfolioConfig();
-  var singles=choosePortfolioSingles(all,cfg);
-  var pairs=buildPortfolioPairs(singles,cfg).filter(function(x){ return x.sameBookBestDec!=null; }).slice(0,4);
-  var readyGames=new Set(ready.map(function(x){ return x.g?x.g.id:null; }).filter(Boolean)).size;
-  var pendingGames=new Set(waiting.map(function(x){ return x.g?x.g.id:null; }).filter(Boolean)).size;
-  var avgReadyEdge=ready.length ? ready.reduce(function(a,x){ return a+(x.edge||0); },0)/ready.length : null;
 
   function payload(legs){
-    return btoa(unescape(encodeURIComponent(JSON.stringify(legs.map(function(x){ return {gamePk:(x.g&&x.g.id)||null, name:x.p.name, mk:x.mk}; })))));
+    return btoa(unescape(encodeURIComponent(JSON.stringify((legs||[]).map(function(x){ return {gamePk:(x.g&&x.g.id)||null, name:x.p.name, mk:x.mk}; })) )));
+  }
+  function availableBooks(x){
+    return ['draftkings','fanatics','betmgm','caesars'].filter(function(book){ return x && x.books && x.books[book]!=null; });
+  }
+  function distinctCandidates(list, count){
+    var out=[];
+    var players=new Set();
+    var games={};
+    (list||[]).forEach(function(x){
+      if(out.length>=count) return;
+      if(!x||!x.p||!x.g) return;
+      var playerKey=(x.p.name||'')+'::'+String((x.g&&x.g.id)||'g');
+      var gameKey=String((x.g&&x.g.id)||'g');
+      if(players.has(playerKey)) return;
+      if((games[gameKey]||0)>=1) return;
+      out.push(x);
+      players.add(playerKey);
+      games[gameKey]=(games[gameKey]||0)+1;
+    });
+    return out;
+  }
+  function explain(x){
+    var notes=[];
+    if(x.readyNow) notes.push('confirmed lineup');
+    else notes.push('projected lineup');
+    if((x.edge||0)>=0.06) notes.push('big edge');
+    else if((x.edge||0)>=0.03) notes.push('solid edge');
+    if((x.ev||0)>=0.12) notes.push('premium EV');
+    else if((x.ev||0)>0) notes.push('positive EV');
+    if((x.tier||'')==='Great') notes.push('top confidence');
+    else if((x.tier||'')==='Good') notes.push('good confidence');
+    if(x.booksAvailable>=3) notes.push('multi-book coverage');
+    else if(x.bestBook) notes.push('best at '+shortBookLabel(x.bestBook));
+    if((x.move||0)>=0.012) notes.push('steam building');
+    else if((x.move||0)<=-0.012) notes.push('price drifting');
+    var spot=(x.p&&x.p._lineupSpot!=null)?Number(x.p._lineupSpot):((x.p&&x.p.spot!=null)?Number(x.p.spot):null);
+    if(spot!=null && spot<=4) notes.push('top-order bat');
+    if(x.p && x.p._env && x.p._env.parkHR!=null && Number(x.p._env.parkHR)>=1.05) notes.push('park boost');
+    return notes.slice(0,4);
   }
 
-  var summary = '<div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:12px">'+
-    '<div class="game-card open" style="padding:14px 16px"><div class="section-title">Ready now</div><div style="font-size:28px;font-weight:800;line-height:1">'+ready.length+'</div><div class="help-note" style="margin-top:8px">Confirmed +EV plays across '+readyGames+' games</div></div>'+
-    '<div class="game-card open" style="padding:14px 16px"><div class="section-title">Lineup watch</div><div style="font-size:28px;font-weight:800;line-height:1">'+waiting.length+'</div><div class="help-note" style="margin-top:8px">Projected plays still waiting on '+pendingGames+' games</div></div>'+
-    '<div class="game-card open" style="padding:14px 16px"><div class="section-title">Same-book builds</div><div style="font-size:28px;font-weight:800;line-height:1">'+pairs.length+'</div><div class="help-note" style="margin-top:8px">Fastest placeable parlays right now</div></div>'+
-    '<div class="game-card open" style="padding:14px 16px"><div class="section-title">Command read</div><div style="font-size:28px;font-weight:800;line-height:1">'+(avgReadyEdge==null?'—':((avgReadyEdge>=0?'+':'')+(avgReadyEdge*100).toFixed(1)+'%'))+'</div><div class="help-note" style="margin-top:8px">Average edge on confirmed plays</div></div>'+
-  '</div>';
+  var radar=all.map(function(x){
+    var move=(x.p&&x.p._mktMove&&x.p._mktMove[x.mk]!=null)?Number(x.p._mktMove[x.mk]):0;
+    var readyNow=!!(x.g&&x.g.env&&x.g.env.lineupsConfirmed);
+    var books=availableBooks(x);
+    var confN=x.tier==='Great'?1:(x.tier==='Good'?0.72:0.4);
+    var evN=Math.max(0, clamp((x.ev||0)/0.20, 0, 1));
+    var edgeN=Math.max(0, clamp((x.edge||0)/0.08, 0, 1));
+    var probN=clamp((x.prob||0)/0.65, 0, 1);
+    var lineN=readyNow?1:0.55;
+    var routeN=clamp(books.length/4, 0, 1);
+    var moveN=move>0?clamp(move/0.03, 0, 1):0;
+    var volatility=(x.tier==='Low'?1:(readyNow?0.18:0.42));
+    var score=Math.round(clamp(50 + evN*18 + edgeN*16 + probN*12 + lineN*10 + routeN*6 + confN*6 + moveN*4 - volatility*6, 35, 99));
+    var enriched=Object.assign({}, x, {move:move, readyNow:readyNow, booksAvailable:books.length, bookList:books, radarScore:score});
+    enriched.reasons=explain(enriched);
+    return enriched;
+  });
+  radar.sort(function(a,b){
+    if((b.radarScore||0)!==(a.radarScore||0)) return (b.radarScore||0)-(a.radarScore||0);
+    if(Math.abs((b.ev||0)-(a.ev||0))>1e-9) return (b.ev||0)-(a.ev||0);
+    if(Math.abs((b.edge||0)-(a.edge||0))>1e-9) return (b.edge||0)-(a.edge||0);
+    return (b.prob||0)-(a.prob||0);
+  });
 
-  var readyHtml = ready.length ? '<table class="players"><thead><tr><th>Ready play</th><th>Market</th><th class="num">Model</th><th class="num">Edge</th><th class="num">Best</th><th></th></tr></thead><tbody>'+
+  var ready=radar.filter(function(x){ return x.readyNow && (x.ev!=null&&x.ev>0); }).slice(0,8);
+  var waiting=radar.filter(function(x){ return !x.readyNow && ((x.edge||0)>0 || (x.ev||0)>0); }).slice(0,8);
+  var avgReadyEdge=ready.length ? ready.reduce(function(a,x){ return a+(x.edge||0); },0)/ready.length : null;
+  var cfg=portfolioConfig();
+  var singles=choosePortfolioSingles(radar,cfg);
+  var pairs=buildPortfolioPairs(singles,cfg).filter(function(x){ return x.sameBookBestDec!=null; }).slice(0,4);
+  var pairSeed=choosePortfolioSingles(radar,{singles:Math.min(6, radar.length), maxGame:2});
+  var sameBookPairs=buildPortfolioPairs(pairSeed,{pairs:6}).filter(function(x){ return x.sameBookBestDec!=null; }).sort(function(a,b){ return (b._ev||0)-(a._ev||0) || (b.adjJoint||0)-(a.adjJoint||0); });
+  var bestSingle=ready[0] || radar[0] || null;
+  var bestSameBook=sameBookPairs[0] || null;
+  var safestSlip=(bestSameBook && (bestSameBook.adjJoint||0)>=0.14)
+    ? bestSameBook.picks
+    : distinctCandidates(radar.filter(function(x){ return x.readyNow && x.tier!=='Low' && (x.ev||0)>-0.02; }).sort(function(a,b){ return (b.prob||0)-(a.prob||0) || (b.radarScore||0)-(a.radarScore||0); }), 2);
+  if(!safestSlip.length && bestSingle) safestSlip=[bestSingle];
+  var valueSlip=distinctCandidates(radar.filter(function(x){ return (x.ev||0)>0; }).sort(function(a,b){ return (b.ev||0)-(a.ev||0) || (b.edge||0)-(a.edge||0); }), 3);
+  if(valueSlip.length<2 && bestSameBook) valueSlip=bestSameBook.picks.slice();
+  var autoCount=[bestSingle, bestSameBook, safestSlip.length?1:null, valueSlip.length?1:null].filter(Boolean).length;
+  var architectPlans=buildArchitectPlans(radar);
+
+  var hrRadar=radar.filter(function(x){ return x.mk==='hr'; });
+  var positive=radar.filter(function(x){ return (x.ev||0)>0; });
+  var lowConfCount=radar.filter(function(x){ return x.tier==='Low'; }).length;
+  var avgBooks=radar.length ? radar.reduce(function(a,x){ return a+(x.booksAvailable||0); },0)/radar.length : 0;
+  var avgMove=radar.length ? radar.reduce(function(a,x){ return a+Math.abs(x.move||0); },0)/radar.length : 0;
+  var readyRate=ready.length/Math.max(1, radar.length);
+  var waitingRate=waiting.length/Math.max(1, radar.length);
+  var positiveRate=positive.length/Math.max(1, radar.length);
+  var lowConfRate=lowConfCount/Math.max(1, radar.length);
+  var hrReadyCount=hrRadar.filter(function(x){ return x.readyNow && (x.prob||0)>=0.17; }).length;
+  var hrEdgeCount=hrRadar.filter(function(x){ return (x.edge||0)>=0.025; }).length;
+  var primarySingleScore=bestSingle?bestSingle.radarScore:0;
+  var sameBookDepth=sameBookPairs.length;
+  var bestPairEv=bestSameBook?(bestSameBook._ev||0):0;
+  var profiles=[
+    {id:'power',label:'Power slate',color:'#d97706',score:Math.round(clamp((hrReadyCount/3)*42 + (hrEdgeCount/3)*25 + readyRate*18 + ((avgReadyEdge&&avgReadyEdge>0)?clamp(avgReadyEdge/0.05,0,1)*15:0), 0, 99)),attack:'Lean into HR-heavy cards and ceiling bats.',avoid:'Do not over-dilute the slate with low-upside safety legs.'},
+    {id:'sameBook',label:'Same-book slate',color:'#0f766e',score:Math.round(clamp((sameBookDepth/4)*45 + (avgBooks/3)*22 + readyRate*18 + positiveRate*14, 0, 99)),attack:'Press same-book pairs while routing is clean.',avoid:'Do not waste the slate forcing mixed-book slips first.'},
+    {id:'chaos',label:'Chaos slate',color:'#b45309',score:Math.round(clamp(waitingRate*45 + lowConfRate*22 + (1-readyRate)*16 + clamp(avgMove/0.015,0,1)*16, 0, 99)),attack:'Stay flexible and wait for lineup confirmation before sizing up.',avoid:'Do not overcommit early when the slate is still moving.'},
+    {id:'trap',label:'Trap slate',color:'#be123c',score:Math.round(clamp((1-positiveRate)*42 + (avgReadyEdge==null?12:clamp((0.02-(avgReadyEdge||0))/0.03,0,1)*26) + clamp((1-(avgBooks/2.5)),0,1)*20 + (1-readyRate)*11, 0, 99)),attack:'Stay selective and demand real pricing mistakes.',avoid:'Do not chase volume just because the slate is full.'},
+    {id:'singles',label:'Singles slate',color:'#2563eb',score:Math.round(clamp((primarySingleScore/100)*30 + readyRate*24 + positiveRate*18 + clamp((0.12-bestPairEv)/0.12,0,1)*18 + clamp((0.28-lowConfRate)/0.28,0,1)*10, 0, 99)),attack:'Keep the card centered on straight bets and small combos.',avoid:'Do not force parlays when the best edge is concentrated in singles.'}
+  ];
+  profiles.sort(function(a,b){ return (b.score||0)-(a.score||0); });
+  var primaryDNA=profiles[0]||null;
+  var secondaryDNA=profiles.slice(1,3);
+  var slateStrength=primaryDNA?(primaryDNA.score>=78?'Strong':(primaryDNA.score>=60?'Clear':'Mixed')):'Mixed';
+  var gameplan=[];
+  if(primaryDNA) gameplan.push(primaryDNA.attack);
+  if(primaryDNA && primaryDNA.id==='sameBook' && bestSameBook) gameplan.push('Best routing path right now is '+shortBookLabel(bestSameBook.sameBookBest)+'.');
+  else if(primaryDNA && primaryDNA.id==='singles' && bestSingle) gameplan.push('Start with '+bestSingle.p.name+' '+MARKET_META[bestSingle.mk].short+'.');
+  else if(primaryDNA && primaryDNA.id==='power' && hrRadar.length) gameplan.push('Prioritize the hottest HR board names before widening out.');
+  else if(primaryDNA && primaryDNA.id==='chaos') gameplan.push('Refresh after lineups and keep stake sizing tighter.');
+  else if(primaryDNA && primaryDNA.id==='trap') gameplan.push('Only fire when edge and price agree.');
+  var avoidLine=primaryDNA?primaryDNA.avoid:'Do not overbuild before prices settle.';
+
+  var summary='<div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:12px">'
+    +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Radar live</div><div style="font-size:28px;font-weight:800;line-height:1">'+radar.length+'</div><div class="help-note" style="margin-top:8px">Ranked playable prices on the slate</div></div>'
+    +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Auto builds</div><div style="font-size:28px;font-weight:800;line-height:1">'+autoCount+'</div><div class="help-note" style="margin-top:8px">One-tap slip ideas ready now</div></div>'
+    +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Confirmed fire</div><div style="font-size:28px;font-weight:800;line-height:1">'+ready.length+'</div><div class="help-note" style="margin-top:8px">Confirmed +EV plays</div></div>'
+    +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Command read</div><div style="font-size:28px;font-weight:800;line-height:1">'+(avgReadyEdge==null?'—':((avgReadyEdge>=0?'+':'')+(avgReadyEdge*100).toFixed(1)+'%'))+'</div><div class="help-note" style="margin-top:8px">Average edge on confirmed plays</div></div>'
+  +'</div>';
+
+  var shockHtml=lineupShockHtml(loadLineupShockReport());
+
+  var dnaHtml='';
+  if(primaryDNA){
+    dnaHtml='<div class="game-card open"><div class="game-body" style="display:block;padding:18px">'
+      +'<div class="section-title">🧬 Slate DNA</div>'
+      +'<div class="help-note" style="margin-bottom:12px">Before you bet, the app reads the slate identity so you know whether today wants aggression, patience, singles, or routing focus.</div>'
+      +'<div class="manual-grid" style="grid-template-columns:1.3fr .9fr .9fr;align-items:stretch">'
+        +'<div class="game-card open" style="padding:16px 18px;border-color:'+primaryDNA.color+'44;background:linear-gradient(180deg,'+primaryDNA.color+'12,rgba(255,255,255,0.94))">'
+          +'<div class="section-title" style="margin-top:0;color:'+primaryDNA.color+'">Primary read</div>'
+          +'<div style="font-size:30px;font-weight:900;line-height:1.05">'+primaryDNA.label+'</div>'
+          +'<div class="help-note" style="margin-top:8px">'+slateStrength+' read · score '+primaryDNA.score+'/99</div>'
+          +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">'+secondaryDNA.map(function(x){ return '<span class="chip" style="background:'+x.color+'22;color:'+x.color+'">'+x.label+' '+x.score+'</span>'; }).join('')+'</div>'
+          +'<div class="help-note" style="margin-top:12px"><b>Attack:</b> '+gameplan.join(' ')+'</div>'
+          +'<div class="help-note" style="margin-top:8px"><b>Avoid:</b> '+avoidLine+'</div>'
+        +'</div>'
+        +'<div class="game-card open" style="padding:16px 18px"><div class="section-title" style="margin-top:0">Pressure points</div><div class="help-note">Ready now <b>'+Math.round(readyRate*100)+'%</b><br>Positive EV <b>'+Math.round(positiveRate*100)+'%</b><br>Low-confidence rate <b>'+Math.round(lowConfRate*100)+'%</b></div></div>'
+        +'<div class="game-card open" style="padding:16px 18px"><div class="section-title" style="margin-top:0">Routing profile</div><div class="help-note">Same-book depth <b>'+sameBookDepth+'</b><br>Average books per play <b>'+avgBooks.toFixed(1)+'</b><br>HR-ready core <b>'+hrReadyCount+'</b></div></div>'
+      +'</div>'
+      +'<table class="players" style="margin-top:12px"><thead><tr><th>DNA type</th><th class="num">Score</th><th>How to attack</th></tr></thead><tbody>'
+        +profiles.map(function(x){
+          return '<tr><td><b style="color:'+x.color+'">'+x.label+'</b></td><td class="num"><span class="chip" style="min-width:52px;justify-content:center;background:'+x.color+'22;color:'+x.color+';font-weight:800">'+x.score+'</span></td><td><div style="font-size:12px;color:#4b5563">'+x.attack+'</div></td></tr>';
+        }).join('')
+      +'</tbody></table>'
+      +'</div></div>';
+  }
+
+  var autoCards=[];
+  if(bestSingle){
+    autoCards.push('<div class="game-card open" style="padding:14px 16px"><div class="section-title">⚡ Best single</div><div style="font-size:20px;font-weight:800;line-height:1.1">'+bestSingle.p.name+'</div><div class="help-note" style="margin-top:8px">'+MARKET_META[bestSingle.mk].leg+' · '+(bestSingle.bestBook?shortBookLabel(bestSingle.bestBook)+' ':'')+fmtAmerican(bestSingle.american)+' · Radar '+bestSingle.radarScore+'</div><div class="help-note" style="margin-top:8px">'+bestSingle.reasons.join(' · ')+'</div><div style="margin-top:12px"><button onclick="addPortfolioLegs(\''+payload([bestSingle])+'\')">Add best single</button></div></div>');
+  }
+  if(bestSameBook){
+    autoCards.push('<div class="game-card open" style="padding:14px 16px"><div class="section-title">🧩 Best 2-leg same-book</div><div style="font-size:18px;font-weight:800;line-height:1.2">'+bestSameBook.picks.map(function(x){ return x.p.name; }).join(' + ')+'</div><div class="help-note" style="margin-top:8px">'+shortBookLabel(bestSameBook.sameBookBest)+' '+decToAmerican(bestSameBook.sameBookBestDec)+' · EV '+((bestSameBook._ev||0)>=0?'+':'')+((bestSameBook._ev||0)*100).toFixed(1)+'%</div><div style="margin-top:12px"><button onclick="addPortfolioLegs(\''+payload(bestSameBook.picks)+'\')">Add same-book pair</button></div></div>');
+  }
+  if(safestSlip.length){
+    autoCards.push('<div class="game-card open" style="padding:14px 16px"><div class="section-title">🛡️ Safest slip</div><div style="font-size:18px;font-weight:800;line-height:1.2">'+safestSlip.map(function(x){ return x.p.name; }).join(' + ')+'</div><div class="help-note" style="margin-top:8px">Leans on confirmed lineups, stronger hit rates, and cleaner confidence.</div><div style="margin-top:12px"><button onclick="addPortfolioLegs(\''+payload(safestSlip)+'\')">Add safest slip</button></div></div>');
+  }
+  if(valueSlip.length){
+    autoCards.push('<div class="game-card open" style="padding:14px 16px"><div class="section-title">💎 Value slip</div><div style="font-size:18px;font-weight:800;line-height:1.2">'+valueSlip.map(function(x){ return x.p.name; }).join(' + ')+'</div><div class="help-note" style="margin-top:8px">Built from the strongest price-value combinations across different games.</div><div style="margin-top:12px"><button onclick="addPortfolioLegs(\''+payload(valueSlip)+'\')">Add value slip</button></div></div>');
+  }
+  var autoHtml='<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">🤖 Auto slip construction</div><div class="help-note" style="margin-bottom:12px">One tap loads the betslip for you so the command center feels like a decision engine, not just a dashboard.</div><div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">'+(autoCards.join('')||'<div class="help-note">No auto-builds available yet.</div>')+'</div></div></div>';
+
+  var architectHtml='<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">🏗️ Bet Slip Architect</div><div class="help-note" style="margin-bottom:12px">Pick the goal, then let DingerLab load the best version of the slip for that style instead of manually piecing legs together.</div><div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">'+(architectPlans.length ? architectPlans.map(function(plan){ var b64=architectPayload(plan.picks); return '<div class="game-card open" style="padding:14px 16px"><div class="section-title">'+plan.title+'</div><div style="font-size:18px;font-weight:800;line-height:1.2">'+plan.picks.map(function(x){ return x.p.name; }).join(' + ')+'</div><div class="help-note" style="margin-top:8px">'+plan.note+'</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">'+(plan.tags||[]).map(function(tag){ return '<span class="chip" style="background:#11182712;color:#111827">'+tag+'</span>'; }).join('')+'</div><div class="help-note" style="margin-top:10px">'+plan.picks.length+' leg'+(plan.picks.length===1?'':'s')+' · Win '+fmtPct(plan.joint)+' · Odds '+(plan.payoutDec?decToAmerican(plan.payoutDec):'—')+(plan.bestBook?(' · '+shortBookLabel(plan.bestBook)):'')+'</div><div class="help-note" style="margin-top:6px">'+(plan.ev!=null?('EV '+(plan.ev>=0?'+':'')+(plan.ev*100).toFixed(1)+'%'):'No EV read yet')+'</div><div style="margin-top:12px"><button onclick="loadArchitectSlip(\''+b64+'\')">Load this slip</button></div></div>'; }).join('') : '<div class="help-note">No architect slips available yet.</div>')+'</div></div></div>';
+
+  var radarHtml='<table class="players"><thead><tr><th>Radar</th><th>Play</th><th>Market</th><th class="num">Model</th><th class="num">Edge</th><th class="num">Best</th><th>Why this pick?</th><th></th></tr></thead><tbody>'+
+    radar.slice(0,12).map(function(x){
+      var badges=[];
+      badges.push('<span class="chip" style="background:'+(x.readyNow?'#16a34a22;color:#16a34a':'#f59e0b22;color:#b45309')+'">'+(x.readyNow?'Ready now':'Lineup watch')+'</span>');
+      if((x.tier||'')==='Great') badges.push('<span class="chip" style="background:#2563eb22;color:#2563eb">Great conf</span>');
+      if((x.move||0)>=0.012) badges.push('<span class="chip" style="background:#dc262622;color:#dc2626">Steam</span>');
+      if(x.booksAvailable>=3) badges.push('<span class="chip" style="background:#0f766e22;color:#0f766e">'+x.booksAvailable+' books</span>');
+      return '<tr>'
+        +'<td class="num"><span class="chip" style="min-width:52px;justify-content:center;background:#11182712;color:#111827;font-weight:800">'+x.radarScore+'</span></td>'
+        +'<td><b>'+x.p.name+'</b><div style="font-size:12px;color:#888">'+x.g.away+' @ '+x.g.home+'</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+badges.join('')+'</div></td>'
+        +'<td>'+MARKET_META[x.mk].leg+'</td>'
+        +'<td class="num">'+fmtPct(x.prob)+'</td>'
+        +'<td class="num" style="color:'+(x.edge>=0?'#16a34a':'#db4437')+'">'+(x.edge>=0?'+':'')+(x.edge*100).toFixed(1)+'%</td>'
+        +'<td class="num">'+(x.bestBook?shortBookLabel(x.bestBook)+' ':'')+fmtAmerican(x.american)+'</td>'
+        +'<td><div style="font-size:12px;color:#4b5563;line-height:1.45">'+(x.reasons.join(' · ')||'priced and playable')+'</div></td>'
+        +'<td><button class="ghost" style="padding:2px 10px" onclick="addPortfolioLegs(\''+payload([x])+'\')">Add</button></td>'
+        +'</tr>';
+    }).join('')+'</tbody></table>';
+
+  var readyHtml = ready.length ? '<table class="players"><thead><tr><th>Ready play</th><th>Market</th><th class="num">Model</th><th class="num">Edge</th><th class="num">Best</th><th>Why</th><th></th></tr></thead><tbody>'+
     ready.map(function(x){
-      var btn=payload([x]);
-      return '<tr><td><b>'+x.p.name+'</b><div style="font-size:12px;color:#888">'+x.g.away+' @ '+x.g.home+'</div></td><td>'+MARKET_META[x.mk].leg+'<div style="font-size:12px;color:#888">'+x.tier+'</div></td><td class="num">'+fmtPct(x.prob)+'</td><td class="num" style="color:'+(x.edge>=0?'#16a34a':'#db4437')+'">'+(x.edge>=0?'+':'')+(x.edge*100).toFixed(1)+'%</td><td class="num">'+(x.bestBook?shortBookLabel(x.bestBook)+' ':'')+fmtAmerican(x.american)+'</td><td><button class="ghost" style="padding:2px 10px" onclick="addPortfolioLegs(\''+btn+'\')">Add</button></td></tr>';
+      return '<tr><td><b>'+x.p.name+'</b><div style="font-size:12px;color:#888">'+x.g.away+' @ '+x.g.home+'</div></td><td>'+MARKET_META[x.mk].leg+'<div style="font-size:12px;color:#888">'+x.tier+'</div></td><td class="num">'+fmtPct(x.prob)+'</td><td class="num" style="color:'+(x.edge>=0?'#16a34a':'#db4437')+'">'+(x.edge>=0?'+':'')+(x.edge*100).toFixed(1)+'%</td><td class="num">'+(x.bestBook?shortBookLabel(x.bestBook)+' ':'')+fmtAmerican(x.american)+'</td><td><div style="font-size:12px;color:#4b5563">'+(x.reasons.join(' · ')||'ready now')+'</div></td><td><button class="ghost" style="padding:2px 10px" onclick="addPortfolioLegs(\''+payload([x])+'\')">Add</button></td></tr>';
     }).join('')+'</tbody></table>' : '<div class="help-note">No confirmed +EV plays yet. Wait for lineups or refresh the slate.</div>';
 
-  var waitingHtml = waiting.length ? '<table class="players"><thead><tr><th>Watchlist</th><th>Market</th><th class="num">Model</th><th class="num">Edge</th><th>Reason</th></tr></thead><tbody>'+
+  var waitingHtml = waiting.length ? '<table class="players"><thead><tr><th>Watchlist</th><th>Market</th><th class="num">Model</th><th class="num">Edge</th><th>Trigger</th></tr></thead><tbody>'+
     waiting.map(function(x){
-      return '<tr><td><b>'+x.p.name+'</b><div style="font-size:12px;color:#888">'+x.g.away+' @ '+x.g.home+'</div></td><td>'+MARKET_META[x.mk].leg+'</td><td class="num">'+fmtPct(x.prob)+'</td><td class="num" style="color:'+(x.edge>=0?'#16a34a':'#db4437')+'">'+(x.edge>=0?'+':'')+(x.edge*100).toFixed(1)+'%</td><td><span class="chip" style="background:#f59e0b22;color:#b45309">Projected lineup</span></td></tr>';
+      return '<tr><td><b>'+x.p.name+'</b><div style="font-size:12px;color:#888">'+x.g.away+' @ '+x.g.home+'</div></td><td>'+MARKET_META[x.mk].leg+'</td><td class="num">'+fmtPct(x.prob)+'</td><td class="num" style="color:'+(x.edge>=0?'#16a34a':'#db4437')+'">'+(x.edge>=0?'+':'')+(x.edge*100).toFixed(1)+'%</td><td><span class="chip" style="background:#f59e0b22;color:#b45309">Projected lineup</span> <span style="font-size:12px;color:#4b5563">'+(x.reasons.filter(function(r){ return r!=='projected lineup'; }).join(' · ')||'waiting on confirmation')+'</span></td></tr>';
     }).join('')+'</tbody></table>' : '<div class="help-note">Everything important is already lineup-confirmed.</div>';
 
-  var pairHtml = pairs.length ? '<table class="players"><thead><tr><th>Same-book parlay</th><th class="num">Win %</th><th class="num">EV</th><th class="num">Book path</th><th></th></tr></thead><tbody>'+
+  var pairHtml = pairs.length ? '<table class="players"><thead><tr><th>Same-book parlay</th><th class="num">Win %</th><th class="num">EV</th><th class="num">Book path</th><th>Profile</th><th></th></tr></thead><tbody>'+
     pairs.map(function(p){
-      var btn=payload(p.picks);
-      return '<tr><td><b>'+p.picks.map(function(x){return x.p.name;}).join(' + ')+'</b><div style="font-size:12px;color:#888">'+p.picks.map(function(x){return MARKET_META[x.mk].short;}).join(' · ')+'</div></td><td class="num">'+fmtPct(p.adjJoint)+'</td><td class="num '+((p._ev||0)>=0?'ev-pos':'ev-neg')+'">'+((p._ev||0)>=0?'+':'')+((p._ev||0)*100).toFixed(1)+'%</td><td class="num">'+shortBookLabel(p.sameBookBest)+' '+decToAmerican(p.sameBookBestDec)+'</td><td><button class="ghost" style="padding:2px 10px" onclick="addPortfolioLegs(\''+btn+'\')">Add both</button></td></tr>';
+      return '<tr><td><b>'+p.picks.map(function(x){return x.p.name;}).join(' + ')+'</b><div style="font-size:12px;color:#888">'+p.picks.map(function(x){return MARKET_META[x.mk].short;}).join(' · ')+'</div></td><td class="num">'+fmtPct(p.adjJoint)+'</td><td class="num '+((p._ev||0)>=0?'ev-pos':'ev-neg')+'">'+((p._ev||0)>=0?'+':'')+((p._ev||0)*100).toFixed(1)+'%</td><td class="num">'+shortBookLabel(p.sameBookBest)+' '+decToAmerican(p.sameBookBestDec)+'</td><td><div style="font-size:12px;color:#4b5563">'+p.picks.map(function(x){ return x.p.name+': '+(x.reasons?x.reasons.slice(0,2).join(', '):x.tier); }).join(' · ')+'</div></td><td><button class="ghost" style="padding:2px 10px" onclick="addPortfolioLegs(\''+payload(p.picks)+'\')">Add both</button></td></tr>';
     }).join('')+'</tbody></table>' : '<div class="help-note">No same-book parlay path is strong enough right now. The engine is favoring singles until prices improve.</div>';
 
-  wrap.innerHTML = summary+
-    '<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">Ready to fire</div>'+readyHtml+'</div></div>'+
-    '<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">Wait for lineups</div>'+waitingHtml+'</div></div>'+
-    '<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">Best same-book paths</div>'+pairHtml+'</div></div>';
+  wrap.innerHTML = summary
+    + shockHtml
+    + dnaHtml
+    + autoHtml
+    + architectHtml
+    + '<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">📡 Edge radar</div><div class="help-note" style="margin-bottom:12px">Ranks plays by edge, EV, lineup certainty, book coverage, and confidence — then tells you why each one deserves attention.</div>'+radarHtml+'</div></div>'
+    + '<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">Ready to fire</div>'+readyHtml+'</div></div>'
+    + '<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">Wait for lineups</div>'+waitingHtml+'</div></div>'
+    + '<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">Best same-book paths</div>'+pairHtml+'</div></div>';
 }
 
 function renderPortfolio(){
