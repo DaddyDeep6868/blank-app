@@ -901,8 +901,8 @@ tr.flash{animation:flash 1.2s ease}
 </div>
 
 <script>
-const APP_VERSION = 'v1.12';
-const APP_UPDATED = 'Updated Jun 8, 2026 1:12 AM ET';
+const APP_VERSION = 'v1.13';
+const APP_UPDATED = 'Updated Jun 8, 2026 1:17 AM ET';
 const APP_PASSWORD = 'adi11';
 const APP_UNLOCK_KEY = 'dingerlab_unlocked_v1';
 let APP_DID_INIT = false;
@@ -1808,27 +1808,29 @@ function extractPlaybookIds(value){
 }
 
 function buildPlaybookPassthroughUrl(){
-  const stats=slipStats();
-  const book=((stats && stats.bestBook) || '').toLowerCase();
-  if(!book || !['draftkings','fanatics','betmgm','caesars','fanduel','bet365'].includes(book)) return null;
   const legs=slipLegsResolved();
   if(!legs.length) return null;
-  const ids=[];
-  for(const leg of legs){
-    const linkData = leg && leg.p && leg.p._mktOdds && leg.p._mktOdds[leg.mk] && leg.p._mktOdds[leg.mk].linkData
-      ? leg.p._mktOdds[leg.mk].linkData[book]
-      : null;
-    const found = extractPlaybookIds(linkData);
-    if(!found.length) return null;
-    ids.push(found[0]);
+  const candidateBooks=['draftkings','fanatics','betmgm','caesars','fanduel','bet365'];
+  for(const book of candidateBooks){
+    const ids=[];
+    let ok=true;
+    for(const leg of legs){
+      const linkData = leg && leg.p && leg.p._mktOdds && leg.p._mktOdds[leg.mk] && leg.p._mktOdds[leg.mk].linkData
+        ? leg.p._mktOdds[leg.mk].linkData[book]
+        : null;
+      const found = extractPlaybookIds(linkData);
+      if(!found.length){ ok=false; break; }
+      ids.push(found[0]);
+    }
+    if(!ok || !ids.length) continue;
+    const params = new URLSearchParams();
+    ids.forEach(function(id, idx){ params.append('deeplinkId['+idx+']', id); });
+    params.set('context','playbook-twitter-quickslip');
+    params.set('sport','baseball');
+    params.set('default','true');
+    return 'https://playbook.actionnetwork.com/books/'+book+'/passthrough?'+params.toString();
   }
-  if(!ids.length) return null;
-  const params = new URLSearchParams();
-  ids.forEach(function(id, idx){ params.append('deeplinkId['+idx+']', id); });
-  params.set('context','playbook-twitter-quickslip');
-  params.set('sport','baseball');
-  params.set('default','true');
-  return 'https://playbookbot.com/books/'+book+'/passthrough?'+params.toString();
+  return null;
 }
 
 async function openPlaybook(){
@@ -1836,7 +1838,7 @@ async function openPlaybook(){
   const directUrl = buildPlaybookPassthroughUrl();
   if(directUrl){
     window.open(directUrl,'_blank','noopener,noreferrer');
-    toast('Playbook one-click','Opened an experimental direct Playbook slip for your current same-book bet.', '⚡');
+    toast('Playbook one-click','Opened an experimental direct Playbook slip using the first sportsbook with valid deeplink IDs for every leg.', '⚡');
     return;
   }
   const txt=slipPlaybookText();
