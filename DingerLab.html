@@ -623,7 +623,7 @@ tr.flash{animation:flash 1.2s ease}
   <span class="pill-tag">MLB Home-Run Parlay Model</span>
   <div class="spacer"></div>
   <button class="ghost" id="btnDemo">Load sample game</button>
-  <button id="btnLoad">Load slate + all-market odds</button> <button id="btnConfirmLineups" class="ghost">&#x2705; Confirm lineups + weather</button>
+  <button id="btnLoad">Load slate + all-market odds</button> <button id="btnConfirmLineups" class="ghost">&#x2705; Confirm lineups + weather</button> <button id="btnRefreshOdds" class="ghost">&#x1F504; Refresh odds</button> <label style="font-size:13px;color:#6b7280"><input type="checkbox" id="autoRefresh"> auto (60s)</label>
 </header>
 
 <main class="app-wrap">
@@ -731,7 +731,16 @@ tr.flash{animation:flash 1.2s ease}
         <div class="field"><label>Correlation model</label><select id="corrMode"><option value="standard" selected>Standard</option><option value="boosted">Boosted</option><option value="off">Independent</option></select></div>
         <div class="field"><label>Value filter</label><label style="display:flex;align-items:center;gap:6px;font-weight:400;text-transform:none;letter-spacing:0"><input id="evOnly" type="checkbox"> +EV only</label></div>
         <div class="field"><label>&nbsp;</label><button id="btnBuildGlobal">Build parlays</button></div>
+        <div class="field"><label>Devig method</label><select id="devigMethod" title="How vig is removed to get fair no-vig probabilities"><option value="mult">Multiplicative</option><option value="add">Additive</option><option value="shin">Shin</option></select></div>
         <div class="field"><label>&nbsp;</label><button id="btnRoundRobin" class="ghost">&#x1F3B2; Round robin</button></div>
+        <div class="field"><label>&nbsp;</label><button id="btnAutoCard">&#x1F916; Auto-suggest</button></div>
+        <div class="field"><label>&nbsp;</label><button id="btnSgp" class="ghost">&#x1F500; Same-game cross-market</button></div>
+        <div class="field"><label>+EV only</label><input type="checkbox" id="boardEvOnly" title="Show only positive expected-value plays in the board and per-game lists"></div>
+        <div class="field"><label>&nbsp;</label><button id="btnBoard" class="ghost">&#x1F3C6; Best bets board</button></div>
+        <div class="field"><label>&nbsp;</label><button id="btnCsv" class="ghost">&#x1F4E5; Export edges CSV</button></div>
+        <div class="field"><label>&nbsp;</label><button id="btnSummary" class="ghost">&#x1F4CA; Slate at a glance</button></div>
+        <div class="field"><label>&nbsp;</label><button id="btnPerGame" class="ghost">&#x1F3DF; Best play / game</button></div>
+        <div class="field"><label>&nbsp;</label><button id="btnMovement" class="ghost">&#x1F525; Line movement</button></div>
       </div>
       <div class="legend">Tips: raise <b>Min leg HR%</b> to increase win chance; increase legs to increase payout; use <b>Chance × payout</b> for a balanced list.</div>
       <div id="builderResults" style="margin-top:10px"></div>
@@ -856,6 +865,7 @@ tr.flash{animation:flash 1.2s ease}
     <div class="row"><span class="lbl">Fair odds</span><span class="val" id="slipFair">—</span></div>
     <div class="row"><span class="lbl">Mixed-books odds</span><span class="val" id="slipOdds">—</span></div>
     <div class="row"><span class="lbl">Difficulty</span><span class="val" id="slipDiff">—</span></div>
+    <div class="row"><span class="lbl">Suggested stake</span><span class="val" id="slipStake">—</span></div>
   </div>
 </div>
 
@@ -931,6 +941,20 @@ const MARKET_META={
   tb:{label:'2+ Total Bases',short:'TB',rateLabel:'Bases/PA',probLabel:'2+ TB%',leg:'2+ TB',cap:65},
   rbi:{label:'1+ RBI',short:'RBI',rateLabel:'RBI/PA',probLabel:'1+ RBI%',leg:'1+ RBI',cap:55}
 };
+// Relative same-game correlation multiplier by market pair (1.0 = full HR-tuned rho).
+const CORR_MKT={
+  hr:{hr:1.0,hits:0.65,tb:0.85,rbi:0.80},
+  hits:{hr:0.65,hits:0.90,tb:0.85,rbi:0.72},
+  tb:{hr:0.85,hits:0.85,tb:0.95,rbi:0.80},
+  rbi:{hr:0.80,hits:0.72,tb:0.80,rbi:0.85}
+};
+// Same-player nesting overlap factor (how strongly one prop contains the other).
+const SAMEP_MKT={
+  hr:{hits:0.98,tb:0.97,rbi:0.98},
+  hits:{hr:0.98,tb:0.95,rbi:0.80},
+  tb:{hr:0.97,hits:0.95,rbi:0.82},
+  rbi:{hr:0.98,hits:0.80,tb:0.82}
+};
 
 /* ---------- Math helpers ---------- */
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
@@ -951,7 +975,10 @@ function normInv(p){
 /* American odds helpers */
 function amToDecimal(a){a=Number(a);if(!a)return null;return a>0?1+a/100:1+100/(-a);}
 function amToImplied(a){const d=amToDecimal(a);return d?1/d:null;}
-function novigProb(over, under){ const io=amToImplied(over), iu=amToImplied(under); if(!(io>0)||!(iu>0)) return null; return io/(io+iu); }
+function shinTrue(pi,Pi,z){ return (Math.sqrt(z*z+4*(1-z)*pi*pi/Pi)-z)/(2*(1-z)); }
+function novigShin(io,iu){ var Pi=io+iu; var lo=0,hi=0.5,z=0; for(var it=0;it<60;it++){ z=(lo+hi)/2; var sum=shinTrue(io,Pi,z)+shinTrue(iu,Pi,z); if(sum>1) lo=z; else hi=z; } z=(lo+hi)/2; return clamp(shinTrue(io,Pi,z),1e-6,1-1e-6); }
+function devigMethod(){ var el=(typeof document!=="undefined")?document.getElementById("devigMethod"):null; return el?el.value:"mult"; }
+function novigProb(over, under){ const io=amToImplied(over), iu=amToImplied(under); if(!(io>0)||!(iu>0)) return null; var m=devigMethod(); if(m==="add"){ var ov=(io+iu)-1; return clamp(io-ov/2,1e-6,1-1e-6); } if(m==="shin"){ return novigShin(io,iu); } return io/(io+iu); }
 function decToAmerican(d){if(!d||d<=1)return null;return d>=2?'+'+Math.round((d-1)*100):'-'+Math.round(100/(d-1));}
 function fmtPct(x){return(100*x).toFixed(1)+'%';}
 
@@ -1552,7 +1579,7 @@ function closeSlip(){
 }
 
 function addToSlip(p, g){
-  const key=`${(g&&g.id)||'g'}::${p.name}::${p.side}`;
+  const key=`${(g&&g.id)||'g'}::${p.name}::${p.side}::${ACTIVE_MARKET}`;
   if(SLIP.some(x=>x.id===key)){
     toast('Already added', 'That leg is already on your betslip.', 'ℹ️');
     openSlip();
@@ -1570,6 +1597,7 @@ function addToSlip(p, g){
     p:p.p,
     odds:p.odds,
     dk, fan, autoBest,
+    mkt:MARKET_META[ACTIVE_MARKET].short, legLabel:MARKET_META[ACTIVE_MARKET].leg,
   });
   toast('Added', `${p.name} added to betslip.`, '➕');
   renderSlip();
@@ -1585,13 +1613,13 @@ function addAllLegs(ld64){
       if(!g) return;
       const pl=g.players.find(function(x){return x.name===l.name;});
       if(!pl) return;
-      const key=String((g&&g.id)||'g')+'::'+pl.name+'::'+pl.side;
+      const key=String((g&&g.id)||'g')+'::'+pl.name+'::'+pl.side+'::'+ACTIVE_MARKET;
       if(SLIP.some(function(x){return x.id===key;})) return;
       const teamAbbr=(pl.side==='home'?(g.homeAbbr||g.home):(g.awayAbbr||g.away))||'';
       const dk=pl._oddsBooks?pl._oddsBooks.draftkings:null;
       const fan=pl._oddsBooks?pl._oddsBooks.fanatics:null;
       const autoBest=pl._oddsBooks?pl._oddsBooks.autoBest:null;
-      SLIP.push({id:key,name:pl.name,game:g.away+' @ '+g.home,team:teamAbbr,p:pl.p,odds:pl.odds,dk:dk,fan:fan,autoBest:autoBest});
+      SLIP.push({id:key,name:pl.name,game:g.away+' @ '+g.home,team:teamAbbr,p:pl.p,odds:pl.odds,dk:dk,fan:fan,autoBest:autoBest,mkt:MARKET_META[ACTIVE_MARKET].short,legLabel:MARKET_META[ACTIVE_MARKET].leg});
       added++;
     });
     renderSlip(); openSlip();
@@ -1609,15 +1637,32 @@ function clearSlip(){
   renderSlip();
 }
 
+function slipLegsResolved(){
+  const out=[];
+  SLIP.forEach(function(x){
+    var parts=String(x.id).split('::');
+    var mk=(parts.length>=4)?parts[parts.length-1]:'hr';
+    var side=(parts.length>=4)?parts[parts.length-2]:null;
+    var gid=parts[0];
+    var g=findGameById(gid);
+    var pl=g?(g.players.find(function(q){return q.name===x.name;})||null):null;
+    var prob=(x.p!=null)?x.p:((pl&&pl._mkt&&pl._mkt[mk])?pl._mkt[mk].p:0.1);
+    var books=(pl&&pl._mktOdds&&pl._mktOdds[mk])?pl._mktOdds[mk].books:{draftkings:x.dk,fanatics:x.fan};
+    out.push({g:g,p:pl||{name:x.name,side:side},mk:mk,prob:clamp(prob,1e-9,0.999),american:x.odds,dec:(x.odds!=null?amToDecimal(x.odds):null),books:books,side:side});
+  });
+  return out;
+}
 function slipStats(){
-  if(!SLIP.length) return {joint:null, fairDec:null, bookDec:null};
-  const joint=SLIP.reduce((acc,x)=>acc*clamp(x.p,1e-9,0.999),1);
+  if(!SLIP.length) return {joint:null, fairDec:null, bookDec:null, ev:null, corr:false};
+  const legs=slipLegsResolved();
+  const resolvable=legs.every(function(l){return l.p&&l.g;});
+  const joint=(resolvable&&legs.length>1)?legsJoint(legs):legs.reduce(function(a,l){return a*clamp(l.prob,1e-9,0.999);},1);
   const fairDec=1/joint;
-  const bookDec=SLIP.reduce((acc,x)=>{
-    const d=x.odds!=null?amToDecimal(x.odds):null;
-    return d?acc*d:null;
-  },1);
-  return {joint, fairDec, bookDec};
+  const od=sgpOdds(legs);
+  const bookDec=(od.bestDec!=null)?od.bestDec:od.mixedDec;
+  let ev=null;
+  if(bookDec!=null){ var tier=weakestTier(legs.map(function(l){return (l.p&&l.p.PA!=null)?confidenceLabel(l.p):'Med';})); ev=parlayEV(calibratedJoint(joint,tier),bookDec); }
+  return {joint:joint, fairDec:fairDec, bookDec:bookDec, ev:ev, corr:(resolvable&&legs.length>1), bestBook:od.bestBook};
 }
 
 function slipText(){
@@ -1627,7 +1672,7 @@ function slipText(){
     const fan=x.fan!=null?(x.fan>0?`+${x.fan}`:`${x.fan}`):'—';
     const best=x.odds!=null?(x.odds>0?`+${x.odds}`:`${x.odds}`):'—';
     const bestBook=x.autoBest?(x.autoBest==='draftkings'?'DK':'Fanatics'):'—';
-    return `${x.name} HR | ${x.game} | DK ${dk} | Fanatics ${fan} | Best ${bestBook} ${best} | Model ${fmtPct(x.p)}`;
+    return `${x.name} ${x.legLabel||'HR'} | ${x.game} | DK ${dk} | Fanatics ${fan} | Best ${bestBook} ${best} | Model ${fmtPct(x.p)}`;
   }).join('\n');
 }
 
@@ -1640,7 +1685,7 @@ function renderSlip(){
     const odds=x.odds!=null?(x.odds>0?`+${x.odds}`:`${x.odds}`):'—';
     const bestBook=x.autoBest?(x.autoBest==='draftkings'?'DK':'Fanatics'):'—';
     return `<div class="leg"><div>
-      <div class="nm">${x.name}</div>
+      <div class="nm">${x.name} <span class="chip" style="background:#2d7ff922;color:#2d7ff9">${x.mkt||'HR'}</span></div>
       <div class="meta">${x.game}<br>${x.team} · Model ${fmtPct(x.p)} · Best ${bestBook} ${odds}</div>
     </div><button class="rm" data-rm="${x.id}" title="Remove">✕</button></div>`;
   }).join(''):'<div class="help-note">Click <b>Add</b> next to a hitter to build a slip.</div>';
@@ -1650,7 +1695,8 @@ function renderSlip(){
   $('#slipProb').textContent = st.joint==null?'—':fmtPct(st.joint);
   $('#slipFair').textContent = st.fairDec==null?'—':decToAmerican(st.fairDec);
   $('#slipOdds').textContent = st.bookDec==null?'—':decToAmerican(st.bookDec);
-  $('#slipDiff').innerHTML = st.joint==null ? '—' : `<span class="badge"><strong>${slipDifficulty(st.joint)}</strong> · ${fmtPct(st.joint)}</span>`;
+    $('#slipDiff').innerHTML = st.joint==null ? '&#x2014;' : ('<span class="badge"><strong>'+slipDifficulty(st.joint)+'</strong> &#xB7; '+fmtPct(st.joint)+(st.ev!=null?(' &#xB7; EV '+(st.ev>=0?'+':'&#x2212;')+(Math.abs(st.ev)*100).toFixed(1)+'%'):'')+(st.corr?' &#xB7; corr-adj':'')+'</span>');
+    (function(){ var ss=$('#slipStake'); if(!ss) return; if(st.joint==null||st.bookDec==null){ ss.textContent='—'; return; } var sug=suggestStake(st.joint, st.bookDec); ss.innerHTML = (sug&&sug.stake>0) ? ('$'+sug.stake.toFixed(2)+' <span style="color:#6b7280;font-size:11px">('+(sug.f*100).toFixed(1)+'% Kelly)</span>') : '<span style="color:#6b7280">No edge &#x2014; pass</span>'; })();
 }
 
 /* ============================ Fetch layer ============================ */
@@ -1854,6 +1900,7 @@ function applyOddsToLoadedGames(merged){
     }
   }
   const _moved = checkLineMovement();
+  try{ checkLineMovementAll(true); }catch(e){}
   recomputeAll();
   if(_moved && _moved.length){ const top=_moved.slice(0,3).map(function(m){return m.name+' '+(m.delta>0?'+':'')+m.delta;}).join(', '); try{ toast('Line movement', _moved.length+' price change(s) since last load. Biggest: '+top, '⚡'); }catch(_e){} }
   return { applied, total };
@@ -2276,6 +2323,29 @@ async function confirmLineups(){
   toast("Lineups + weather", lineupsFound ? ("Confirmed lineups for "+lineupsFound+" game(s). Hitters not in the posted lineup are flagged \u26a0\ufe0f.") : "No lineups posted yet \u2014 check back closer to first pitch. Live weather updated where available.", "\u2705");
 }
 
+var DL_AUTO_REFRESH=null;
+function toggleAutoRefresh(){
+  var el=document.getElementById('autoRefresh');
+  if(el&&el.checked){
+    if(DL_AUTO_REFRESH) clearInterval(DL_AUTO_REFRESH);
+    DL_AUTO_REFRESH=setInterval(function(){ if(GAMES.length>=1 && !document.hidden) refreshOdds(); }, 60000);
+    toast('Auto-refresh on','Odds will refresh about every 60 seconds while this tab is open.','+');
+  } else {
+    if(DL_AUTO_REFRESH){ clearInterval(DL_AUTO_REFRESH); DL_AUTO_REFRESH=null; }
+    toast('Auto-refresh off','Stopped auto-refreshing odds.','i');
+  }
+}
+async function refreshOdds(){
+  if(GAMES.length<1){toast('No slate','Load a slate first.','!');return;}
+  try{
+    setStatus('Refreshing OddsBlaze prices\u2026',true);
+    var merged=await loadOddsBlazeHrMerged();
+    var res=applyOddsToLoadedGames(merged);
+    setStatus('Odds refreshed. Applied to '+res.applied+'/'+res.total+' hitters.',false);
+    renderGames();
+    toast('Refreshed','Latest prices applied to '+res.applied+' hitters.','+');
+  }catch(e){ console.error(e); setStatus('Odds refresh failed: '+e.message); toast('Error','Could not refresh odds.','!'); }
+}
 function renderGames(){
   const all=[...GAMES];
   if(MANUAL.meta&&MANUAL.players.length)all.unshift(buildManualGame());
@@ -2590,6 +2660,11 @@ function copySlip(b64){
   }
 }
 
+var PREF_KEY='dl_prefs_v1';
+var PREF_IDS=['devigMethod','priceMode','corrMode','legCount','optMode','minLegP','minComboP','shortlistSize','confFilter','maxPerGame','bankroll','kellyFrac','evOnly','boardEvOnly'];
+function savePrefs(){ try{ var o={}; PREF_IDS.forEach(function(id){ var el=document.getElementById(id); if(!el) return; o[id]=(el.type==='checkbox')?el.checked:el.value; }); localStorage.setItem(PREF_KEY, JSON.stringify(o)); }catch(e){} }
+function restorePrefs(){ try{ var o=JSON.parse(localStorage.getItem(PREF_KEY)||'null'); if(!o) return; PREF_IDS.forEach(function(id){ if(o[id]==null) return; var el=document.getElementById(id); if(!el) return; if(el.type==='checkbox') el.checked=!!o[id]; else el.value=o[id]; }); }catch(e){} }
+function wirePrefs(){ PREF_IDS.forEach(function(id){ var el=document.getElementById(id); if(!el) return; var h=function(){ savePrefs(); }; el.addEventListener('change',h); el.addEventListener('input',h); }); }
 function init(){
   const today=new Date();$('#dateInput').value=today.toISOString().slice(0,10);
   populateParkSelect();renderSettings();renderManualRoster();
@@ -2614,10 +2689,13 @@ function init(){
     }
   };
   $('#btnLoad').onclick=loadAll;$('#btnLoad2').onclick=loadAll;
+  if($('#btnRefreshOdds')) $('#btnRefreshOdds').onclick=()=>{ refreshOdds(); };
+  if($('#autoRefresh')) $('#autoRefresh').onchange=()=>{ toggleAutoRefresh(); };
   if($('#btnConfirmLineups')) $('#btnConfirmLineups').onclick=()=>{ confirmLineups(); };
   $('#btnDemo').onclick=loadSample;
   $$('.mktbtn').forEach(function(b){ b.onclick=function(){ setMarket(b.dataset.mkt); }; });
   paintMarketButtons();
+  restorePrefs(); wirePrefs();
 
   // Toast
   $('#toastClose').onclick=()=>$('#toast').classList.remove('show');
@@ -2723,6 +2801,13 @@ function init(){
     $('#builderResults').innerHTML='<div class="help-note">\ud83c\udfb2 <b>Round robin</b>: '+built.length+' separate '+K+'-leg parlays from your top '+POOL.length+' legs (one per game). Stake them all \u2014 if one leg misses, the parlays avoiding it still cash, so a single miss does not bust your whole card.</div>'+
       '<div class="parlay-grid">'+built.map(function(b,i){return globalNLegCardHTML(b,i+1);}).join('')+'</div>';
   };
+  if($('#btnAutoCard')) $('#btnAutoCard').onclick=()=>{ autoSuggestCard(); };
+  if($('#btnSgp')) $('#btnSgp').onclick=()=>{ buildSgpCards(); };
+  if($('#btnBoard')) $('#btnBoard').onclick=()=>{ buildBestBoard(); };
+  if($('#btnCsv')) $('#btnCsv').onclick=()=>{ exportEdgesCSV(); };
+  if($('#btnSummary')) $('#btnSummary').onclick=()=>{ slateSummary(); };
+  if($('#btnPerGame')) $('#btnPerGame').onclick=()=>{ buildOnePerGame(); };
+  if($('#btnMovement')) $('#btnMovement').onclick=()=>{ showMovement(); };
   ['#mPark','#mTemp','#mWind','#mWindDir','#mHum','#mDayNight','#mAway','#mHome'].forEach(s=>{$(s).addEventListener('change',()=>{refreshManualMeta();renderManualRoster();renderGames();});});
   $('#btnAddHitter').onclick=()=>{
     refreshManualMeta();
@@ -2734,6 +2819,344 @@ function init(){
   };
   $('#btnBuildManual').onclick=()=>{refreshManualMeta();renderManualRoster();switchTab('games');renderGames();setStatus('Manual game built. See the Games tab.');};
   switchTab('games');
+}
+
+function legsJoint(legs){
+  let joint=legs.reduce(function(a,l){return a*clamp(l.prob,1e-9,0.999);},1);
+  const corr=(window.DL_CORR_MULT==null?1:window.DL_CORR_MULT);
+  for(let i=0;i<legs.length;i++){
+    for(let j=i+1;j<legs.length;j++){
+      const a=legs[i], b=legs[j];
+      const pa=clamp(a.prob,1e-9,0.999), pb=clamp(b.prob,1e-9,0.999);
+      const indep=pa*pb;
+      let pair;
+      if(a.p===b.p){ var sf=(a.mk&&b.mk&&SAMEP_MKT[a.mk]&&SAMEP_MKT[a.mk][b.mk]!=null)?SAMEP_MKT[a.mk][b.mk]:0.92; pair=Math.min(pa,pb)*sf; }
+      else if(a.g===b.g){
+        const sameTeam=(a.p.side===b.p.side);
+        var mm=(a.mk&&b.mk&&CORR_MKT[a.mk]&&CORR_MKT[a.mk][b.mk]!=null)?CORR_MKT[a.mk][b.mk]:0.8;
+        const rho=(sameTeam?CFG.corrTeammates:CFG.corrOpponents)*corr*mm;
+        const zA=normInv(1-pa), zB=normInv(1-pb);
+        pair=clamp(pa*pb+rho*normPdf(zA)*normPdf(zB), indep, Math.min(pa,pb));
+      } else { pair=indep; }
+      const ratio=indep>0?pair/indep:1;
+      joint*=ratio;
+    }
+  }
+  const cap=Math.min.apply(null, legs.map(function(l){return clamp(l.prob,1e-9,0.999);}));
+  return clamp(joint,0,cap);
+}
+function sgpOdds(picks){
+  const books=['draftkings','fanatics','betmgm','caesars'];
+  const prod={}, ok={};
+  books.forEach(function(bk){prod[bk]=1;ok[bk]=true;});
+  let mixedDec=1, mixedOk=true;
+  picks.forEach(function(l){
+    const bb=l.books||{};
+    books.forEach(function(bk){ const am=bb[bk]; if(am!=null){ prod[bk]*=amToDecimal(am); } else { ok[bk]=false; } });
+    if(l.american!=null && l.dec) mixedDec*=l.dec; else mixedOk=false;
+  });
+  const bookDecs={};
+  books.forEach(function(bk){ bookDecs[bk]=ok[bk]?prod[bk]:null; });
+  let bestDec=null,bestBook=null;
+  books.forEach(function(bk){ if(bookDecs[bk]!=null && (bestDec==null||bookDecs[bk]>bestDec)){bestDec=bookDecs[bk];bestBook=bk;} });
+  return {mixedDec:mixedOk?mixedDec:null, books:bookDecs, bestDec:bestDec, bestBook:bestBook};
+}
+function sgpEV(b){
+  const tier=weakestTier(b.picks.map(function(l){return confidenceLabel(l.p);}));
+  const cj=calibratedJoint(b.joint,tier);
+  const dec=(b.bestDec!=null)?b.bestDec:b.mixedDec;
+  return parlayEV(cj,dec);
+}
+function boardLegEV(prob,dec,tier){ return parlayEV(calibratedJoint(prob,tier),dec); }
+function exportEdgesCSV(){
+  if(GAMES.length<1){toast('No slate','Load a slate first.','!');return;}
+  var rows=[['Player','Team','Game','Market','ModelProb%','BestPriceAmerican','FairAmerican','Edge%','EV%','Tier']];
+  GAMES.forEach(function(g){ (g.players||[]).forEach(function(p){
+    Object.keys(MARKET_META).forEach(function(mk){
+      var mc=p._mkt&&p._mkt[mk]; var mo=p._mktOdds&&p._mktOdds[mk];
+      if(!mc||mc.p==null) return;
+      var am=mo?mo.best:null;
+      var dec=(am!=null)?amToDecimal(am):null;
+      var fairAm=decToAmerican(1/clamp(mc.p,1e-9,0.999));
+      var tier=confidenceLabel(p);
+      var ev=(dec!=null)?parlayEV(calibratedJoint(mc.p,tier),dec):null;
+      var edge=(mo&&mo.mktProb!=null)?(mc.p-mo.mktProb):null;
+      var teamAbbr=(p.side==='home'?(g.homeAbbr||g.home):(g.awayAbbr||g.away))||'';
+      rows.push([p.name,teamAbbr,g.away+' @ '+g.home,MARKET_META[mk].leg,(mc.p*100).toFixed(1),(am!=null?am:''),fairAm,(edge!=null?(edge*100).toFixed(1):''),(ev!=null?(ev*100).toFixed(1):''),tier]);
+    });
+  }); });
+  if(rows.length<2){toast('No data','No priced markets to export yet.','!');return;}
+  var csv=rows.map(function(r){ return r.map(function(c){ var v=String(c==null?'':c); return /[",\n]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v; }).join(','); }).join('\n');
+  var blob=new Blob([csv],{type:'text/csv'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a'); a.href=url; a.download='dingerlab_edges_'+(new Date().toISOString().slice(0,10))+'.csv'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  toast('Exported','Edges CSV downloaded ('+(rows.length-1)+' rows).','+');
+}
+
+function slateSummary(){
+  if(GAMES.length<1){$('#builderResults').innerHTML='<div class="help-note">Load a slate first.</div>';return;}
+  var byMkt={}; var totalLegs=0; var posEV=0; var best=null;
+  GAMES.forEach(function(g){ (g.players||[]).forEach(function(p){
+    Object.keys(MARKET_META).forEach(function(mk){
+      var mc=p._mkt&&p._mkt[mk]; var mo=p._mktOdds&&p._mktOdds[mk];
+      if(!mc||mc.p==null) return; var am=mo?mo.best:null; if(am==null) return;
+      var dec=amToDecimal(am); if(!dec||dec<=1) return;
+      var tier=confidenceLabel(p); var ev=parlayEV(calibratedJoint(mc.p,tier),dec);
+      var edge=(mo&&mo.mktProb!=null)?(mc.p-mo.mktProb):null;
+      if(!byMkt[mk]) byMkt[mk]={n:0,pos:0,edgeSum:0,edgeN:0,bestEV:-1e9,best:null};
+      var b=byMkt[mk]; b.n++; totalLegs++;
+      if(ev>0){ b.pos++; posEV++; }
+      if(edge!=null){ b.edgeSum+=edge; b.edgeN++; }
+      if(ev>b.bestEV){ b.bestEV=ev; b.best={name:p.name,prob:mc.p}; }
+      if(!best||ev>best.ev){ best={name:p.name,mk:mk,ev:ev,prob:mc.p}; }
+    });
+  }); });
+  if(!totalLegs){$('#builderResults').innerHTML='<div class="help-note">No priced markets yet. Load all-market odds first.</div>';return;}
+  var head='<div class="help-note">&#x1F4CA; <b>Slate at a glance</b> &#xB7; '+GAMES.length+' games &#xB7; '+totalLegs+' priced legs &#xB7; '+posEV+' positive-EV plays.'+(best?(' Top play: <b>'+best.name+'</b> '+MARKET_META[best.mk].short+' (EV +'+(best.ev*100).toFixed(1)+'%).'):'')+'</div>';
+  var rows=Object.keys(MARKET_META).map(function(mk){ var b=byMkt[mk]; if(!b) return ''; var avgEdge=b.edgeN?((b.edgeSum/b.edgeN*100).toFixed(1)+'%'):'&#x2014;'; return '<tr><td>'+MARKET_META[mk].leg+'</td><td class="num">'+b.n+'</td><td class="num">'+b.pos+'</td><td class="num">'+avgEdge+'</td><td>'+(b.best?(b.best.name+' (+'+(b.bestEV*100).toFixed(1)+'%)'):'&#x2014;')+'</td></tr>'; }).join('');
+  $('#builderResults').innerHTML=head+'<table class="players"><thead><tr><th>Market</th><th class="num">Priced</th><th class="num">+EV</th><th class="num">Avg edge</th><th>Best play</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+function buildOnePerGame(){
+  if(GAMES.length<1){$('#builderResults').innerHTML='<div class="help-note">Load a slate first.</div>';return;}
+  var picks=[];
+  GAMES.forEach(function(g){
+    var best=null;
+    (g.players||[]).forEach(function(p){
+      Object.keys(MARKET_META).forEach(function(mk){
+        var mc=p._mkt&&p._mkt[mk]; var mo=p._mktOdds&&p._mktOdds[mk];
+        if(!mc||mc.p==null) return; var am=mo?mo.best:null; if(am==null) return;
+        var dec=amToDecimal(am); if(!dec||dec<=1) return;
+        var tier=confidenceLabel(p); var ev=parlayEV(calibratedJoint(mc.p,tier),dec);
+        if(!best||ev>best.ev){ best={g:g,p:p,mk:mk,prob:mc.p,am:am,dec:dec,ev:ev,tier:tier}; }
+      });
+    });
+    if(best) picks.push(best);
+  });
+  if(!picks.length){$('#builderResults').innerHTML='<div class="help-note">No priced markets yet. Load all-market odds first.</div>';return;}
+  if($("#boardEvOnly")&&$("#boardEvOnly").checked) picks=picks.filter(function(r){return r.ev>0;});
+  if(!picks.length){$("#builderResults").innerHTML='<div class="help-note">No positive-EV plays right now. Uncheck +EV only to see every game.</div>';return;}
+  picks.sort(function(a,b){ return b.ev-a.ev || b.prob-a.prob; });
+  var banner='<div class="help-note">&#x1F3DF; <b>Best play in each game</b>: the single highest expected-value bet from every game on the slate, so you can spread action across matchups. Ranked by EV.</div>';
+  $('#builderResults').innerHTML=banner+'<div class="parlay-grid">'+picks.map(function(r,i){return boardCardHTML(r,i+1);}).join('')+'</div>';
+}
+
+var LINE_SNAP_ALL_KEY='dingerlab_line_snap_all_v1';
+function checkLineMovementAll(commit){
+  var prev={}; try{prev=JSON.parse(localStorage.getItem(LINE_SNAP_ALL_KEY)||'{}');}catch(e){}
+  var now={}; var moves=[];
+  GAMES.forEach(function(g){ (g.players||[]).forEach(function(p){
+    Object.keys(MARKET_META).forEach(function(mk){
+      var mo=p._mktOdds&&p._mktOdds[mk]; if(!mo||mo.best==null) return;
+      var key=mk+'::'+normalizeName(p.name);
+      now[key]=mo.best;
+      if(prev[key]!=null && prev[key]!==mo.best){
+        var pf=amToImplied(prev[key]), cf=amToImplied(mo.best);
+        if(pf!=null&&cf!=null){ moves.push({name:p.name,g:g,mk:mk,from:prev[key],to:mo.best,deltaImp:(cf-pf)}); p._mktMove=p._mktMove||{}; p._mktMove[mk]=cf-pf; }
+      }
+    });
+  }); });
+  moves.sort(function(a,b){return Math.abs(b.deltaImp)-Math.abs(a.deltaImp);});
+  if(commit!==false){ try{localStorage.setItem(LINE_SNAP_ALL_KEY,JSON.stringify(now));}catch(e){} }
+  return moves;
+}
+function showMovement(){
+  if(GAMES.length<1){$('#builderResults').innerHTML='<div class="help-note">Load a slate first.</div>';return;}
+  var moves=checkLineMovementAll(true);
+  if(!moves.length){$('#builderResults').innerHTML='<div class="help-note">&#x1F4CD; <b>No line movement yet.</b> This just saved a snapshot of current prices. Come back after &#x1F504; Refresh odds to see what moved \u2014 sharp money tends to shorten a price (steam).</div>';return;}
+  var rows=moves.slice(0,25).map(function(m){
+    var up=m.deltaImp>0;
+    var dir=up?'&#x25B2; shortening (steam)':'&#x25BC; drifting';
+    var col=up?'#dc2626':'#16a34a';
+    return '<tr><td>'+m.name+'</td><td>'+MARKET_META[m.mk].short+'</td><td class="num">'+m.from+'</td><td class="num">'+m.to+'</td><td class="num" style="color:'+col+'">'+(up?'+':'')+(m.deltaImp*100).toFixed(1)+'%</td><td style="color:'+col+'">'+dir+'</td></tr>';
+  }).join('');
+  $('#builderResults').innerHTML='<div class="help-note">&#x1F525; <b>Line movement</b> vs your last snapshot, across all markets. &#x25B2; shortening = price getting worse (money coming in / steam); &#x25BC; drifting = price getting better. Sorted by size of implied-probability move.</div><table class="players"><thead><tr><th>Player</th><th>Market</th><th class="num">Was</th><th class="num">Now</th><th class="num">&#x0394; implied</th><th>Direction</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+function buildBestBoard(){
+  if(GAMES.length<1){$('#builderResults').innerHTML='<div class="help-note">Load a slate first.</div>';return;}
+  var minP=clamp((parseFloat(($('#minLegP')&&$('#minLegP').value)||'0')||0)/100,0,1);
+  var rows=[];
+  GAMES.forEach(function(g){
+    (g.players||[]).forEach(function(p){
+      Object.keys(MARKET_META).forEach(function(mk){
+        var mc=p._mkt&&p._mkt[mk]; var mo=p._mktOdds&&p._mktOdds[mk];
+        if(!mc||mc.p==null) return;
+        if(mc.p<minP) return;
+        var am=mo?mo.best:null; if(am==null) return;
+        var dec=amToDecimal(am); if(!dec||dec<=1) return;
+        var tier=confidenceLabel(p);
+        var ev=boardLegEV(mc.p,dec,tier);
+        rows.push({g:g,p:p,mk:mk,prob:mc.p,am:am,dec:dec,ev:ev,tier:tier});
+      });
+    });
+  });
+  if(!rows.length){$('#builderResults').innerHTML='<div class="help-note">No priced single legs found. Load all-market odds first.</div>';return;}
+  if($("#boardEvOnly")&&$("#boardEvOnly").checked) rows=rows.filter(function(r){return r.ev>0;});
+  if(!rows.length){$("#builderResults").innerHTML='<div class="help-note">No positive-EV single legs right now. Uncheck +EV only to see the full board.</div>';return;}
+  rows.sort(function(a,b){ return b.ev-a.ev || b.prob-a.prob; });
+  var top=rows.slice(0,15);
+  var banner='<div class="help-note">&#x1F3C6; <b>Best Bets Board</b>: the '+top.length+' highest expected-value single legs across every player and market on the slate, devig-calibrated. Positive EV means the best price beats the model fair odds. Tap &#x26a1; to add any to your slip.</div>';
+  $('#builderResults').innerHTML=banner+'<div class="parlay-grid">'+top.map(function(r,i){return boardCardHTML(r,i+1);}).join('')+'</div>';
+}
+function boardCardHTML(r,rank){
+  var g=r.g,p=r.p; var meta=MARKET_META[r.mk];
+  var mv=(p._mktMove&&p._mktMove[r.mk]!=null)?p._mktMove[r.mk]:null;
+  var steam=(mv!=null&&Math.abs(mv)>=0.01)?(' <span class="chip" style="'+(mv>0?'background:#dc262622;color:#dc2626':'background:#16a34a22;color:#16a34a')+'">'+(mv>0?'&#x1F525; steam':'&#x25BC; drift')+'</span>'):'';
+  var teamAbbr=(p.side==='home'?(g.homeAbbr||g.home):(g.awayAbbr||g.away))||'';
+  var b64=btoa(unescape(encodeURIComponent(JSON.stringify({gid:String(g.id||'g'),name:p.name,mk:r.mk}))));
+  var evpos=r.ev>=0; var evtxt=(evpos?'+':'&#x2212;')+(Math.abs(r.ev)*100).toFixed(1)+'%';
+  var evcol=evpos?'#16a34a':'#dc2626';
+  return '<div class="parlay-card" style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;background:#fff">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center">'
+    +'<div style="font-weight:700">#'+rank+' '+p.name+' <span class="chip" style="background:#2d7ff922;color:#2d7ff9">'+meta.short+'</span>'+steam+'</div>'
+    +'<div style="font-weight:800;color:'+evcol+'">EV '+evtxt+'</div></div>'
+    +'<div style="color:#6b7280;font-size:12px;margin:2px 0 8px">'+teamAbbr+' &#xB7; '+g.away+' @ '+g.home+' &#xB7; '+meta.leg+'</div>'
+    +'<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13px">'
+    +'<div><div style="color:#6b7280;font-size:11px">Model</div><b>'+fmtPct(r.prob)+'</b></div>'
+    +'<div><div style="color:#6b7280;font-size:11px">Best price</div><b>'+decToAmerican(r.dec)+'</b></div>'
+    +'<div><div style="color:#6b7280;font-size:11px">Fair</div><b>'+decToAmerican(1/clamp(r.prob,1e-9,0.999))+'</b></div>'
+    +'</div>'
+    +'<button style="margin-top:10px;width:100%" onclick="addBoardLeg(&#39;'+b64+'&#39;)">&#x26a1; Add to slip</button>'
+    +'</div>';
+}
+function addBoardLeg(b64){
+  try{
+    var l=JSON.parse(decodeURIComponent(escape(atob(b64))));
+    var g=findGameById(l.gid); if(!g){toast('Error','Game not found.','!');return;}
+    var pl=g.players.find(function(x){return x.name===l.name;}); if(!pl){toast('Error','Player not found.','!');return;}
+    var mk=l.mk||'hr'; var mo=pl._mktOdds&&pl._mktOdds[mk]; var mc=pl._mkt&&pl._mkt[mk];
+    var key=String(g.id||'g')+'::'+pl.name+'::'+pl.side+'::'+mk;
+    if(SLIP.some(function(x){return x.id===key;})){toast('Already added','That leg is already on your slip.','i');openSlip();return;}
+    var teamAbbr=(pl.side==='home'?(g.homeAbbr||g.home):(g.awayAbbr||g.away))||'';
+    var books=mo?mo.books:null;
+    SLIP.push({id:key,name:pl.name,game:g.away+' @ '+g.home,team:teamAbbr,p:mc?mc.p:pl.p,odds:mo?mo.best:null,dk:books?books.draftkings:null,fan:books?books.fanatics:null,autoBest:books?books.autoBest:null,mkt:MARKET_META[mk].short,legLabel:MARKET_META[mk].leg});
+    renderSlip(); openSlip();
+    toast('Added','1 leg added to your betslip.','+');
+  }catch(e){ console.error(e); toast('Error','Could not add that leg.','!'); }
+}
+
+function buildSgpCards(){
+  if(GAMES.length<1){$('#builderResults').innerHTML='<div class="help-note">Load a slate first.</div>';return;}
+  window.DL_CORR_MULT=readCorrMult(); readStakeCfg();
+  const K=Number($('#legCount').value)||3;
+  const minComboP=Number($('#minComboP').value)/100;
+  const confSel=$('#confFilter').value; const minConf=confSel==='high'?2:confSel==='med'?1:0;
+  const MK=['hr','hits','tb','rbi'];
+  const allCards=[];
+  GAMES.forEach(function(g){
+    const legs=[];
+    (g.players||[]).forEach(function(p){
+      if(confidenceRank(confidenceLabel(p))<minConf) return;
+      MK.forEach(function(mk){
+        const mc=p._mkt&&p._mkt[mk]; const mo=p._mktOdds&&p._mktOdds[mk];
+        if(!mc||!mo||mo.best==null) return;
+        legs.push({g:g,p:p,mk:mk,prob:mc.p,american:mo.best,books:mo.books,dec:amToDecimal(mo.best),side:p.side});
+      });
+    });
+    legs.sort(function(a,b){ return (b.prob*(b.dec||1))-(a.prob*(a.dec||1)); });
+    const POOL=legs.slice(0,10);
+    if(POOL.length<K) return;
+    kCombos(POOL,K).forEach(function(picks){
+      const cnt={}; let ok=true;
+      picks.forEach(function(l){ const kk=l.p.name; cnt[kk]=(cnt[kk]||0)+1; if(cnt[kk]>2) ok=false; });
+      if(!ok) return;
+      const joint=legsJoint(picks);
+      const od=sgpOdds(picks);
+      allCards.push({picks:picks,joint:joint,g:g,_legs:K,mixedDec:od.mixedDec,bookDecs:od.books,bestDec:od.bestDec,bestBook:od.bestBook});
+    });
+  });
+  if(!allCards.length){$('#builderResults').innerHTML='<div class="help-note">No same-game cross-market cards found. Load all-market odds, lower the leg count, or relax filters.</div>';return;}
+  allCards.forEach(function(b){ b._ev=sgpEV(b); });
+  let res=allCards.filter(function(b){ return b.joint>=minComboP; });
+  if(!res.length) res=allCards;
+  res.sort(function(x,y){ var ex=(x._ev==null?-1:x._ev),ey=(y._ev==null?-1:y._ev); var xp=ex>0?1:0,yp=ey>0?1:0; if(xp!==yp)return yp-xp; if(Math.abs(ey-ex)>1e-9)return ey-ex; return y.joint-x.joint; });
+  const seen=new Set(); const top=[];
+  for(const b of res){ const key=b.picks.map(function(l){return l.p.name+':'+l.mk;}).slice().sort().join('|'); if(seen.has(key))continue; seen.add(key); top.push(b); if(top.length>=6)break; }
+  const banner='<div class="help-note">&#x1F500; <b>Same-game cross-market parlays.</b> Mixes HR / Hits / Total Bases / RBI legs inside one game with same-game correlation applied (teammates &amp; opposing hitters lift each other; a hitter&#39;s own props are treated as near-nested). Ranked by EV. <b>Note:</b> books apply their own SGP correlation discount we cannot see &#x2014; treat the payout as a ceiling and prefer the best <b>same-book</b> price for a real SGP.</div>';
+  $('#builderResults').innerHTML=banner+'<div class="parlay-grid">'+top.map(function(b,i){return sgpCardHTML(b,i+1);}).join('')+'</div>';
+}
+function sgpCardHTML(b,rank){
+  const bookName={draftkings:'DK',fanatics:'Fanatics',betmgm:'BetMGM',caesars:'Caesars'};
+  const tier=weakestTier(b.picks.map(function(l){return confidenceLabel(l.p);}));
+  const cj=calibratedJoint(b.joint,tier);
+  const fair=decToAmerican(1/b.joint);
+  const mixed=b.mixedDec?decToAmerican(b.mixedDec):'&#x2014;';
+  const same=(b.bestDec!=null)?(bookName[b.bestBook]+' '+decToAmerican(b.bestDec)):'&#x2014;';
+  const ev=b._ev;
+  const evTxt=ev==null?'&#x2014;':((ev>=0?'+':'&#x2212;')+(Math.abs(ev)*100).toFixed(1)+'%');
+  const evCls=ev==null?'':(ev>=0?'ev-pos':'ev-neg');
+  const recDec=(b.bestDec!=null)?b.bestDec:b.mixedDec;
+  const stk=recDec?suggestStake(cj,recDec):null;
+  const stkTxt=(stk&&stk.stake>0)?('$'+stk.stake.toFixed(2)+' &#xB7; '+(STAKE.kelly*100).toFixed(0)+'% Kelly'):'No bet';
+  const tcol=tierColor(tier);
+  const rows=b.picks.map(function(l){
+    const am=l.american!=null?(l.american>0?'+'+l.american:''+l.american):'&#x2014;';
+    const ab=(l.side==='home'?(b.g.homeAbbr||b.g.home):(b.g.awayAbbr||b.g.away));
+    return '<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid #eee"><div><b>'+l.p.name+'</b> <span class="chip" style="background:#2d7ff922;color:#2d7ff9">'+MARKET_META[l.mk].leg+'</span><div style="font-size:12px;color:#888">'+ab+' &#xB7; Model '+fmtPct(l.prob)+'</div></div><div style="font-weight:600">'+am+'</div></div>';
+  }).join('');
+  const payload=b.picks.map(function(l){return {gamePk:l.g.id,name:l.p.name,mk:l.mk};});
+  const b64=btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+  return '<div class="game-card open" style="padding:14px 16px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div><b>#'+rank+' &#x1F500; '+b._legs+'-leg SGP</b><div style="font-size:12px;color:#888">'+(b.g?(b.g.away+' @ '+b.g.home):'')+'</div></div><span class="chip" style="background:'+tcol+'22;color:'+tcol+'">'+tier+'</span></div>'+rows+'<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;font-size:13px"><div>Combined <b>'+fmtPct(b.joint)+'</b></div><div>Fair <b>'+fair+'</b></div><div>Best same-book <b>'+same+'</b></div><div>Shop-each-leg <b>'+mixed+'</b></div><div>EV <b class="'+evCls+'">'+evTxt+'</b></div><div>Stake <b>'+stkTxt+'</b></div></div><div style="margin-top:10px"><button onclick="addSgpLegs(&#39;'+b64+'&#39;)">&#x26a1; Add all legs</button></div></div>';
+}
+function addSgpLegs(b64){
+  try{
+    const arr=JSON.parse(decodeURIComponent(escape(atob(b64))));
+    let added=0;
+    arr.forEach(function(l){
+      const g=findGameById(l.gamePk); if(!g) return;
+      const pl=g.players.find(function(x){return x.name===l.name;}); if(!pl) return;
+      const mk=l.mk||'hr'; const mo=pl._mktOdds&&pl._mktOdds[mk]; const mc=pl._mkt&&pl._mkt[mk];
+      const key=String(g.id||'g')+'::'+pl.name+'::'+pl.side+'::'+mk;
+      if(SLIP.some(function(x){return x.id===key;})) return;
+      const teamAbbr=(pl.side==='home'?(g.homeAbbr||g.home):(g.awayAbbr||g.away))||'';
+      const books=mo?mo.books:null;
+      SLIP.push({id:key,name:pl.name,game:g.away+' @ '+g.home,team:teamAbbr,p:mc?mc.p:pl.p,odds:mo?mo.best:null,dk:books?books.draftkings:null,fan:books?books.fanatics:null,autoBest:books?books.autoBest:null,mkt:MARKET_META[mk].short,legLabel:MARKET_META[mk].leg});
+      added++;
+    });
+    renderSlip(); openSlip();
+    toast('Added', added+' leg'+(added===1?'':'s')+' added to your betslip.', '+');
+  }catch(e){ console.error(e); toast('Error','Could not add these legs.','!'); }
+}
+
+function autoSuggestCard(){
+  if(GAMES.length<2){$('#builderResults').innerHTML='<div class="help-note">Load a slate first.</div>';return;}
+  window.DL_CORR_MULT=readCorrMult(); readStakeCfg();
+  const priceMode=$('#priceMode').value;
+  const topLegs=Number($('#shortlistSize').value)||60;
+  const confSel=$('#confFilter').value;
+  const minConf=confSel==='high'?2:confSel==='med'?1:0;
+  const maxSel=$('#maxPerGame').value;
+  const mkt=MARKET_META[ACTIVE_MARKET]||MARKET_META.hr;
+  const pool=[];
+  [2,3,4].forEach(function(legs){
+    const maxOnePerGame=(maxSel==='on')?true:(maxSel==='off')?false:(legs>=4);
+    let minLegP=Number($('#minLegP').value)/100;
+    let minComboP=Number($('#minComboP').value)/100;
+    let res=[];
+    for(let k=0;k<8;k++){
+      res=buildCrossGameParlays(GAMES,{legs:legs,mode:'mix',topLegs:topLegs,minLegP:minLegP,minComboP:minComboP,priceMode:priceMode,minConf:minConf,maxOnePerGame:maxOnePerGame,outN:8});
+      if(res.length) break;
+      if(legs>=4){ minComboP=Math.max(minComboP*0.6,0.0002); if(k%2===1) minLegP=Math.max(minLegP-0.02,0.06); }
+      else { minComboP=Math.max(minComboP*0.7,0.001); if(k%2===1) minLegP=Math.max(minLegP-0.01,0.08); }
+    }
+    res.forEach(function(b){ b._legs=legs; b._ev=nLegEV(b); pool.push(b); });
+  });
+  if(!pool.length){ $('#builderResults').innerHTML='<div class="help-note">No '+mkt.label+' cards found across 2-4 legs. Load all-market odds, lower Min leg %, or raise Shortlist size.</div>'; return; }
+  pool.sort(function(x,y){
+    var ex=(x._ev==null?-1:x._ev), ey=(y._ev==null?-1:y._ev);
+    var xp=ex>0?1:0, yp=ey>0?1:0;
+    if(xp!==yp) return yp-xp;
+    if(Math.abs(ey-ex)>1e-9) return ey-ex;
+    return y.joint-x.joint;
+  });
+  const seen=new Set(); const top=[];
+  for(const b of pool){ const key=b.picks.map(function(x){return x.p.name;}).slice().sort().join('|'); if(seen.has(key)) continue; seen.add(key); top.push(b); if(top.length>=5) break; }
+  const best=top[0];
+  const evTxt=best._ev==null?'':(' &#xB7; EV <b>'+(best._ev>=0?'+':'&#x2212;')+(Math.abs(best._ev)*100).toFixed(1)+'%</b>');
+  const note=(best._ev!=null&&best._ev<=0)?' &#x2014; nothing is +EV on this market right now, so this is the least-bad value.':'';
+  const banner='<div class="help-note">&#x1F916; <b>Auto-suggest &#x2014; best '+mkt.label+' card.</b> Swept 2-4 legs across the whole slate and ranked by expected value (no-vig fair odds). Top pick: <b>'+best._legs+'-leg</b>'+evTxt+note+' Flip the market toggle to auto-build a different prop.</div>';
+  $('#builderResults').innerHTML=banner+'<div class="parlay-grid">'+top.map(function(b,i){return globalNLegCardHTML(b,i+1);}).join('')+'</div>';
 }
 
 function globalNLegCardHTML(b,rank){
