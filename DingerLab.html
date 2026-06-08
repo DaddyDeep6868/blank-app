@@ -693,6 +693,7 @@ tr.flash{animation:flash 1.2s ease}
   <div class="tabbar">
     <button class="active" data-tab="games">Games &amp; Parlays</button>
     <button data-tab="insights">Insights</button>
+    <button data-tab="command">Command Center</button>
     <button data-tab="portfolio">Portfolio</button>
     <button data-tab="manual">Manual entry</button>
     <button data-tab="track">Tracking</button>
@@ -810,6 +811,15 @@ tr.flash{animation:flash 1.2s ease}
       <div class="section-title">📈 Top edges</div>
       <p class="help-note">The strongest priced edges on the slate right now, ranked by model edge versus the market's no-vig probability. Use this as a fast shortlist before building a slip.</p>
       <div id="insightsTopEdges" style="margin-top:10px"></div>
+    </div></div>
+  </div>
+
+  <!-- TAB: COMMAND -->
+  <div data-panel="command" style="display:none">
+    <div class="game-card open"><div class="game-body" style="display:block;padding:18px">
+      <div class="section-title">🎛️ Betting command center</div>
+      <p class="help-note">Your control room for what is ready right now, what to watch for lineups, and the best same-book builds — without jumping between tools.</p>
+      <div id="commandCenterResults" style="margin-top:10px"></div>
     </div></div>
   </div>
 
@@ -956,8 +966,8 @@ tr.flash{animation:flash 1.2s ease}
 </div>
 
 <script>
-const APP_VERSION = 'v1.21';
-const APP_UPDATED = 'Updated Jun 8, 2026 2:14 AM ET';
+const APP_VERSION = 'v1.22';
+const APP_UPDATED = 'Updated Jun 8, 2026 2:28 AM ET';
 const APP_PASSWORD = 'adi11';
 {
   const av=document.getElementById('appVersion');
@@ -2928,6 +2938,7 @@ function switchTab(t){
   if(t==='parks')renderParks();if(t==='method')renderMethod();
   if(t==='track')renderTracking();
   if(t==='insights')renderInsights();
+  if(t==='command')renderCommandCenter();
   if(t==='portfolio')renderPortfolio();
 }
 
@@ -3433,6 +3444,57 @@ function portfolioGrade(singles,pairs,rrCore){
   if(sameBookPairs===pairs.length && pairs.length) notes.push('all recommended parlays have a same-book path');
   if(rrCore.length>=3) notes.push('round-robin core improves survivability');
   return {grade:grade, score:score, note:notes.join(' · ')||'balanced card construction'};
+}
+
+function renderCommandCenter(){
+  var wrap=$('#commandCenterResults');
+  if(!wrap) return;
+  if(GAMES.length<1){ wrap.innerHTML='<div class="help-note">Load a slate first.</div>'; return; }
+  window.DL_CORR_MULT=readCorrMult();
+  readStakeCfg();
+  var all=collectPortfolioCandidates();
+  if(!all.length){ wrap.innerHTML='<div class="help-note">No priced candidates yet. Load all-market odds first.</div>'; return; }
+  var ready=all.filter(function(x){ return x.g&&x.g.env&&x.g.env.lineupsConfirmed && (x.ev!=null&&x.ev>0); }).slice(0,8);
+  var waiting=all.filter(function(x){ return !x.g || !x.g.env || !x.g.env.lineupsConfirmed; }).slice(0,8);
+  var cfg=portfolioConfig();
+  var singles=choosePortfolioSingles(all,cfg);
+  var pairs=buildPortfolioPairs(singles,cfg).filter(function(x){ return x.sameBookBestDec!=null; }).slice(0,4);
+  var readyGames=new Set(ready.map(function(x){ return x.g?x.g.id:null; }).filter(Boolean)).size;
+  var pendingGames=new Set(waiting.map(function(x){ return x.g?x.g.id:null; }).filter(Boolean)).size;
+  var avgReadyEdge=ready.length ? ready.reduce(function(a,x){ return a+(x.edge||0); },0)/ready.length : null;
+
+  function payload(legs){
+    return btoa(unescape(encodeURIComponent(JSON.stringify(legs.map(function(x){ return {gamePk:(x.g&&x.g.id)||null, name:x.p.name, mk:x.mk}; })))));
+  }
+
+  var summary = '<div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:12px">'+
+    '<div class="game-card open" style="padding:14px 16px"><div class="section-title">Ready now</div><div style="font-size:28px;font-weight:800;line-height:1">'+ready.length+'</div><div class="help-note" style="margin-top:8px">Confirmed +EV plays across '+readyGames+' games</div></div>'+
+    '<div class="game-card open" style="padding:14px 16px"><div class="section-title">Lineup watch</div><div style="font-size:28px;font-weight:800;line-height:1">'+waiting.length+'</div><div class="help-note" style="margin-top:8px">Projected plays still waiting on '+pendingGames+' games</div></div>'+
+    '<div class="game-card open" style="padding:14px 16px"><div class="section-title">Same-book builds</div><div style="font-size:28px;font-weight:800;line-height:1">'+pairs.length+'</div><div class="help-note" style="margin-top:8px">Fastest placeable parlays right now</div></div>'+
+    '<div class="game-card open" style="padding:14px 16px"><div class="section-title">Command read</div><div style="font-size:28px;font-weight:800;line-height:1">'+(avgReadyEdge==null?'—':((avgReadyEdge>=0?'+':'')+(avgReadyEdge*100).toFixed(1)+'%'))+'</div><div class="help-note" style="margin-top:8px">Average edge on confirmed plays</div></div>'+
+  '</div>';
+
+  var readyHtml = ready.length ? '<table class="players"><thead><tr><th>Ready play</th><th>Market</th><th class="num">Model</th><th class="num">Edge</th><th class="num">Best</th><th></th></tr></thead><tbody>'+
+    ready.map(function(x){
+      var btn=payload([x]);
+      return '<tr><td><b>'+x.p.name+'</b><div style="font-size:12px;color:#888">'+x.g.away+' @ '+x.g.home+'</div></td><td>'+MARKET_META[x.mk].leg+'<div style="font-size:12px;color:#888">'+x.tier+'</div></td><td class="num">'+fmtPct(x.prob)+'</td><td class="num" style="color:'+(x.edge>=0?'#16a34a':'#db4437')+'">'+(x.edge>=0?'+':'')+(x.edge*100).toFixed(1)+'%</td><td class="num">'+(x.bestBook?shortBookLabel(x.bestBook)+' ':'')+fmtAmerican(x.american)+'</td><td><button class="ghost" style="padding:2px 10px" onclick="addPortfolioLegs(\''+btn+'\')">Add</button></td></tr>';
+    }).join('')+'</tbody></table>' : '<div class="help-note">No confirmed +EV plays yet. Wait for lineups or refresh the slate.</div>';
+
+  var waitingHtml = waiting.length ? '<table class="players"><thead><tr><th>Watchlist</th><th>Market</th><th class="num">Model</th><th class="num">Edge</th><th>Reason</th></tr></thead><tbody>'+
+    waiting.map(function(x){
+      return '<tr><td><b>'+x.p.name+'</b><div style="font-size:12px;color:#888">'+x.g.away+' @ '+x.g.home+'</div></td><td>'+MARKET_META[x.mk].leg+'</td><td class="num">'+fmtPct(x.prob)+'</td><td class="num" style="color:'+(x.edge>=0?'#16a34a':'#db4437')+'">'+(x.edge>=0?'+':'')+(x.edge*100).toFixed(1)+'%</td><td><span class="chip" style="background:#f59e0b22;color:#b45309">Projected lineup</span></td></tr>';
+    }).join('')+'</tbody></table>' : '<div class="help-note">Everything important is already lineup-confirmed.</div>';
+
+  var pairHtml = pairs.length ? '<table class="players"><thead><tr><th>Same-book parlay</th><th class="num">Win %</th><th class="num">EV</th><th class="num">Book path</th><th></th></tr></thead><tbody>'+
+    pairs.map(function(p){
+      var btn=payload(p.picks);
+      return '<tr><td><b>'+p.picks.map(function(x){return x.p.name;}).join(' + ')+'</b><div style="font-size:12px;color:#888">'+p.picks.map(function(x){return MARKET_META[x.mk].short;}).join(' · ')+'</div></td><td class="num">'+fmtPct(p.adjJoint)+'</td><td class="num '+((p._ev||0)>=0?'ev-pos':'ev-neg')+'">'+((p._ev||0)>=0?'+':'')+((p._ev||0)*100).toFixed(1)+'%</td><td class="num">'+shortBookLabel(p.sameBookBest)+' '+decToAmerican(p.sameBookBestDec)+'</td><td><button class="ghost" style="padding:2px 10px" onclick="addPortfolioLegs(\''+btn+'\')">Add both</button></td></tr>';
+    }).join('')+'</tbody></table>' : '<div class="help-note">No same-book parlay path is strong enough right now. The engine is favoring singles until prices improve.</div>';
+
+  wrap.innerHTML = summary+
+    '<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">Ready to fire</div>'+readyHtml+'</div></div>'+
+    '<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">Wait for lineups</div>'+waitingHtml+'</div></div>'+
+    '<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">Best same-book paths</div>'+pairHtml+'</div></div>';
 }
 
 function renderPortfolio(){
