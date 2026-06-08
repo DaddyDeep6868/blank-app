@@ -622,8 +622,7 @@ tr.flash{animation:flash 1.2s ease}
   <div class="brand"><span class="logo">⚾</span> Dinger Lab</div>
   <span class="pill-tag">MLB Home-Run Parlay Model</span>
   <div class="spacer"></div>
-  <button class="ghost" id="btnDemo">Load sample game</button>
-  <button id="btnLoad">Load slate + all-market odds</button> <button id="btnConfirmLineups" class="ghost">&#x2705; Confirm lineups + weather</button> <button id="btnRefreshOdds" class="ghost">&#x1F504; Refresh odds</button> <label style="font-size:13px;color:#6b7280"><input type="checkbox" id="autoRefresh"> auto (60s)</label>
+  <button id="btnLoad">Load slate + all-market odds</button> <button id="btnRefreshOdds" class="ghost">&#x1F504; Refresh odds</button> <label style="font-size:13px;color:#6b7280"><input type="checkbox" id="autoRefresh"> auto (60s)</label>
 </header>
 
 <main class="app-wrap">
@@ -714,8 +713,8 @@ tr.flash{animation:flash 1.2s ease}
         <div class="field"><label>Exclude low confidence</label>
           <select id="confFilter">
             <option value="any" selected>Allow all</option>
-            <option value="med">Med+ only</option>
-            <option value="high">High only</option>
+            <option value="med">Good+ only</option>
+            <option value="high">Great only</option>
           </select>
         </div>
         <div class="field"><label>Lineups</label><label style="display:flex;align-items:center;gap:6px;font-weight:400;text-transform:none;letter-spacing:0"><input id="lineupOnly" type="checkbox"> Confirmed starters only</label></div>
@@ -749,7 +748,7 @@ tr.flash{animation:flash 1.2s ease}
     </div></div>
     <div id="globalPairsContainer"></div>
     <div id="bookValueContainer"></div>
-    <div id="gamesContainer"><div class="empty">No games loaded yet. Use <b>Load MLB slate</b> for live data, or <b>Load sample game</b> to explore.</div></div>
+    <div id="gamesContainer"><div class="empty">No games loaded yet. Use <b>Load slate + all-market odds</b> for live data.</div></div>
   </div>
 
   <!-- TAB: MANUAL -->
@@ -1020,19 +1019,19 @@ function nLegBestDec(b){
   return d>1?d:null;
 }
 function getCalibration(){
-  var out={ High:1, Med:1, Low:1 };
+  var out={ Great:1, Good:1, Low:1 };
   try{
     var arr=loadSaved();
-    var agg={ High:{w:0,l:0,ps:0,pn:0}, Med:{w:0,l:0,ps:0,pn:0}, Low:{w:0,l:0,ps:0,pn:0} };
+    var agg={ Great:{w:0,l:0,ps:0,pn:0}, Good:{w:0,l:0,ps:0,pn:0}, Low:{w:0,l:0,ps:0,pn:0} };
     for(var i=0;i<arr.length;i++){
       var x=arr[i], t=x.tier;
-      if(t!=='High'&&t!=='Med'&&t!=='Low') continue;
+      if(t!=='Great'&&t!=='Good'&&t!=='Low') continue;
       if(x.result!=='win'&&x.result!=='loss') continue;
       if(x.result==='win') agg[t].w++; else agg[t].l++;
       var pp=(x.predProb!=null)?Number(x.predProb):((x.combinedPct!=null)?Number(x.combinedPct)/100:null);
       if(pp!=null){ agg[t].ps+=pp; agg[t].pn++; }
     }
-    ['High','Med','Low'].forEach(function(t){
+    ['Great','Good','Low'].forEach(function(t){
       var a=agg[t], n=a.w+a.l;
       if(n>=8 && a.pn>0 && a.ps>0){ var actual=a.w/n, pred=a.ps/a.pn; if(pred>0) out[t]=clamp(actual/pred,0.6,1.4); }
     });
@@ -1054,16 +1053,16 @@ function confidenceReasons(p){
     if(f.temp>1.02) out.push('Warm weather');
     if(f.wind>1.03) out.push('Wind blowing out'); else if(f.wind<0.97) out.push('Wind blowing in');
   }
-  if(p.p>=0.22) out.push('High HR rate'); else if(p.p>0&&p.p<0.10) out.push('Longshot');
+  if(p.p>=0.22) out.push('Great HR rate'); else if(p.p>0&&p.p<0.10) out.push('Longshot');
   return out;
 }
-function tierColor(lbl){ return lbl==='High'?'#2b8a3e':(lbl==='Med'?'#b08900':'#c92a2a'); }
+function tierColor(lbl){ return lbl==='Great'?'#2b8a3e':(lbl==='Good'?'#b08900':'#c92a2a'); }
 function tierBadge(p){
   var lbl=confidenceLabel(p); var col=tierColor(lbl);
   return '<span class="chip" style="background:'+col+'22;color:'+col+'">'+lbl+'</span>';
 }
 function weakestTier(labels){
-  var order={High:3,Med:2,Low:1}; var w='High';
+  var order={Great:3,Good:2,Low:1}; var w='Great';
   labels.forEach(function(l){ if((order[l]||0)<(order[w]||0)) w=l; });
   return w;
 }
@@ -1388,7 +1387,7 @@ function renderTracking(){
   const _fmt=function(v){ return v==null?'—':(v*100).toFixed(1)+'%'; };
   const _roiFmt=function(v){ return v==null?'—':((v>=0?'+':'')+(v*100).toFixed(1)+'%'); };
   const calib=getCalibration();
-  const tierRows=['High','Med','Low'].map(function(t){
+  const tierRows=['Great','Good','Low'].map(function(t){
     const grp=arr.filter(function(x){return x.tier===t;});
     if(!grp.length) return '';
     const stt=_wrRoi(grp);
@@ -1692,7 +1691,7 @@ function slipStats(){
   const od=sgpOdds(legs);
   const bookDec=(od.bestDec!=null)?od.bestDec:od.mixedDec;
   let ev=null;
-  if(bookDec!=null){ var tier=weakestTier(legs.map(function(l){return (l.p&&l.p.PA!=null)?confidenceLabel(l.p):'Med';})); ev=parlayEV(calibratedJoint(joint,tier),bookDec); }
+  if(bookDec!=null){ var tier=weakestTier(legs.map(function(l){return (l.p&&l.p.PA!=null)?confidenceLabel(l.p):'Good';})); ev=parlayEV(calibratedJoint(joint,tier),bookDec); }
   return {joint:joint, fairDec:fairDec, bookDec:bookDec, ev:ev, corr:(resolvable&&legs.length>1), bestBook:od.bestBook};
 }
 
@@ -1782,13 +1781,13 @@ function confidenceLabel(p){
   else score-=1;
   // retractable roof uncertainty
   if(p._env && p._env.roof==='retractable') score-=1;
-  if(score>=1) return 'High';
-  if(score>=0) return 'Med';
+  if(score>=1) return 'Great';
+  if(score>=0) return 'Good';
   return 'Low';
 }
 
 function confidenceRank(lbl){
-  return lbl==='High'?2:lbl==='Med'?1:0;
+  return lbl==='Great'?2:lbl==='Good'?1:0;
 }
 
 function betterAmerican(a,b){
@@ -2106,7 +2105,7 @@ function bestPairs(game){
     const bestBook=bestBookDecimalForTwoLeg(a,b);
     const sameBookBestDec = bestBook.dec;
 
-    // High-chance + big-payout score.
+    // Great-chance + big-payout score.
     // Uses same-book payout when available (placeable). Falls back to mixed-books payout.
     const payoutDec = sameBookBestDec!=null ? sameBookBestDec : bookDec;
     const score = payoutDec!=null ? (joint * payoutDec) : joint;
@@ -2431,7 +2430,7 @@ function renderGames(){
     bc.style.display='none';
   }
 
-  if(!all.length){c.innerHTML='<div class="empty">No games loaded yet. Use <b>Load MLB slate</b> for live data, or <b>Load sample game</b> to explore.</div>';return;}
+  if(!all.length){c.innerHTML='<div class="empty">No games loaded yet. Use <b>Load slate + all-market odds</b> for live data.</div>';return;}
   c.innerHTML=all.map((g,gi)=>gameCardHTML(g,gi)).join('');
   // wire toggles
   $$('#gamesContainer .game-head').forEach(h=>h.onclick=()=>h.parentElement.classList.toggle('open'));
@@ -2750,9 +2749,8 @@ function init(){
   $('#btnLoad').onclick=loadAll;$('#btnLoad2').onclick=loadAll;
   if($('#btnRefreshOdds')) $('#btnRefreshOdds').onclick=()=>{ refreshOdds(); };
   if($('#autoRefresh')) $('#autoRefresh').onchange=()=>{ toggleAutoRefresh(); };
-  if($('#btnConfirmLineups')) $('#btnConfirmLineups').onclick=()=>{ confirmLineups(); };
-  if($('#lineupOnly')) $('#lineupOnly').onchange=()=>{ renderGames(); renderSlip(); if($('#builderResults')) $('#builderResults').innerHTML=''; };
-  $('#btnDemo').onclick=loadSample;
+    if($('#lineupOnly')) $('#lineupOnly').onchange=()=>{ renderGames(); renderSlip(); if($('#builderResults')) $('#builderResults').innerHTML=''; };
+  if($('#btnDemo')) $('#btnDemo').onclick=loadSample;
   $$('.mktbtn').forEach(function(b){ b.onclick=function(){ setMarket(b.dataset.mkt); }; });
   paintMarketButtons();
   restorePrefs(); wirePrefs();
