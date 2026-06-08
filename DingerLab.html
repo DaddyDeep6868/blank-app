@@ -577,18 +577,19 @@ details.breakdown summary:hover{background:transparent}
 .slider-field .hint{font-size:11.5px;color:var(--notion-text-faint);margin-top:2px}
 
 .manual-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
-.builder-meta{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 2px}
-.builder-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:14px;margin-top:14px}
-.builder-grid .field{background:color-mix(in srgb,var(--notion-bg-soft) 82%, transparent);border:1px solid var(--notion-border-soft);border-radius:14px;padding:12px;min-height:82px;justify-content:space-between}
-.builder-grid .field label{margin-bottom:8px;font-size:11px;letter-spacing:.07em;color:var(--notion-text-faint)}
-.builder-grid .field input,.builder-grid .field select{width:100%;min-width:0}
-.builder-grid .field.check-field{min-height:82px}
-.builder-grid .field.check-field .toggle-line{display:flex;align-items:center;gap:8px;line-height:1.35;color:var(--notion-text-soft);min-height:42px;font-size:13px}
+.builder-meta{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0}
+.builder-meta .chip{padding:2px 8px;font-size:11px}
+.builder-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:10px}
+.builder-grid .field{background:color-mix(in srgb,var(--notion-bg-soft) 82%, transparent);border:1px solid var(--notion-border-soft);border-radius:12px;padding:10px;min-height:68px;justify-content:space-between}
+.builder-grid .field label{margin-bottom:6px;font-size:10px;letter-spacing:.08em;color:var(--notion-text-faint)}
+.builder-grid .field input,.builder-grid .field select{width:100%;min-width:0;font-size:13px;padding:9px 10px;border-radius:10px}
+.builder-grid .field.check-field{min-height:68px}
+.builder-grid .field.check-field .toggle-line{display:flex;align-items:center;gap:7px;line-height:1.25;color:var(--notion-text-soft);min-height:30px;font-size:12px}
 .builder-grid .field.check-field input{width:auto;min-width:auto}
-.builder-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:14px}
+.builder-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:10px}
 .builder-actions .field{background:transparent;border:none;padding:0;min-height:auto}
 .builder-actions .field label{display:none}
-.builder-actions button{width:100%;min-height:44px;font-weight:700;border-radius:12px}
+.builder-actions button{width:100%;min-height:38px;font-weight:700;border-radius:11px;font-size:13px;padding:9px 10px}
 .help-note{font-size:12.5px;color:var(--notion-text-soft)}
 .empty{text-align:center;color:var(--notion-text-faint);padding:50px 20px;font-size:14px}
 .legend{font-size:11.5px;color:var(--notion-text-faint);margin-top:10px}
@@ -955,8 +956,8 @@ tr.flash{animation:flash 1.2s ease}
 </div>
 
 <script>
-const APP_VERSION = 'v1.20';
-const APP_UPDATED = 'Updated Jun 8, 2026 2:10 AM ET';
+const APP_VERSION = 'v1.21';
+const APP_UPDATED = 'Updated Jun 8, 2026 2:14 AM ET';
 const APP_PASSWORD = 'adi11';
 {
   const av=document.getElementById('appVersion');
