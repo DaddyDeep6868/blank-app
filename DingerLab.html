@@ -884,6 +884,7 @@ tr.flash{animation:flash 1.2s ease}
       <div class="sub" id="betslipSub">0 legs</div>
     </div>
     <div class="sp"></div>
+    <button class="ghost" id="btnPlaceBet">Place bet</button>
     <button class="ghost" id="btnCopySlip">Copy</button>
     <button class="ghost" id="btnClearSlip">Clear</button>
     <button class="ghost" id="btnCloseSlip">✕</button>
@@ -899,8 +900,8 @@ tr.flash{animation:flash 1.2s ease}
 </div>
 
 <script>
-const APP_VERSION = 'v1.7';
-const APP_UPDATED = 'Updated Jun 8, 2026 12:25 AM ET';
+const APP_VERSION = 'v1.8';
+const APP_UPDATED = 'Updated Jun 8, 2026 12:48 AM ET';
 const APP_PASSWORD = 'adi11';
 const APP_UNLOCK_KEY = 'dingerlab_unlocked_v1';
 let APP_DID_INIT = false;
@@ -1737,6 +1738,33 @@ function slipText(){
     const bestBook=x.autoBest?(x.autoBest==='draftkings'?'DK':'Fanatics'):'—';
     return `${x.name} ${x.legLabel||'HR'} | ${x.game} | DK ${dk} | Fanatics ${fan} | Best ${bestBook} ${best} | Model ${fmtPct(x.p)}`;
   }).join('\n');
+}
+
+function quickPickLegText(x){
+  const market=(x.mkt||'HR').toUpperCase();
+  if(market==='HR') return `Over 0.5 ${x.name} Home Runs`;
+  if(market==='HIT') return `Over 0.5 ${x.name} Hits`;
+  if(market==='2H') return `Over 1.5 ${x.name} Hits`;
+  if(market==='TB') return `Over 1.5 ${x.name} Total Bases`;
+  if(market==='RBI') return `Over 0.5 ${x.name} RBIs`;
+  return `${x.name} ${x.legLabel||market}`;
+}
+
+function slipQuickPickText(){
+  if(!SLIP.length) return '';
+  return SLIP.map(function(x){ return quickPickLegText(x); }).join('\n');
+}
+
+async function openQuickPick(){
+  const txt=slipQuickPickText();
+  if(!txt){ toast('Empty','Add legs to your betslip first.','ℹ️'); return; }
+  try{
+    await navigator.clipboard.writeText(txt);
+    toast('QuickPick ready','Copied your legs for QuickPick. Paste them into the text box, then generate the betslip.','↗');
+  }catch(e){
+    toast('QuickPick ready','Your picks are ready. If copy is blocked, use Copy first, then paste into QuickPick.','↗');
+  }
+  window.open('https://quickpick.pikkit.com/','_blank','noopener,noreferrer');
 }
 
 function renderSlip(){
@@ -2797,6 +2825,7 @@ function init(){
   // Betslip drawer
   $('#btnCloseSlip').onclick=closeSlip;
   $('#btnClearSlip').onclick=()=>{clearSlip(); toast('Cleared','Betslip cleared.','🧹');};
+  $('#btnPlaceBet').onclick=()=>{ openQuickPick(); };
   $('#btnCopySlip').onclick=()=>{
     const txt=slipText();
     if(!txt){ toast('Empty','Add legs to your betslip first.','ℹ️'); return; }
