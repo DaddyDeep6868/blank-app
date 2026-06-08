@@ -125,7 +125,6 @@ def show_login():
         if submitted:
             if pw == APP_PASSWORD:
                 st.session_state["dl_unlocked"] = True
-                st.session_state["dl_just_unlocked"] = True
                 st.rerun()
             else:
                 st.error("Wrong password. Try again.")
@@ -145,22 +144,22 @@ with st.sidebar:
     league = st.selectbox("League", ["mlb"], index=0)
     force_fetch = st.button("Refresh live odds", use_container_width=True)
 
-# First render after password skips the server-side odds calls so the login panel
-# disappears quickly. Use Refresh live odds or any later rerun to fetch/inject odds.
-just_unlocked = bool(st.session_state.pop("dl_just_unlocked", False))
 raw = {}
-if not just_unlocked or force_fetch:
-    for b in BOOKS:
-        try:
-            raw[b] = fetch_book(key, b, league)
-        except Exception as e:  # noqa: BLE001
-            st.sidebar.warning(f"{b}: {e}")
-    n = len([1 for v in raw.values() if v])
+for b in BOOKS:
+    try:
+        raw[b] = fetch_book(key, b, league)
+    except Exception as e:  # noqa: BLE001
+        st.sidebar.warning(f"{b}: {e}")
+
+n = len([1 for v in raw.values() if v])
+if force_fetch:
+    st.sidebar.caption(
+        f"Live odds refreshed: {n}/{len(BOOKS)} books. Click **Load slate + all-market odds** in the app."
+    )
+else:
     st.sidebar.caption(
         f"Live odds ready: {n}/{len(BOOKS)} books. Click **Load slate + all-market odds** in the app."
     )
-else:
-    st.sidebar.caption("Unlocked instantly. Click **Refresh live odds** when you want to pre-load sportsbook odds.")
 
 html = load_html()
 payload = json.dumps(raw).replace("</", "<\\/")
