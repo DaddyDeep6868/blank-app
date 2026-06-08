@@ -901,8 +901,8 @@ tr.flash{animation:flash 1.2s ease}
 </div>
 
 <script>
-const APP_VERSION = 'v1.9';
-const APP_UPDATED = 'Updated Jun 8, 2026 1:03 AM ET';
+const APP_VERSION = 'v1.12';
+const APP_UPDATED = 'Updated Jun 8, 2026 1:12 AM ET';
 const APP_PASSWORD = 'adi11';
 const APP_UNLOCK_KEY = 'dingerlab_unlocked_v1';
 let APP_DID_INIT = false;
@@ -1786,16 +1786,63 @@ function slipPlaybookText(){
   if(!SLIP.length) return '';
   const book=preferredSportsbookLabel();
   const lines=SLIP.map(function(x){ return quickPickLegText(x); });
-  return ['@Playbook', ...lines, book ? ('Book: ' + book) : ''].filter(Boolean).join('\n');
+  return [...lines, book ? ('Book: ' + book) : ''].filter(Boolean).join('\n');
+}
+
+function extractPlaybookIds(value){
+  const out=[];
+  const seen=new Set();
+  function add(v){ if(v && !seen.has(v)){ seen.add(v); out.push(v); } }
+  function walk(v){
+    if(v==null) return;
+    if(typeof v==='string'){
+      const ms=v.match(/ML\d+/g);
+      if(ms) ms.forEach(add);
+      return;
+    }
+    if(Array.isArray(v)){ v.forEach(walk); return; }
+    if(typeof v==='object'){ Object.values(v).forEach(walk); }
+  }
+  walk(value);
+  return out;
+}
+
+function buildPlaybookPassthroughUrl(){
+  const stats=slipStats();
+  const book=((stats && stats.bestBook) || '').toLowerCase();
+  if(!book || !['draftkings','fanatics','betmgm','caesars','fanduel','bet365'].includes(book)) return null;
+  const legs=slipLegsResolved();
+  if(!legs.length) return null;
+  const ids=[];
+  for(const leg of legs){
+    const linkData = leg && leg.p && leg.p._mktOdds && leg.p._mktOdds[leg.mk] && leg.p._mktOdds[leg.mk].linkData
+      ? leg.p._mktOdds[leg.mk].linkData[book]
+      : null;
+    const found = extractPlaybookIds(linkData);
+    if(!found.length) return null;
+    ids.push(found[0]);
+  }
+  if(!ids.length) return null;
+  const params = new URLSearchParams();
+  ids.forEach(function(id, idx){ params.append('deeplinkId['+idx+']', id); });
+  params.set('context','playbook-twitter-quickslip');
+  params.set('sport','baseball');
+  params.set('default','true');
+  return 'https://playbookbot.com/books/'+book+'/passthrough?'+params.toString();
 }
 
 async function openPlaybook(){
+  if(!SLIP.length){ toast('Empty','Add legs to your betslip first.','ℹ️'); return; }
+  const directUrl = buildPlaybookPassthroughUrl();
+  if(directUrl){
+    window.open(directUrl,'_blank','noopener,noreferrer');
+    toast('Playbook one-click','Opened an experimental direct Playbook slip for your current same-book bet.', '⚡');
+    return;
+  }
   const txt=slipPlaybookText();
-  if(!txt){ toast('Empty','Add legs to your betslip first.','ℹ️'); return; }
   try{ await navigator.clipboard.writeText(txt); }catch(e){}
-  const url='https://x.com/intent/tweet?text='+encodeURIComponent(txt);
-  window.open(url,'_blank','noopener,noreferrer');
-  toast('Playbook ready','Opened a prefilled @Playbook post on X. Post it to get the generated betslip link.','↗');
+  window.open('https://playbookbot.com/','_blank','noopener,noreferrer');
+  toast('Playbook fallback','Direct Playbook IDs were not available for these legs, so the site opened as a fallback.','↗');
 }
 
 function renderSlip(){
@@ -1992,7 +2039,7 @@ function applyOddsToLoadedGames(merged){
     const nameKey = parts.slice(2).join('::');
     const key2 = `${teamAbbr}::${nameKey}`;
     let rec = byPlayer.get(key2);
-    if(!rec){ rec={}; MK.forEach(function(mk){ rec[mk]={dk:null,fan:null,mgm:null,cae:null,bestPrice:null,bestBook:null,mktSum:0,mktN:0}; }); byPlayer.set(key2,rec); }
+    if(!rec){ rec={}; MK.forEach(function(mk){ rec[mk]={dk:null,fan:null,mgm:null,cae:null,dkLinks:null,fanLinks:null,mgmLinks:null,caeLinks:null,bestPrice:null,bestBook:null,mktSum:0,mktN:0}; }); byPlayer.set(key2,rec); }
     const books = obj.books || {};
     MK.forEach(function(mk){
       const slot = rec[mk];
@@ -2001,6 +2048,7 @@ function applyOddsToLoadedGames(merged){
         if(!mc) return;
         const short = SHORT[bk];
         if(mc.price!=null && betterAmerican(mc.price, slot[short])) slot[short]=mc.price;
+        if(mc.links!=null) slot[short+'Links']=mc.links;
         if(mc.price!=null && mc.under!=null){ const fp=novigProb(mc.price, mc.under); if(fp!=null){ slot.mktSum+=fp; slot.mktN++; } }
       });
       let bestBook=null,bestPrice=null;
@@ -2024,7 +2072,7 @@ function applyOddsToLoadedGames(merged){
         MK.forEach(function(mk){
           const sx = rec[mk];
           if(sx && sx.bestPrice!=null){
-            p._mktOdds[mk] = { best: sx.bestPrice, books: { draftkings:sx.dk, fanatics:sx.fan, betmgm:sx.mgm, caesars:sx.cae, autoBest:sx.bestBook }, mktProb: (sx.mktN>0 ? sx.mktSum/sx.mktN : null) };
+            p._mktOdds[mk] = { best: sx.bestPrice, books: { draftkings:sx.dk, fanatics:sx.fan, betmgm:sx.mgm, caesars:sx.cae, autoBest:sx.bestBook }, linkData: { draftkings:sx.dkLinks, fanatics:sx.fanLinks, betmgm:sx.mgmLinks, caesars:sx.caeLinks }, mktProb: (sx.mktN>0 ? sx.mktSum/sx.mktN : null) };
             any=true;
           }
         });
