@@ -515,6 +515,7 @@ button.ghost{background:var(--notion-surface);color:var(--notion-text);border:1p
 button.ghost:hover{background:var(--notion-surface-hover)}
 button.warn{background:var(--notion-orange)}
 button.warn:hover{background:color-mix(in srgb,var(--notion-orange) 82%,black)}
+.mobile-toggle.active{background:var(--notion-blue);color:#fff!important;border-color:transparent!important}
 
 .statusbar{margin-top:12px;font-size:13px;color:var(--notion-text-soft);min-height:20px;display:flex;align-items:center;gap:8px}
 .spinner{width:14px;height:14px;border:2px solid var(--notion-border);border-top-color:var(--notion-blue);border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
@@ -647,6 +648,47 @@ tr.flash{animation:flash 1.2s ease}
 .drawer-sum .row .val{font-weight:800;font-variant-numeric:tabular-nums}
 .badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--notion-border-soft);background:var(--notion-gray-bg);border-radius:999px;padding:2px 10px;font-size:12px;color:var(--notion-text-soft)}
 .badge strong{color:var(--notion-text)}
+
+body.mobile-layout .app-header{padding:10px 12px;gap:8px;align-items:flex-start}
+body.mobile-layout .app-header .brand{font-size:16px}
+body.mobile-layout .app-header .brand .logo{width:28px;height:28px;font-size:15px;border-radius:9px}
+body.mobile-layout .app-header button{padding:7px 10px;font-size:12px}
+body.mobile-layout .version-tag,body.mobile-layout .pill-tag{font-size:10.5px}
+body.mobile-layout .app-wrap{padding:14px 12px 96px}
+body.mobile-layout h2{font-size:24px;line-height:1.15}
+body.mobile-layout .hero-sub{font-size:13px;max-width:none;margin:6px 0 0}
+body.mobile-layout .toolbar{padding:12px;gap:8px}
+body.mobile-layout .toolbar .field{flex:1 1 calc(50% - 8px);min-width:0}
+body.mobile-layout .toolbar .field input,
+body.mobile-layout .toolbar .field select,
+body.mobile-layout .toolbar .field button{width:100%;min-width:0}
+body.mobile-layout .statusbar{font-size:12px;align-items:flex-start}
+body.mobile-layout .log{font-size:10.5px;max-height:80px}
+body.mobile-layout .tabbar{overflow-x:auto;overflow-y:hidden;flex-wrap:nowrap;gap:2px;padding-bottom:4px;scrollbar-width:none;-ms-overflow-style:none}
+body.mobile-layout .tabbar::-webkit-scrollbar{display:none}
+body.mobile-layout .tabbar button{flex:0 0 auto;padding:8px 10px;font-size:12px}
+body.mobile-layout .game-card{margin-top:12px;border-radius:14px}
+body.mobile-layout .game-head{padding:12px;gap:10px}
+body.mobile-layout .game-body{padding:4px 12px 14px}
+body.mobile-layout .game-matchup{font-size:15px}
+body.mobile-layout .game-meta{gap:8px;font-size:11px}
+body.mobile-layout .game-meta .chip{padding:2px 8px}
+body.mobile-layout .env-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+body.mobile-layout .manual-grid,
+body.mobile-layout .settings-grid,
+body.mobile-layout .builder-grid,
+body.mobile-layout .builder-actions,
+body.mobile-layout .parlay-grid{grid-template-columns:1fr}
+body.mobile-layout .builder-grid .field{padding:9px;min-height:auto}
+body.mobile-layout .builder-actions button{min-height:36px;font-size:12px}
+body.mobile-layout .parlay-card{padding:12px!important;background:var(--notion-surface)!important;border-radius:12px!important}
+body.mobile-layout .parlay-card h4{font-size:13px;margin-top:10px}
+body.mobile-layout .parlay-stat{font-size:12px}
+body.mobile-layout table.players{display:block;overflow-x:auto;font-size:12px}
+body.mobile-layout .drawer{left:8px;right:8px;bottom:8px;width:auto;max-height:72vh}
+body.mobile-layout .drawer-h{padding:10px;gap:6px}
+body.mobile-layout .drawer-h button{padding:5px 8px;font-size:11px}
+body.mobile-layout .drawer-b{padding:10px}
 </style>
 </head>
 <body class="locked">
@@ -666,7 +708,7 @@ tr.flash{animation:flash 1.2s ease}
   <span class="pill-tag">MLB Home-Run Parlay Model</span>
   <span class="version-tag" id="appVersion"></span>
   <div class="spacer"></div>
-  <button id="btnLoad">Load slate + all-market odds</button> <button id="btnRefreshOdds" class="ghost">&#x1F504; Refresh odds</button> <label style="font-size:13px;color:#6b7280"><input type="checkbox" id="autoRefresh"> auto (60s)</label>
+  <button id="btnLoad">Load slate + all-market odds</button> <button id="btnRefreshOdds" class="ghost">&#x1F504; Refresh odds</button> <button id="btnMobileMode" class="ghost mobile-toggle">📱 Mobile layout: Off</button> <label style="font-size:13px;color:#6b7280"><input type="checkbox" id="autoRefresh"> auto (60s)</label>
 </header>
 
 <main class="app-wrap">
@@ -968,8 +1010,8 @@ tr.flash{animation:flash 1.2s ease}
 </div>
 
 <script>
-const APP_VERSION = 'v1.23';
-const APP_UPDATED = 'Updated Jun 8, 2026 2:36 AM ET';
+const APP_VERSION = 'v1.24';
+const APP_UPDATED = 'Updated Jun 8, 2026 3:00 AM ET';
 const APP_PASSWORD = 'adi11';
 {
   const av=document.getElementById('appVersion');
@@ -978,7 +1020,24 @@ const APP_PASSWORD = 'adi11';
   if(lv) lv.innerHTML='Version <b>'+APP_VERSION+'</b>';
 }
 const APP_UNLOCK_KEY = 'dingerlab_unlocked_v1';
+const MOBILE_LAYOUT_KEY = 'dingerlab_mobile_layout_v1';
 let APP_DID_INIT = false;
+function currentMobileLayoutEnabled(){
+  var saved=localStorage.getItem(MOBILE_LAYOUT_KEY);
+  if(saved==='on') return true;
+  if(saved==='off') return false;
+  return window.innerWidth <= 860;
+}
+function applyMobileLayout(){
+  var enabled=currentMobileLayoutEnabled();
+  document.body.classList.toggle('mobile-layout', enabled);
+  var btn=document.getElementById('btnMobileMode');
+  if(btn){
+    btn.classList.toggle('active', enabled);
+    btn.textContent='📱 Mobile layout: '+(enabled?'On':'Off');
+  }
+}
+
 /* =========================================================================
    DINGER LAB — MLB Home Run Probability & Parlay Optimizer
    Self-contained. Live data: MLB Stats API + Open-Meteo (both free, no key).
@@ -3001,10 +3060,13 @@ function wirePrefs(){ PREF_IDS.forEach(function(id){ var el=document.getElementB
 function init(){
   if(APP_DID_INIT) return;
   APP_DID_INIT=true;
+  applyMobileLayout();
   const today=new Date();$('#dateInput').value=today.toISOString().slice(0,10);
   populateParkSelect();renderSettings();renderManualRoster();
-  $$('.tabbar button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+  $('.tabbar button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   $('#btnSettings').onclick=()=>{const p=$('#settingsPanel');p.style.display=p.style.display==='none'?'':'none';};
+  if($('#btnMobileMode')) $('#btnMobileMode').onclick=()=>{ var enabled=currentMobileLayoutEnabled(); localStorage.setItem(MOBILE_LAYOUT_KEY, enabled ? 'off' : 'on'); applyMobileLayout(); };
+  window.addEventListener('resize', ()=>{ if(localStorage.getItem(MOBILE_LAYOUT_KEY)==null) applyMobileLayout(); });
   const loadAll=async()=>{
     await loadSlate($('#dateInput').value);
     try{
