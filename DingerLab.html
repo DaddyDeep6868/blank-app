@@ -733,6 +733,7 @@ tr.flash{animation:flash 1.2s ease}
       <div class="builder-grid">
         <div class="field"><label>Legs</label>
           <select id="legCount">
+            <option value="1">1-leg</option>
             <option value="2">2-leg</option>
             <option value="3">3-leg</option>
             <option value="4">4-leg</option>
@@ -769,7 +770,7 @@ tr.flash{animation:flash 1.2s ease}
             <option value="high">Great only</option>
           </select>
         </div>
-        <div class="field check-field"><label>Lineups</label><label class="toggle-line"><input id="lineupOnly" type="checkbox"> Confirmed starters only</label></div>
+        <div class="field"><label>Lineups</label><select id="lineupMode"><option value="all" selected>All hitters</option><option value="confirmed">Confirmed only</option><option value="projected">Projected only</option></select></div>
         <div class="field"><label>Max 1 leg per game</label>
           <select id="maxPerGame">
             <option value="auto" selected>Auto (ON for 4+)</option>
@@ -898,6 +899,7 @@ tr.flash{animation:flash 1.2s ease}
         <div class="field"><label>Legs</label>
           <select id="trackLegs">
             <option value="all" selected>All</option>
+            <option value="1">1-leg</option>
             <option value="2">2-leg</option>
             <option value="3">3-leg</option>
             <option value="4">4-leg</option>
@@ -966,8 +968,8 @@ tr.flash{animation:flash 1.2s ease}
 </div>
 
 <script>
-const APP_VERSION = 'v1.22';
-const APP_UPDATED = 'Updated Jun 8, 2026 2:28 AM ET';
+const APP_VERSION = 'v1.23';
+const APP_UPDATED = 'Updated Jun 8, 2026 2:36 AM ET';
 const APP_PASSWORD = 'adi11';
 {
   const av=document.getElementById('appVersion');
@@ -1332,17 +1334,34 @@ function setMarket(mk){
   renderGames();
 }
 
-function lineupOnlyOn(){ return !!($('#lineupOnly') && $('#lineupOnly').checked); }
+function lineupMode(){ return ($('#lineupMode') && $('#lineupMode').value) || 'all'; }
+function lineupOnlyOn(){ return lineupMode()==='confirmed'; }
+function projectedOnlyOn(){ return lineupMode()==='projected'; }
 function playerBuildAllowed(p,g){
-  if(g&&g.env&&g.env.lineupsConfirmed){
+  var mode=lineupMode();
+  var confirmed=!!(g&&g.env&&g.env.lineupsConfirmed);
+  if(confirmed){
     if(p._lineupStatus==='out') return false;
-    if(lineupOnlyOn()) return p._lineupStatus==='in';
+    if(mode==='confirmed') return p._lineupStatus==='in';
+    if(mode==='projected') return false;
     return true;
   }
-  return lineupOnlyOn() ? false : true;
+  if(mode==='confirmed') return false;
+  if(mode==='projected') return p._lineupStatus!=='out';
+  return true;
 }
 function visiblePlayersForGame(g){
-  return (g.players||[]).filter(function(p){ return lineupOnlyOn() ? playerBuildAllowed(p,g) : true; });
+  return (g.players||[]).filter(function(p){ return playerBuildAllowed(p,g); });
+}
+function lineupFilterSummary(games){
+  var mode=lineupMode();
+  var total=games.length, visibleGames=0, hiddenGames=0, confirmedGames=0, projectedGames=0;
+  games.forEach(function(g){
+    if(g&&g.env&&g.env.lineupsConfirmed) confirmedGames++; else projectedGames++;
+    var n=visiblePlayersForGame(g).length;
+    if(n>0) visibleGames++; else hiddenGames++;
+  });
+  return {mode:mode,total:total,visibleGames:visibleGames,hiddenGames:hiddenGames,confirmedGames:confirmedGames,projectedGames:projectedGames};
 }
 
 /* ---------- Pair correlation (Gaussian copula, 1st-order) ---------- */
@@ -1875,6 +1894,14 @@ function slipAvailableBooks(legs){
   });
 }
 
+function sameBookRouteStatus(legs){
+  const books=['draftkings','fanatics','betmgm','caesars'];
+  return books.map(function(book){
+    const missing=legs.filter(function(l){ return !(l && l.books && l.books[book]!=null); }).length;
+    return {book:book, missing:missing, ok:missing===0};
+  });
+}
+
 function slipWarningCards(legs, stats){
   const cards=[];
   const sameBooks=slipAvailableBooks(legs);
@@ -1882,7 +1909,7 @@ function slipWarningCards(legs, stats){
     const bestBook=(stats&&stats.bestBook)?shortBookLabel(stats.bestBook):shortBookLabel(sameBooks[0]);
     cards.push('<div class="help-note" style="margin-bottom:8px;border-left:4px solid #0f9d58;padding-left:10px"><b>Same-book ready:</b> '+sameBooks.map(bookLabel).join(', ')+' can price every leg.'+(bestBook?(' Best placeable path right now: <b>'+bestBook+'</b>.'):'')+'</div>');
   }else if(legs.length>1){
-    cards.push('<div class="help-note" style="margin-bottom:8px;border-left:4px solid #db4437;padding-left:10px"><b>Same-book warning:</b> no single sportsbook currently has prices for every leg, so this slip is best for shopping lines rather than one-tap placement.</div>');
+    cards.push('<div class="help-note" style="margin-bottom:8px;border-left:4px solid #db4437;padding-left:10px"><b>Same-book warning:</b> no single sportsbook currently has prices for every leg. Route breakdown: '+sameBookRouteStatus(legs).map(function(x){ return shortBookLabel(x.book)+' missing '+x.missing; }).join(' · ')+'.</div>');
   }
   const lowConf=legs.filter(function(l){ return l && l.p && confidenceLabel(l.p)==='Low'; });
   if(lowConf.length){
@@ -1964,7 +1991,8 @@ function renderSlip(){
       var names=sameBooks.map(shortBookLabel).join(', ');
       el.innerHTML=names + (st.bestBook ? (' <span style="color:#6b7280;font-size:11px">(best '+shortBookLabel(st.bestBook)+')</span>') : '');
     }else{
-      el.innerHTML='<span style="color:#db4437">Mixed only</span>';
+      var routes=sameBookRouteStatus(legs).map(function(x){ return shortBookLabel(x.book)+' -'+x.missing; }).join(' · ');
+      el.innerHTML='<span style="color:#db4437">Mixed only</span> <span style="color:#6b7280;font-size:11px">'+routes+'</span>';
     }
   })();
   $('#slipDiff').innerHTML = st.joint==null ? '&#x2014;' : ('<span class="badge"><strong>'+slipDifficulty(st.joint)+'</strong> &#xB7; '+fmtPct(st.joint)+(st.ev!=null?(' &#xB7; EV '+(st.ev>=0?'+':'&#x2212;')+(Math.abs(st.ev)*100).toFixed(1)+'%'):'')+(st.corr?' &#xB7; corr-adj':'')+'</span>');
@@ -2650,7 +2678,7 @@ function renderGames(){
     const best=bestPairsAcrossSlate(GAMES, 12);
     if(best.length){
       gc.innerHTML=`<div class="game-card open"><div class="game-body" style="display:block;padding:18px">
-        <div class="section-title">��� Cross-game parlay pairs (different games)</div>
+        <div class="section-title">Cross-game parlay pairs (different games)</div>
         <p class="help-note">These pairs are from <b>different games</b> (near-independent). Ranked for high chance + payout using same-book odds when available.</p>
         <div class="parlay-grid">${best.map((pr,k)=>globalParlayCardHTML(pr,k+1)).join('')}</div>
       </div></div>`;
@@ -2663,8 +2691,19 @@ function renderGames(){
   }
 
   if(!all.length){c.innerHTML='<div class="empty">No games loaded yet. Use <b>Load slate + all-market odds</b> for live data.</div>';return;}
-  c.innerHTML=all.map((g,gi)=>gameCardHTML(g,gi)).join('');
-  // wire toggles
+  const visible=all.filter(function(g){ return visiblePlayersForGame(g).length>0; });
+  const summary=lineupFilterSummary(all);
+  let banner='';
+  if(summary.mode==='confirmed'){
+    banner='<div class="help-note" style="margin:0 0 10px;border-left:4px solid #0f9d58;padding-left:10px"><b>Confirmed-only mode:</b> showing '+summary.visibleGames+' game'+(summary.visibleGames===1?'':'s')+' with posted lineups. '+summary.hiddenGames+' game'+(summary.hiddenGames===1?' is':'s are')+' hidden because lineups are not confirmed yet.</div>';
+  } else if(summary.mode==='projected'){
+    banner='<div class="help-note" style="margin:0 0 10px;border-left:4px solid #f59e0b;padding-left:10px"><b>Projected-only mode:</b> showing '+summary.visibleGames+' game'+(summary.visibleGames===1?'':'s')+' still waiting on official lineups. '+summary.confirmedGames+' confirmed game'+(summary.confirmedGames===1?' is':'s are')+' hidden.</div>';
+  }
+  if(!visible.length){
+    c.innerHTML=banner+'<div class="empty">No games match the current lineup filter. Try <b>All hitters</b> or wait for more confirmed lineups.</div>';
+    return;
+  }
+  c.innerHTML=banner+visible.map((g,gi)=>gameCardHTML(g,gi)).join('');
   $$('#gamesContainer .game-head').forEach(h=>h.onclick=()=>h.parentElement.classList.toggle('open'));
 }
 
@@ -2955,9 +2994,9 @@ function copySlip(b64){
 }
 
 var PREF_KEY='dl_prefs_v1';
-var PREF_IDS=['devigMethod','priceMode','corrMode','legCount','optMode','minLegP','minComboP','shortlistSize','confFilter','lineupOnly','maxPerGame','bankroll','kellyFrac','evOnly','boardEvOnly'];
+var PREF_IDS=['devigMethod','priceMode','corrMode','legCount','optMode','minLegP','minComboP','shortlistSize','confFilter','lineupMode','maxPerGame','bankroll','kellyFrac','evOnly','boardEvOnly'];
 function savePrefs(){ try{ var o={}; PREF_IDS.forEach(function(id){ var el=document.getElementById(id); if(!el) return; o[id]=(el.type==='checkbox')?el.checked:el.value; }); localStorage.setItem(PREF_KEY, JSON.stringify(o)); }catch(e){} }
-function restorePrefs(){ try{ var o=JSON.parse(localStorage.getItem(PREF_KEY)||'null'); if(!o) return; PREF_IDS.forEach(function(id){ if(o[id]==null) return; var el=document.getElementById(id); if(!el) return; if(el.type==='checkbox') el.checked=!!o[id]; else el.value=o[id]; }); }catch(e){} }
+function restorePrefs(){ try{ var o=JSON.parse(localStorage.getItem(PREF_KEY)||'null'); if(!o) return; if(o.lineupMode==null && o.lineupOnly!=null) o.lineupMode=o.lineupOnly?'confirmed':'all'; PREF_IDS.forEach(function(id){ if(o[id]==null) return; var el=document.getElementById(id); if(!el) return; if(el.type==='checkbox') el.checked=!!o[id]; else el.value=o[id]; }); }catch(e){} }
 function wirePrefs(){ PREF_IDS.forEach(function(id){ var el=document.getElementById(id); if(!el) return; var h=function(){ savePrefs(); }; el.addEventListener('change',h); el.addEventListener('input',h); }); }
 function init(){
   if(APP_DID_INIT) return;
@@ -2987,7 +3026,7 @@ function init(){
   $('#btnLoad').onclick=loadAll;$('#btnLoad2').onclick=loadAll;
   if($('#btnRefreshOdds')) $('#btnRefreshOdds').onclick=()=>{ refreshOdds(); };
   if($('#autoRefresh')) $('#autoRefresh').onchange=()=>{ toggleAutoRefresh(); };
-    if($('#lineupOnly')) $('#lineupOnly').onchange=()=>{ renderGames(); renderSlip(); if($('#builderResults')) $('#builderResults').innerHTML=''; };
+    if($('#lineupMode')) $('#lineupMode').onchange=()=>{ renderGames(); renderSlip(); if($('#builderResults')) $('#builderResults').innerHTML=''; };
   if($('#btnDemo')) $('#btnDemo').onclick=loadSample;
   $$('.mktbtn').forEach(function(b){ b.onclick=function(){ setMarket(b.dataset.mkt); }; });
   paintMarketButtons();
@@ -3023,8 +3062,9 @@ function init(){
     el.onchange=()=>renderTracking();
   });
   $('#btnBuildGlobal').onclick=()=>{
-    if(GAMES.length<2){$('#builderResults').innerHTML='<div class="help-note">Load a slate first.</div>';return;}
     const legs=Number($('#legCount').value);
+    if(legs===1){ buildSingleLegs(); return; }
+    if(GAMES.length<2){$('#builderResults').innerHTML='<div class="help-note">Load at least two games for cross-game parlays.</div>';return;}
     const mode=$('#optMode').value;
     window.DL_CORR_MULT = readCorrMult();
     readStakeCfg();
@@ -3039,20 +3079,14 @@ function init(){
     let minLegP=Number($('#minLegP').value)/100;
     let minComboP=Number($('#minComboP').value)/100;
 
-    // Auto-relax for 4+ legs: probabilities get tiny fast.
-    // If no results, progressively relax Min combined % and Min leg HR% until we find something.
-    const attempts=[];
     let res=[];
     for(let k=0;k<8;k++){
       res=buildCrossGameParlays(GAMES,{legs,mode:buildMode,topLegs,minLegP,minComboP,priceMode,minConf,maxOnePerGame,outN:12});
-      attempts.push({minLegP, minComboP, found: res.length});
       if(res.length) break;
       if(legs>=4){
-        // relax combined first, then leg threshold
-        minComboP = Math.max(minComboP*0.6, 0.0002); // floor 0.02%
-        if(k%2===1) minLegP = Math.max(minLegP-0.02, 0.06); // down to 6%
+        minComboP = Math.max(minComboP*0.6, 0.0002);
+        if(k%2===1) minLegP = Math.max(minLegP-0.02, 0.06);
       } else {
-        // for 2-3 legs, mild relaxation
         minComboP = Math.max(minComboP*0.7, 0.001);
         if(k%2===1) minLegP = Math.max(minLegP-0.01, 0.08);
       }
@@ -3061,14 +3095,16 @@ function init(){
     if(evOnly){ res = res.filter(function(b){ var e=nLegEV(b); return e!=null && e>0; }); }
     if(mode==='ev'){ res = res.slice().sort(function(x,y){ var ex=nLegEV(x), ey=nLegEV(y); return (ey==null?-1:ey)-(ex==null?-1:ex); }); }
     if(!res.length){
-      const hint = legs>=4
-        ? 'No results even after auto-relax. Increase Shortlist size and/or load odds again.'
+      const filterHint = lineupMode()==='confirmed' ? ' You are also in Confirmed-only lineup mode, so projected games are hidden.' : '';
+      const hint = legs>=5
+        ? 'No 5-leg cards found. Try lowering Min leg HR%, increasing Shortlist size, or turning Max 1 leg per game off.'+filterHint
+        : legs>=4
+        ? 'No results even after auto-relax. Increase Shortlist size, lower Min leg HR%, or switch lineup mode.'
         : 'No parlays found. Try lowering Min leg HR% or Min combined %.';
       $('#builderResults').innerHTML=`<div class="help-note">${hint}</div>`;
       return;
     }
 
-    // If we auto-relaxed, update inputs so you can see what worked.
     $('#minLegP').value = (minLegP*100).toFixed(0);
     $('#minComboP').value = (minComboP*100).toFixed(2);
 
@@ -3550,6 +3586,42 @@ function renderPortfolio(){
     '<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">Best singles</div>'+singlesHtml+'</div></div>'+
     '<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">Best parlays</div>'+pairsHtml+'</div></div>'+
     '<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">Round-robin recommendation</div>'+rrHtml+'</div></div>';
+}
+
+function buildSingleLegs(){
+  if(GAMES.length<1){$('#builderResults').innerHTML='<div class="help-note">Load a slate first.</div>';return;}
+  readStakeCfg();
+  const priceMode=$('#priceMode').value;
+  const topLegs=Number($('#shortlistSize').value)||60;
+  const confSel=$('#confFilter').value;
+  const minConf=confSel==='high'?2:confSel==='med'?1:0;
+  const minLegP=Number($('#minLegP').value)/100;
+  const evOnly=!!($('#evOnly')&&$('#evOnly').checked);
+  const rows=[];
+  GAMES.forEach(function(g){
+    (g.players||[]).forEach(function(p){
+      if(!playerBuildAllowed(p,g)) return;
+      if((p.p||0) < minLegP) return;
+      if(confidenceRank(confidenceLabel(p))<minConf) return;
+      var mo=p._mktOdds&&p._mktOdds[ACTIVE_MARKET];
+      if(!mo) return;
+      var am=null;
+      if(priceMode==='draftkings') am=mo.books&&mo.books.draftkings!=null?mo.books.draftkings:null;
+      else if(priceMode==='fanatics') am=mo.books&&mo.books.fanatics!=null?mo.books.fanatics:null;
+      else am=mo.best;
+      if(am==null) return;
+      var dec=amToDecimal(am); if(!dec||dec<=1) return;
+      var tier=confidenceLabel(p);
+      var ev=parlayEV(calibratedJoint(p.p,tier),dec);
+      rows.push({g:g,p:p,mk:ACTIVE_MARKET,prob:p.p,am:am,dec:dec,ev:ev,tier:tier});
+    });
+  });
+  rows.sort(function(a,b){ return (b.ev-a.ev) || (b.prob-a.prob); });
+  var picked=rows.slice(0, topLegs);
+  if(evOnly) picked=picked.filter(function(r){ return r.ev>0; });
+  if(!picked.length){ $('#builderResults').innerHTML='<div class="help-note">No single-leg plays match the current filters. Lower Min leg HR%, switch lineup mode, or turn off +EV only.</div>'; return; }
+  var banner='<div class="help-note">⚡ <b>Single-leg mode.</b> This ranks the strongest straight bets on the current market using the same EV, bankroll, and confidence logic as the parlay builder.</div>';
+  $('#builderResults').innerHTML=banner+'<div class="parlay-grid">'+picked.slice(0,12).map(function(r,i){return boardCardHTML(r,i+1);}).join('')+'</div>';
 }
 
 function buildOnePerGame(){
