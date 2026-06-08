@@ -488,6 +488,17 @@ section:first-child {
 .app-header .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;letter-spacing:-0.02em}
 .app-header .brand .logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#d5803b,#e56458);display:flex;align-items:center;justify-content:center;font-size:18px}
 .app-header .spacer{flex:1}
+.version-tag{font-size:12px;color:var(--notion-text-soft);background:var(--notion-bg-soft);border:1px solid var(--notion-border-soft);border-radius:999px;padding:4px 9px;white-space:nowrap}
+body.locked .app-header, body.locked main, body.locked #betslip, body.locked #toastHost{display:none!important}
+.password-gate{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;background:radial-gradient(circle at top left, rgba(213,128,59,.20), transparent 34%),linear-gradient(135deg,var(--notion-bg),var(--notion-bg-soft));}
+.password-card{width:min(420px,100%);background:var(--notion-surface);border:1px solid var(--notion-border);border-radius:18px;box-shadow:0 18px 55px rgba(0,0,0,.14);padding:26px;}
+.password-card .logo-row{display:flex;align-items:center;gap:12px;font-weight:800;font-size:22px;margin-bottom:8px;}
+.password-card .logo-dot{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#d5803b,#e56458);display:flex;align-items:center;justify-content:center;}
+.password-card p{color:var(--notion-text-soft);font-size:14px;margin:0 0 16px;line-height:1.45;}
+.password-card input{width:100%;box-sizing:border-box;margin:4px 0 10px;font-size:16px;padding:12px 13px;}
+.password-card button{width:100%;padding:12px 14px;}
+.password-error{min-height:18px;font-size:12px;color:var(--notion-red);margin-top:8px;}
+body:not(.locked) .password-gate{display:none!important}
 .app-wrap{max-width:1120px;margin:0 auto;padding:28px 24px 90px}
 .hero-sub{color:var(--notion-text-soft);font-size:15px;max-width:760px;margin:-4px 0 0}
 
@@ -617,10 +628,22 @@ tr.flash{animation:flash 1.2s ease}
 .badge strong{color:var(--notion-text)}
 </style>
 </head>
-<body>
+<body class="locked">
+<div class="password-gate" id="passwordGate">
+  <form class="password-card" id="passwordForm" autocomplete="off">
+    <div class="logo-row"><span class="logo-dot">⚾</span><span>Dinger Lab</span></div>
+    <p>Enter the password to unlock the parlay optimizer.</p>
+    <label for="passwordInput">Password</label>
+    <input id="passwordInput" type="password" placeholder="Enter password" autocomplete="current-password">
+    <button type="submit">Unlock</button>
+    <div class="password-error" id="passwordError"></div>
+    <div class="help-note" style="margin-top:12px">Version <b>v1.1</b></div>
+  </form>
+</div>
 <header class="app-header">
   <div class="brand"><span class="logo">⚾</span> Dinger Lab</div>
   <span class="pill-tag">MLB Home-Run Parlay Model</span>
+  <span class="version-tag" id="appVersion">v1.1 · Updated Jun 7, 2026 11:00 PM ET</span>
   <div class="spacer"></div>
   <button id="btnLoad">Load slate + all-market odds</button> <button id="btnRefreshOdds" class="ghost">&#x1F504; Refresh odds</button> <label style="font-size:13px;color:#6b7280"><input type="checkbox" id="autoRefresh"> auto (60s)</label>
 </header>
@@ -871,6 +894,11 @@ tr.flash{animation:flash 1.2s ease}
 </div>
 
 <script>
+const APP_VERSION = 'v1.1';
+const APP_UPDATED = 'Updated Jun 7, 2026 11:00 PM ET';
+const APP_PASSWORD = 'adi11';
+const APP_UNLOCK_KEY = 'dingerlab_unlocked_v1';
+let APP_DID_INIT = false;
 /* =========================================================================
    DINGER LAB — MLB Home Run Probability & Parlay Optimizer
    Self-contained. Live data: MLB Stats API + Open-Meteo (both free, no key).
@@ -2724,6 +2752,8 @@ function savePrefs(){ try{ var o={}; PREF_IDS.forEach(function(id){ var el=docum
 function restorePrefs(){ try{ var o=JSON.parse(localStorage.getItem(PREF_KEY)||'null'); if(!o) return; PREF_IDS.forEach(function(id){ if(o[id]==null) return; var el=document.getElementById(id); if(!el) return; if(el.type==='checkbox') el.checked=!!o[id]; else el.value=o[id]; }); }catch(e){} }
 function wirePrefs(){ PREF_IDS.forEach(function(id){ var el=document.getElementById(id); if(!el) return; var h=function(){ savePrefs(); }; el.addEventListener('change',h); el.addEventListener('input',h); }); }
 function init(){
+  if(APP_DID_INIT) return;
+  APP_DID_INIT=true;
   const today=new Date();$('#dateInput').value=today.toISOString().slice(0,10);
   populateParkSelect();renderSettings();renderManualRoster();
   $$('.tabbar button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
@@ -3274,7 +3304,34 @@ function globalNLegCardHTML(b,rank){
     <div class="parlay-stat"><span class="lbl">Save</span><span class="val"><button class="ghost" style="padding:2px 10px" onclick="saveParlay('${b64}', ${legs.length}, ${(b.joint*100).toFixed(4)}, '${bestSameBook.replace(/'/g,"\\'")}', ${_bd||'null'}, '${_wk}', ${_ev==null?'null':_ev.toFixed(4)}, ${b.joint.toFixed(6)}, '${_ld64}')">Save</button></span></div>
   </div>`;
 }
-document.addEventListener('DOMContentLoaded',init);
+function unlockApp(){
+  try{ sessionStorage.setItem(APP_UNLOCK_KEY,'1'); }catch(e){}
+  document.body.classList.remove('locked');
+  init();
+}
+function setupPasswordGate(){
+  const form=document.getElementById('passwordForm');
+  const input=document.getElementById('passwordInput');
+  const err=document.getElementById('passwordError');
+  if(!form){ unlockApp(); return; }
+  form.addEventListener('submit',function(e){
+    e.preventDefault();
+    if((input.value||'')===APP_PASSWORD){
+      if(err) err.textContent='';
+      unlockApp();
+    }else{
+      if(err) err.textContent='Wrong password. Try again.';
+      input.value='';
+      input.focus();
+    }
+  });
+  setTimeout(function(){ try{ input.focus(); }catch(e){} },50);
+}
+document.addEventListener('DOMContentLoaded',function(){
+  let ok=false;
+  try{ ok=sessionStorage.getItem(APP_UNLOCK_KEY)==='1'; }catch(e){}
+  if(ok) unlockApp(); else setupPasswordGate();
+});
 </script>
 </body>
 </html>
