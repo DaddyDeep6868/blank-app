@@ -642,13 +642,13 @@ tr.flash{animation:flash 1.2s ease}
     <input id="passwordInput" type="password" placeholder="Enter password" autocomplete="current-password">
     <button type="submit">Unlock</button>
     <div class="password-error" id="passwordError"></div>
-    <div class="help-note" style="margin-top:12px">Version <b>v1.7</b></div>
+    <div class="help-note" id="loginVersionNote" style="margin-top:12px"></div>
   </form>
 </div>
 <header class="app-header">
   <div class="brand"><span class="logo">⚾</span> Dinger Lab</div>
   <span class="pill-tag">MLB Home-Run Parlay Model</span>
-  <span class="version-tag" id="appVersion">v1.7 · Updated Jun 8, 2026 12:25 AM ET</span>
+  <span class="version-tag" id="appVersion"></span>
   <div class="spacer"></div>
   <button id="btnLoad">Load slate + all-market odds</button> <button id="btnRefreshOdds" class="ghost">&#x1F504; Refresh odds</button> <label style="font-size:13px;color:#6b7280"><input type="checkbox" id="autoRefresh"> auto (60s)</label>
 </header>
@@ -901,9 +901,15 @@ tr.flash{animation:flash 1.2s ease}
 </div>
 
 <script>
-const APP_VERSION = 'v1.13';
-const APP_UPDATED = 'Updated Jun 8, 2026 1:17 AM ET';
+const APP_VERSION = 'v1.14';
+const APP_UPDATED = 'Updated Jun 8, 2026 1:22 AM ET';
 const APP_PASSWORD = 'adi11';
+{
+  const av=document.getElementById('appVersion');
+  if(av) av.textContent=APP_VERSION+' · '+APP_UPDATED;
+  const lv=document.getElementById('loginVersionNote');
+  if(lv) lv.innerHTML='Version <b>'+APP_VERSION+'</b>';
+}
 const APP_UNLOCK_KEY = 'dingerlab_unlocked_v1';
 let APP_DID_INIT = false;
 /* =========================================================================
@@ -2103,7 +2109,7 @@ async function loadSlate(dateStr){
     for(let gi=0; gi<gamesRaw.length; gi++){
       const g=gamesRaw[gi];
       const homeT=g.teams.home.team, awayT=g.teams.away.team;
-      setStatus(`Loading game ${gi+1}/${gamesRaw.length}: ${awayT.name} @ ${homeT.name}…`,true);
+      setStatus(`Loading game ${gi+1}/${gamesRaw.length}: ${awayT.name} @ ${homeT.name}���`,true);
       const homePark=PARKS[homeT.id]||{team:homeT.name,park:(g.venue&&g.venue.name)||'Unknown',hr:100,cf:null,roof:'open',lat:null,lon:null,elev:0};
       const dayNight=(g.dayNight==='day')?'day':'night';
       // probable pitchers
