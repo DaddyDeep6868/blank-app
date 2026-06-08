@@ -884,7 +884,8 @@ tr.flash{animation:flash 1.2s ease}
       <div class="sub" id="betslipSub">0 legs</div>
     </div>
     <div class="sp"></div>
-    <button class="ghost" id="btnPlaceBet">Place bet</button>
+    <button class="ghost" id="btnPlaybook">Playbook</button>
+    <button class="ghost" id="btnPlaceBet">QuickPick</button>
     <button class="ghost" id="btnCopySlip">Copy</button>
     <button class="ghost" id="btnClearSlip">Clear</button>
     <button class="ghost" id="btnCloseSlip">✕</button>
@@ -900,8 +901,8 @@ tr.flash{animation:flash 1.2s ease}
 </div>
 
 <script>
-const APP_VERSION = 'v1.8';
-const APP_UPDATED = 'Updated Jun 8, 2026 12:48 AM ET';
+const APP_VERSION = 'v1.9';
+const APP_UPDATED = 'Updated Jun 8, 2026 1:03 AM ET';
 const APP_PASSWORD = 'adi11';
 const APP_UNLOCK_KEY = 'dingerlab_unlocked_v1';
 let APP_DID_INIT = false;
@@ -1765,6 +1766,36 @@ async function openQuickPick(){
     toast('QuickPick ready','Your picks are ready. If copy is blocked, use Copy first, then paste into QuickPick.','↗');
   }
   window.open('https://quickpick.pikkit.com/','_blank','noopener,noreferrer');
+}
+
+function preferredSportsbookLabel(){
+  const stats=slipStats();
+  const key=((stats && stats.bestBook) || '').toLowerCase();
+  const map={
+    draftkings:'DraftKings',
+    fanatics:'Fanatics',
+    betmgm:'BetMGM',
+    caesars:'Caesars',
+    fanduel:'FanDuel',
+    bet365:'bet365'
+  };
+  return map[key] || '';
+}
+
+function slipPlaybookText(){
+  if(!SLIP.length) return '';
+  const book=preferredSportsbookLabel();
+  const lines=SLIP.map(function(x){ return quickPickLegText(x); });
+  return ['@Playbook', ...lines, book ? ('Book: ' + book) : ''].filter(Boolean).join('\n');
+}
+
+async function openPlaybook(){
+  const txt=slipPlaybookText();
+  if(!txt){ toast('Empty','Add legs to your betslip first.','ℹ️'); return; }
+  try{ await navigator.clipboard.writeText(txt); }catch(e){}
+  const url='https://x.com/intent/tweet?text='+encodeURIComponent(txt);
+  window.open(url,'_blank','noopener,noreferrer');
+  toast('Playbook ready','Opened a prefilled @Playbook post on X. Post it to get the generated betslip link.','↗');
 }
 
 function renderSlip(){
@@ -2825,6 +2856,7 @@ function init(){
   // Betslip drawer
   $('#btnCloseSlip').onclick=closeSlip;
   $('#btnClearSlip').onclick=()=>{clearSlip(); toast('Cleared','Betslip cleared.','🧹');};
+  $('#btnPlaybook').onclick=()=>{ openPlaybook(); };
   $('#btnPlaceBet').onclick=()=>{ openQuickPick(); };
   $('#btnCopySlip').onclick=()=>{
     const txt=slipText();
