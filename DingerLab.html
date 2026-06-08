@@ -637,13 +637,13 @@ tr.flash{animation:flash 1.2s ease}
     <input id="passwordInput" type="password" placeholder="Enter password" autocomplete="current-password">
     <button type="submit">Unlock</button>
     <div class="password-error" id="passwordError"></div>
-    <div class="help-note" style="margin-top:12px">Version <b>v1.1</b></div>
+    <div class="help-note" style="margin-top:12px">Version <b>v1.2</b></div>
   </form>
 </div>
 <header class="app-header">
   <div class="brand"><span class="logo">⚾</span> Dinger Lab</div>
   <span class="pill-tag">MLB Home-Run Parlay Model</span>
-  <span class="version-tag" id="appVersion">v1.1 · Updated Jun 7, 2026 11:00 PM ET</span>
+  <span class="version-tag" id="appVersion">v1.2 · Updated Jun 7, 2026 11:16 PM ET</span>
   <div class="spacer"></div>
   <button id="btnLoad">Load slate + all-market odds</button> <button id="btnRefreshOdds" class="ghost">&#x1F504; Refresh odds</button> <label style="font-size:13px;color:#6b7280"><input type="checkbox" id="autoRefresh"> auto (60s)</label>
 </header>
@@ -894,9 +894,9 @@ tr.flash{animation:flash 1.2s ease}
 </div>
 
 <script>
-const APP_VERSION = 'v1.1';
-const APP_UPDATED = 'Updated Jun 7, 2026 11:00 PM ET';
-const APP_PASSWORD = 'hi';
+const APP_VERSION = 'v1.2';
+const APP_UPDATED = 'Updated Jun 7, 2026 11:16 PM ET';
+const APP_PASSWORD = 'adi11';
 const APP_UNLOCK_KEY = 'dingerlab_unlocked_v1';
 let APP_DID_INIT = false;
 /* =========================================================================
@@ -2470,7 +2470,8 @@ function globalParlayCardHTML(pr,rank){
   const tB = pr.bGameObj && pr.bGameObj.gameDate ? fmtLocalTime(pr.bGameObj.gameDate) : '';
   const aImg = headshotUrl(pr.a && pr.a.mlbId);
   const bImg = headshotUrl(pr.b && pr.b.mlbId);
-  const _pmkt = (pr.a._mktProb!=null && pr.b._mktProb!=null) ? (pr.a._mktProb * pr.b._mktProb) : null;
+  const _pmktRaw = (pr.a._mktProb!=null && pr.b._mktProb!=null) ? (pr.a._mktProb * pr.b._mktProb) : null;
+  const _pmkt = (_pmktRaw!=null) ? _pmktRaw : (pr.sameBookBestDec ? (1/pr.sameBookBestDec) : null);
   const _pedge = (_pmkt!=null) ? (pr.joint - _pmkt) : null;
   const _pedgeTxt = (_pedge==null) ? '\u2014' : ((_pedge>=0?'+':'')+(_pedge*100).toFixed(1)+' pts');
   const _dec = pr.sameBookBestDec || null;
@@ -2506,7 +2507,7 @@ function globalParlayCardHTML(pr,rank){
     <div class="parlay-stat"><span class="lbl">Best same-book</span><span class="val">${bookLine}</span></div>
     <div class="parlay-stat"><span class="lbl">Expected value</span><span class="val ${_evCls}">${_evTxt}</span></div>
     <div class="parlay-stat"><span class="lbl">Suggested stake</span><span class="val">${_stkTxt}</span></div>
-    <div class="parlay-stat"><span class="lbl">Confidence</span><span class="val"><span class="chip" style="background:${_wkCol}22;color:${_wkCol}" title="${_reasons||'No standout factors'}">${_wk}</span> <span class="notion-faint">weakest leg</span></span></div>
+    <div class="parlay-stat"><span class="lbl">Confidence</span><span class="val"><span class="chip" style="background:${_wkCol}22;color:${_wkCol}" title="${_reasons||'No standout factors'}">${_wk}</span></span></div>
     <div class="parlay-stat"><span class="lbl">Add to betslip</span><span class="val"><button class="ghost" style="padding:2px 10px" onclick="addSlipGP('${pr.aGameObj.id}','${encodeURIComponent(pr.a.name)}'); addSlipGP('${pr.bGameObj.id}','${encodeURIComponent(pr.b.name)}');">Add both</button></span></div>
   </div>`;
 }
@@ -3282,7 +3283,8 @@ function globalNLegCardHTML(b,rank){
   const _legData = b.picks.map(function(x){ return { name:x.p.name, mlbId:(x.p.mlbId||null), gamePk:(x.g.id||null), date:(x.g.gameDate? String(x.g.gameDate).slice(0,10):null) }; });
   const _ld64 = btoa(unescape(encodeURIComponent(JSON.stringify(_legData))));
   const _mktArr = b.picks.map(function(x){ return x.p._mktProb; });
-  const _mkt = _mktArr.every(function(v){ return v!=null; }) ? _mktArr.reduce(function(a,v){ return a*v; }, 1) : null;
+  const _mktRaw = _mktArr.every(function(v){ return v!=null; }) ? _mktArr.reduce(function(a,v){ return a*v; }, 1) : null;
+  const _mkt = (_mktRaw!=null) ? _mktRaw : (_bd ? (1/_bd) : null);
   const _edge = (_mkt!=null) ? (b.joint - _mkt) : null;
   const _edgeTxt = (_edge==null) ? '\u2014' : ((_edge>=0?'+':'')+(_edge*100).toFixed(1)+' pts');
   const bestSameBook = b.sameBookBestDec ? `${b.sameBookBest==='draftkings'?'DK':'Fanatics'} ${decToAmerican(b.sameBookBestDec)}` : '—';
@@ -3295,7 +3297,7 @@ function globalNLegCardHTML(b,rank){
     <div class="parlay-stat"><span class="lbl">Model edge vs market</span><span class="val ${_edge==null?'':(_edge>=0?'ev-pos':'ev-neg')}">${_edgeTxt}</span></div>
     <div class="parlay-stat"><span class="lbl">Expected value</span><span class="val ${_evCls}">${_evTxt}</span></div>
     <div class="parlay-stat"><span class="lbl">Suggested stake</span><span class="val">${_stkTxt}</span></div>
-    <div class="parlay-stat"><span class="lbl">Confidence</span><span class="val"><span class="chip" style="background:${_wkCol}22;color:${_wkCol}" title="${_reasons||'No standout factors'}">${_wk}</span> <span class="notion-faint">weakest leg</span></span></div>
+    <div class="parlay-stat"><span class="lbl">Confidence</span><span class="val"><span class="chip" style="background:${_wkCol}22;color:${_wkCol}" title="${_reasons||'No standout factors'}">${_wk}</span></span></div>
     <div class="parlay-stat"><span class="lbl">Fair odds</span><span class="val">${fairLine}</span></div>
     <div class="parlay-stat"><span class="lbl">Best same-book</span><span class="val">${sameBookLine}</span></div>
     <div class="parlay-stat"><span class="lbl">Mixed-books (best legs)</span><span class="val">${mixedLine}</span></div>
