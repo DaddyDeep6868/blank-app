@@ -608,18 +608,18 @@ tr.flash{animation:flash 1.2s ease}
 @keyframes flash{0%{background:color-mix(in srgb,var(--notion-green-bg) 70%, transparent)}100%{background:transparent}}
 
 /* Betslip drawer */
-.drawer{position:fixed;right:18px;bottom:18px;top:auto;z-index:9000;width:min(380px, calc(100vw - 36px));
+.drawer{position:fixed;top:96px;right:18px;z-index:9000;width:min(340px, calc(100vw - 36px));
   background:var(--notion-surface);border:1px solid var(--notion-border);border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.20);
-  overflow:hidden;display:flex;flex-direction:column;max-height:min(70vh, calc(100vh - 36px))}
+  overflow:hidden;display:flex;flex-direction:column;max-height:min(58vh, calc(100vh - 120px))}
 .drawer.hidden{display:none}
-.drawer-h{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--notion-bg-soft);border-bottom:1px solid var(--notion-border-soft);flex-wrap:wrap}
+.drawer-h{display:flex;align-items:center;gap:8px;padding:12px 14px;background:var(--notion-bg-soft);border-bottom:1px solid var(--notion-border-soft);flex-wrap:wrap}
 .drawer-h .ttl{font-weight:800;letter-spacing:-0.01em}
 .drawer-h .sub{font-size:12px;color:var(--notion-text-soft)}
-.drawer-h .sp{flex:1}
+.drawer-h .sp{flex:1 1 auto}
 .drawer-h button{padding:6px 10px;font-size:12px}
 .drawer-b{padding:12px 14px;overflow:auto}
 @media (max-width: 720px){
-  .drawer{left:12px;right:12px;bottom:12px;width:auto;max-height:min(68vh, calc(100vh - 24px))}
+  .drawer{left:12px;right:12px;top:auto;bottom:12px;width:auto;max-height:min(54vh, calc(100vh - 24px))}
 }
 .leg{display:flex;justify-content:space-between;gap:10px;padding:10px 10px;border:1px solid var(--notion-border-soft);border-radius:12px;background:var(--notion-bg-soft);margin-bottom:10px}
 .leg .nm{font-weight:700;font-size:13px;line-height:1.2}
@@ -904,8 +904,8 @@ tr.flash{animation:flash 1.2s ease}
 </div>
 
 <script>
-const APP_VERSION = 'v1.16';
-const APP_UPDATED = 'Updated Jun 8, 2026 1:29 AM ET';
+const APP_VERSION = 'v1.17';
+const APP_UPDATED = 'Updated Jun 8, 2026 1:31 AM ET';
 const APP_PASSWORD = 'adi11';
 {
   const av=document.getElementById('appVersion');
