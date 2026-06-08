@@ -163,11 +163,39 @@ else:
 
 html = load_html()
 payload = json.dumps(raw).replace("</", "<\\/")
+wallpaper_css = (
+    "<style>"
+    "html, body { height: 100%; }"
+    "body {"
+    "  background-image: linear-gradient(rgba(0,0,0,.20), rgba(0,0,0,.46)),"
+    "    url('data:image/png;base64," + WALLPAPER + "');"
+    "  background-position: center center;"
+    "  background-size: cover;"
+    "  background-repeat: no-repeat;"
+    "  background-attachment: fixed;"
+    "}"
+    "body::before {"
+    "  content: '';"
+    "  position: fixed;"
+    "  inset: 0;"
+    "  pointer-events: none;"
+    "  background:"
+    "    radial-gradient(circle at 28% 18%, rgba(255,69,199,.14), transparent 30%),"
+    "    radial-gradient(circle at 70% 76%, rgba(56,189,248,.12), transparent 32%);"
+    "  z-index: 0;"
+    "}"
+    "main, .notion-shell, .block-container { position: relative; z-index: 1; }"
+    "</style>"
+)
+
 inject = (
-    "<script>"
-    "sessionStorage.setItem('dingerlab_unlocked_v1','1');"
-    "window.DL_RAW_ODDS = " + payload + ";"
-    "</script>"
+    wallpaper_css
+    + "<script>"
+    + "sessionStorage.setItem('dingerlab_unlocked_v1','1');"
+    + "window.DL_RAW_ODDS = "
+    + payload
+    + ";"
+    + "</script>"
 )
 if "</head>" in html:
     html = html.replace("</head>", inject + "</head>", 1)
