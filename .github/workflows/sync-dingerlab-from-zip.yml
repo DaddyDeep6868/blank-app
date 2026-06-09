@@ -56,7 +56,7 @@ jobs:
 
       - name: Run sync script
         run: |
-          python scripts/sync_dingerlab_from_zip.py "${{ steps.zip.outputs.zip_path }}"
+          python scripts/sync_dingerlab_from_zip.py --zip "${{ steps.zip.outputs.zip_path }}"
 
       - name: Commit synced files
         shell: bash
