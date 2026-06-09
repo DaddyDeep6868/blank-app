@@ -1004,12 +1004,14 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
           </select>
         </div>
         <div class="field"><label>Search</label><input id="trackSearch" placeholder="player name…"></div>
-        <div class="field"><label>&nbsp;</label><button class="ghost" id="btnGradePending">\ud83e\udd16 Grade pending</button></div>
-        <div class="field"><label>&nbsp;</label><button class="ghost" id="btnExportData">\u2b07\ufe0f Export</button></div>
-        <div class="field"><label>&nbsp;</label><button class="ghost" id="btnImportData">\u2b06\ufe0f Import</button></div>
+        <div class="field"><label>&nbsp;</label><button class="ghost" id="btnGradePending">🤖 Grade pending</button></div>
+        <div class="field"><label>&nbsp;</label><button class="ghost" id="btnSimulate">🎲 Simulate card</button></div>
+        <div class="field"><label>&nbsp;</label><button class="ghost" id="btnExportData">⬇️ Export</button></div>
+        <div class="field"><label>&nbsp;</label><button class="ghost" id="btnImportData">⬆️ Import</button></div>
         <div class="field"><label>&nbsp;</label><button class="ghost" id="btnClearSaved">Clear all</button></div>
-        <div class="field" id="syncPanel" style="display:none;flex:1 1 100%"><label>Sync data \u2014 copy to move to another device, or paste exported data and load</label><textarea id="syncBox" style="width:100%;min-height:64px;font-family:monospace;font-size:11px"></textarea><div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap"><button class="ghost" id="btnSyncCopy">\ud83d\udccb Copy</button><button class="ghost" id="btnSyncLoad">Load pasted data</button><button class="ghost" id="btnSyncClose">Close</button></div></div>
+        <div class="field" id="syncPanel" style="display:none;flex:1 1 100%"><label>Sync data \u2014 copy to move to another device, or paste exported data and load</label><textarea id="syncBox" style="width:100%;min-height:64px;font-family:monospace;font-size:11px"></textarea><div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap"><button class="ghost" id="btnSyncCopy">📋 Copy</button><button class="ghost" id="btnSyncLoad">Load pasted data</button><button class="ghost" id="btnSyncClose">Close</button></div></div>
       </div>
+      <div id="simPanel" style="margin-top:10px"></div>
       <div id="trackTable" style="margin-top:10px"></div>
     </div></div>
   </div>
@@ -1069,8 +1071,8 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
 <button class="mobile-slip-fab hidden" id="mobileSlipFab">🧾 Open slip</button>
 
 <script>
-const APP_VERSION = 'v1.37';
-const APP_UPDATED = 'Updated Jun 9, 2026 — Sharp Layer (CLV tracker + Steam radar)';
+const APP_VERSION = 'v1.38';
+const APP_UPDATED = 'Updated Jun 9, 2026 — Sharp Layer (CLV + Steam) + Analytics Layer (Monte Carlo sim + Model report card)';
 const APP_PASSWORD = 'adi11';
 {
   const av=document.getElementById('appVersion');
@@ -1901,7 +1903,7 @@ function renderTracking(){
     </tr>`;
   }).join('');
   const bankHtml=bankrollChartHtml(arr);
-  $('#trackTable').innerHTML=summaryHtml+clvScorecardHtml(loadSaved())+bankHtml+btHtml+`<table class="players"><thead><tr>
+  $('#trackTable').innerHTML=summaryHtml+clvScorecardHtml(loadSaved())+modelReportCardHtml(loadSaved())+bankHtml+btHtml+`<table class="players"><thead><tr>
     <th>Saved</th><th class="num">Legs</th><th>Bet slip</th><th class="num">Combined</th><th class="num">Best same-book</th><th class="num">Stake</th><th>Status</th><th></th>
   </tr></thead><tbody>${rows}</tbody></table>`;
 
@@ -1953,7 +1955,7 @@ async function gradePending(){
       (sch.dates||[]).forEach(function(dd){ (dd.games||[]).forEach(function(g){ status[g.gamePk] = g.status && g.status.abstractGameState; }); });
     }catch(e){ try{ console.warn("grade schedule", d, e); }catch(_e){} }
   }
-  const hr = {};
+  const box = {};
   for(const pk of Object.keys(pks)){
     if(status[pk] !== "Final") continue;
     try{
@@ -1964,31 +1966,47 @@ async function gradePending(){
         Object.keys(pl).forEach(function(key){
           const prx = pl[key];
           const id = prx && prx.person && prx.person.id;
-          const h = prx && prx.stats && prx.stats.batting && prx.stats.batting.homeRuns;
-          if(id!=null) set[id] = Number(h||0);
+          const bat = prx && prx.stats && prx.stats.batting;
+          if(id==null || !bat) return;
+          const h=Number(bat.hits||0), d2=Number(bat.doubles||0), t3=Number(bat.triples||0), hr=Number(bat.homeRuns||0);
+          set[id] = { hr:hr, h:h, rbi:Number(bat.rbi||0), tb:(h + d2 + 2*t3 + 3*hr), pa:Number(bat.plateAppearances!=null?bat.plateAppearances:(bat.atBats!=null?bat.atBats:0)) };
         });
       });
-      hr[pk] = set;
+      box[pk] = set;
     }catch(e){ try{ console.warn("grade boxscore", pk, e); }catch(_e){} }
   }
-  let graded = 0, waiting = 0;
+  function legHit(l, st){
+    if(!st) return null;
+    const mk = l.mk || 'hr';
+    if(mk==='hr')   return st.hr  >= 1;
+    if(mk==='hits') return st.h   >= 1;
+    if(mk==='hits2')return st.h   >= 2;
+    if(mk==='tb')   return st.tb  >= 2;
+    if(mk==='rbi')  return st.rbi >= 1;
+    return null;
+  }
+  let graded = 0, waiting = 0, legsGraded = 0;
   pend.forEach(function(pp){
     let ready = true, win = true;
     for(const l of pp.legData){
-      if((l.mk||'hr')!=='hr'){ ready = false; break; } /* non-HR legs: settle by hand for now */
-      if(status[l.gamePk] !== "Final"){ ready = false; break; }
-      const set = hr[l.gamePk];
-      if(!set || l.mlbId==null || set[l.mlbId]===undefined){ ready = false; break; }
-      if(!(set[l.mlbId] >= 1)) win = false;
+      if(l.hit==null){
+        if(status[l.gamePk] !== "Final"){ ready = false; continue; }
+        const set = box[l.gamePk];
+        const st = (set && l.mlbId!=null) ? set[l.mlbId] : undefined;
+        const h = legHit(l, st);
+        if(h==null){ ready = false; continue; }
+        l.hit = h; l.gradedAt = Date.now(); legsGraded++;
+      }
+      if(l.hit===false) win = false;
     }
     if(!ready){ waiting++; return; }
     pp.result = win ? "win" : "loss";
     graded++;
   });
-  if(graded){ try{ localStorage.setItem(TRACK_KEY, JSON.stringify(all)); }catch(e){} }
+  if(graded || legsGraded){ try{ localStorage.setItem(TRACK_KEY, JSON.stringify(all)); }catch(e){} }
   renderTracking();
-  setStatus(graded ? ("Auto-graded "+graded+" parlay(s).") : "Nothing to grade yet \u2014 games not final.");
-  toast("Auto-grade", graded ? ("Settled "+graded+" parlay(s) from final box scores."+(waiting?(" "+waiting+" still waiting on final scores."):"")) : "No parlays ready \u2014 their games aren't final yet.", "\ud83e\udd16");
+  setStatus(graded ? ("Auto-graded "+graded+" parlay(s), "+legsGraded+" leg(s).") : (legsGraded ? ("Graded "+legsGraded+" leg(s); parlays still waiting on other games.") : "Nothing to grade yet \u2014 games not final."));
+  toast("Auto-grade", graded ? ("Settled "+graded+" parlay(s) from final box scores."+(waiting?(" "+waiting+" still waiting."):"")) : (legsGraded ? (legsGraded+" leg(s) graded \u2014 parlays still pending other games.") : "No legs ready \u2014 games aren't final yet."), "\ud83e\udd16");
 }
 function exportSaved(){
   const panel = $("#syncPanel"); if(panel) panel.style.display = "";
@@ -2702,6 +2720,7 @@ function enrichLegBetOdds(legData){
     const g=GAMES.find(gg=>String(gg.id)===String(l.gamePk)); if(!g) continue;
     const p=g.players.find(x=>(l.mlbId!=null && String(x.mlbId)===String(l.mlbId)) || x.name===l.name); if(!p) continue;
     const mk=l.mk||ACTIVE_MARKET||'hr'; l.mk=mk;
+    try{ const calc=p._mkt && p._mkt[mk]; if(calc && calc.p!=null) l.p=calc.p; }catch(e){}
     const mo=p._mktOdds && p._mktOdds[mk]; if(!mo || mo.best==null) continue;
     l.betPrice=mo.best;
     l.betBook=(mo.books&&mo.books.autoBest)||null;
@@ -2766,6 +2785,143 @@ function clvScorecardHtml(arr){
     '<p class="notion-faint" style="margin:2px 0 6px">Beating the close consistently means real edge \u2014 it shows up in weeks instead of waiting months for win/loss variance to settle. \u201cClosing\u201d = the last odds the app saw before first pitch, so keep odds refreshing near game time for best accuracy.</p>'+
     '<p>Legs with closing data: <b>'+legs+'</b> \u00b7 Beat the close: <b>'+(br*100).toFixed(1)+'%</b> \u00b7 Avg CLV: <b style="color:'+(avg>=0?'#2b8a3e':'#c92a2a')+'">'+(avg>=0?'+':'')+(avg*100).toFixed(2)+' pts</b></p>'+
     '</div></div>';
+}
+
+
+/* ===== v1.38 Analytics Layer: model report card + Monte Carlo simulator ===== */
+function gradedLegs(arr){
+  const out=[];
+  for(const pp of (arr||[])){
+    if(!Array.isArray(pp.legData)) continue;
+    const n=pp.legData.length||1;
+    for(const l of pp.legData){
+      if(!l || l.hit==null) continue;
+      let p=(l.p!=null)?Number(l.p):null;
+      if(p==null && pp.predProb!=null) p=Math.pow(Number(pp.predProb), 1/n); /* legacy fallback */
+      if(p==null||!(p>0&&p<1)) continue;
+      out.push({p:p, hit:!!l.hit, mk:(l.mk||'hr'), betPrice:(l.betPrice!=null?l.betPrice:null)});
+    }
+  }
+  return out;
+}
+
+function modelReportCardHtml(arr){
+  const legs=gradedLegs(arr);
+  if(legs.length<5) return '';
+  let brier=0, predSum=0, hitSum=0;
+  legs.forEach(function(l){ const h=l.hit?1:0; brier+=(l.p-h)*(l.p-h); predSum+=l.p; hitSum+=h; });
+  brier/=legs.length;
+  const pBar=predSum/legs.length;
+  const brierRef=pBar*(1-pBar); /* always-predict-the-average baseline */
+  const skill=(brierRef>0)?(1-brier/brierRef):null; /* >0 = beats naive baseline */
+  const BUCKETS=[[0,0.10,'<10%'],[0.10,0.15,'10\u201315%'],[0.15,0.20,'15\u201320%'],[0.20,0.30,'20\u201330%'],[0.30,1.01,'30%+']];
+  const calRows=BUCKETS.map(function(b){
+    const grp=legs.filter(function(l){return l.p>=b[0]&&l.p<b[1];});
+    if(!grp.length) return '';
+    const ap=grp.reduce(function(a,l){return a+l.p;},0)/grp.length;
+    const ah=grp.reduce(function(a,l){return a+(l.hit?1:0);},0)/grp.length;
+    const diff=ah-ap;
+    const col=Math.abs(diff)<0.03?'#2b8a3e':(Math.abs(diff)<0.07?'#b08900':'#c92a2a');
+    return '<tr><td>'+b[2]+'</td><td class="num">'+grp.length+'</td><td class="num">'+(ap*100).toFixed(1)+'%</td><td class="num">'+(ah*100).toFixed(1)+'%</td><td class="num" style="color:'+col+'">'+(diff>=0?'+':'')+(diff*100).toFixed(1)+'</td></tr>';
+  }).join('');
+  const MKL={hr:'Home Run',hits:'1+ Hit',hits2:'2+ Hits',tb:'2+ TB',rbi:'1+ RBI'};
+  const mkRows=Object.keys(MKL).map(function(mk){
+    const grp=legs.filter(function(l){return l.mk===mk;});
+    if(!grp.length) return '';
+    const ap=grp.reduce(function(a,l){return a+l.p;},0)/grp.length;
+    const ah=grp.reduce(function(a,l){return a+(l.hit?1:0);},0)/grp.length;
+    return '<tr><td>'+MKL[mk]+'</td><td class="num">'+grp.length+'</td><td class="num">'+(ap*100).toFixed(1)+'%</td><td class="num">'+(ah*100).toFixed(1)+'%</td></tr>';
+  }).join('');
+  return '<div class="notion-callout" data-tone="blue" style="margin:0 0 12px"><div>\ud83d\udccb</div><div>'+
+    '<strong>Model report card</strong> <span class="notion-faint">('+legs.length+' graded legs)</span>'+
+    '<p class="notion-faint" style="margin:2px 0 8px">Leg-level calibration: when the model says X%, does it actually happen X% of the time? <b>Brier</b> '+brier.toFixed(4)+' vs naive baseline '+brierRef.toFixed(4)+(skill!=null?(' \u2192 skill score <b style="color:'+(skill>0?'#2b8a3e':'#c92a2a')+'">'+(skill>=0?'+':'')+(skill*100).toFixed(1)+'%</b> (positive = model beats always-guessing-the-average)'):'')+'.</p>'+
+    '<table class="players"><thead><tr><th>Predicted band</th><th class="num">Legs</th><th class="num">Model avg</th><th class="num">Actual</th><th class="num">Diff (pts)</th></tr></thead><tbody>'+calRows+'</tbody></table>'+
+    (mkRows?('<table class="players" style="margin-top:8px"><thead><tr><th>Market</th><th class="num">Legs</th><th class="num">Model avg</th><th class="num">Actual</th></tr></thead><tbody>'+mkRows+'</tbody></table>'):'')+
+    '</div></div>';
+}
+
+/* ---- Monte Carlo card simulator ---- */
+const SIM_N = 10000;
+const SIM_SAME_GAME_RHO = 0.18;
+function _randn(){ let u=0,v=0; while(u===0)u=Math.random(); while(v===0)v=Math.random(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+
+function simulateCard(){
+  const panel=$('#simPanel'); if(!panel) return;
+  const all=loadSaved();
+  const card=all.filter(function(x){ return (x.result||'pending')==='pending' && Array.isArray(x.legData) && x.legData.length && Number(x.decOdds)>1; });
+  if(!card.length){ toast('Simulator','No pending parlays with stored legs + odds to simulate. Save some parlays first.','\ud83c\udfb2'); panel.innerHTML=''; return; }
+  let assumedStakes=0;
+  const parlays=card.map(function(pp){
+    const n=pp.legData.length||1;
+    let stake=Number(pp.stake||0); if(!(stake>0)){ stake=10; assumedStakes++; }
+    const legs=pp.legData.map(function(l){
+      let p=(l.p!=null)?Number(l.p):null;
+      if(p==null && pp.predProb!=null) p=Math.pow(Number(pp.predProb),1/n);
+      p=clamp(p!=null?p:0.15, 0.005, 0.95);
+      return { key:String(l.gamePk||'g')+'::'+String(l.mlbId!=null?l.mlbId:l.name)+'::'+(l.mk||'hr'), game:String(l.gamePk||'g'), p:p };
+    });
+    return { stake:stake, dec:Number(pp.decOdds), legs:legs };
+  });
+  /* unique legs shared across parlays so duplicated picks are properly correlated */
+  const uniq=new Map();
+  parlays.forEach(function(pl){ pl.legs.forEach(function(l){ if(!uniq.has(l.key)) uniq.set(l.key,{game:l.game, z:normInv(l.p)}); }); });
+  const keys=[...uniq.keys()];
+  const games=[...new Set(keys.map(function(k){return uniq.get(k).game;}))];
+  const totalStake=parlays.reduce(function(a,p){return a+p.stake;},0);
+
+  const pnl=new Array(SIM_N);
+  const parlayWins=new Array(parlays.length).fill(0);
+  const hitBuf={};
+  for(let it=0; it<SIM_N; it++){
+    const zg={}; games.forEach(function(g){ zg[g]=_randn(); });
+    for(const k of keys){
+      const u=uniq.get(k);
+      const x=Math.sqrt(SIM_SAME_GAME_RHO)*zg[u.game] + Math.sqrt(1-SIM_SAME_GAME_RHO)*_randn();
+      hitBuf[k]=(x < u.z);
+    }
+    let day=0;
+    for(let pi=0; pi<parlays.length; pi++){
+      const pl=parlays[pi];
+      let win=true;
+      for(const l of pl.legs){ if(!hitBuf[l.key]){ win=false; break; } }
+      if(win){ day += pl.stake*(pl.dec-1); parlayWins[pi]++; }
+      else day -= pl.stake;
+    }
+    pnl[it]=day;
+  }
+  pnl.sort(function(a,b){return a-b;});
+  const q=function(p){ return pnl[Math.min(SIM_N-1, Math.max(0, Math.floor(p*SIM_N)))]; };
+  const mean=pnl.reduce(function(a,b){return a+b;},0)/SIM_N;
+  const pProfit=pnl.filter(function(x){return x>0;}).length/SIM_N;
+  const pWipe=pnl.filter(function(x){return x<=-totalStake+1e-9;}).length/SIM_N;
+  const fm=function(v){ return (v>=0?'+$':'-$')+Math.abs(v).toFixed(2); };
+
+  /* histogram */
+  const lo=pnl[0], hi=pnl[SIM_N-1], NB=18, w=(hi-lo)/NB||1;
+  const bins=new Array(NB).fill(0);
+  pnl.forEach(function(x){ bins[Math.min(NB-1,Math.floor((x-lo)/w))]++; });
+  const mx=Math.max.apply(null,bins);
+  const bars=bins.map(function(b,i){
+    const c=lo+w*(i+0.5);
+    const col=c>=0?'#2b8a3e':'#c92a2a';
+    const h=Math.max(2,Math.round(64*b/mx));
+    return '<div title="'+fm(lo+w*i)+' to '+fm(lo+w*(i+1))+': '+(100*b/SIM_N).toFixed(1)+'%" style="flex:1;display:flex;flex-direction:column;justify-content:flex-end"><div style="height:'+h+'px;background:'+col+';opacity:.85;border-radius:2px 2px 0 0"></div></div>';
+  }).join('');
+
+  const simRows=parlays.map(function(pl,pi){
+    const sw=parlayWins[pi]/SIM_N;
+    return '<tr><td>'+card[pi].legData.map(function(l){return l.name;}).join(' + ')+'</td><td class="num">$'+pl.stake.toFixed(2)+'</td><td class="num">'+decToAmerican(pl.dec)+'</td><td class="num">'+(sw*100).toFixed(1)+'%</td></tr>';
+  }).join('');
+
+  panel.innerHTML='<div class="notion-callout" data-tone="blue" style="margin:0"><div>\ud83c\udfb2</div><div>'+
+    '<strong>Monte Carlo \u2014 today\'s card</strong> <span class="notion-faint">('+SIM_N.toLocaleString()+' simulated days \u00b7 '+parlays.length+' pending parlay(s) \u00b7 '+keys.length+' unique legs \u00b7 same-game \u03c1='+SIM_SAME_GAME_RHO+(assumedStakes?(' \u00b7 '+assumedStakes+' parlay(s) had no stake \u2014 assumed $10'):'')+')</span>'+
+    '<p style="margin-top:8px">Total staked: <b>$'+totalStake.toFixed(2)+'</b> \u00b7 Expected P&amp;L: <b style="color:'+(mean>=0?'#2b8a3e':'#c92a2a')+'">'+fm(mean)+'</b> \u00b7 P(profitable day): <b>'+(pProfit*100).toFixed(1)+'%</b> \u00b7 P(lose every bet): <b>'+(pWipe*100).toFixed(1)+'%</b></p>'+
+    '<p class="notion-faint" style="margin-top:4px">Median '+fm(q(0.5))+' \u00b7 5th pct '+fm(q(0.05))+' \u00b7 95th pct '+fm(q(0.95))+' \u00b7 Best '+fm(hi)+' \u00b7 Worst '+fm(lo)+'</p>'+
+    '<div style="display:flex;gap:2px;align-items:flex-end;height:64px;margin-top:10px">'+bars+'</div>'+
+    '<div class="notion-faint" style="display:flex;justify-content:space-between;font-size:11px;margin-top:2px"><span>'+fm(lo)+'</span><span>'+fm(hi)+'</span></div>'+
+    '<table class="players" style="margin-top:10px"><thead><tr><th>Parlay</th><th class="num">Stake</th><th class="num">Odds</th><th class="num">Sim win%</th></tr></thead><tbody>'+simRows+'</tbody></table>'+
+    '</div></div>';
+  toast('Simulator','Ran '+SIM_N.toLocaleString()+' simulated days. P(profit) '+(pProfit*100).toFixed(1)+'%.','\ud83c\udfb2');
 }
 
 async function loadSlate(dateStr){
@@ -3633,6 +3789,7 @@ function init(){
     if(confirm('Clear all saved parlays?')){ localStorage.removeItem(TRACK_KEY); renderTracking(); }
   };
   if($('#btnGradePending')) $('#btnGradePending').onclick=()=>{ gradePending(); };
+  if($('#btnSimulate')) $('#btnSimulate').onclick=()=>{ simulateCard(); };
   if($('#btnExportData')) $('#btnExportData').onclick=()=>{ exportSaved(); };
   if($('#btnImportData')) $('#btnImportData').onclick=()=>{ showImport(); };
   if($('#btnSyncCopy')) $('#btnSyncCopy').onclick=()=>{ copySync(); };

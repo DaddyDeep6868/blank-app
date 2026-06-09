@@ -59,3 +59,18 @@ Don't hardcode your key if the repo is public. Instead:
   CLV scorecard (beat-the-close %, avg CLV in prob points) plus a per-parlay CLV chip.
   Beating the close consistently = real edge, visible in weeks instead of months.
 - Auto-grader now skips non-HR legs instead of silently grading them as HR bets.
+
+## New in v1.38 — The Analytics Layer
+- **🎲 Monte Carlo simulator** (Tracking tab → "Simulate card"): runs 10,000 simulated days
+  over all pending saved parlays. Shared legs across parlays win/lose together, and legs in the
+  same game are correlated (Gaussian copula, ρ=0.18). Shows expected P&L, P(profitable day),
+  P(losing every bet), 5th/95th percentiles, a P&L histogram, and a per-parlay simulated win%.
+  Parlays without a stake are assumed $10 (noted in the output).
+- **📋 Model report card** (Tracking tab, appears at 5+ graded legs): leg-level calibration
+  table (predicted band vs actual hit rate), Brier score with a skill score vs the naive
+  baseline, and per-market accuracy breakdown.
+- **Auto-grader upgraded to all 5 markets**: HR, 1+ Hit, 2+ Hits, 2+ Total Bases (computed from
+  hits/doubles/triples/HR), and 1+ RBI are now graded from final box scores — and individual
+  legs get graded even while a parlay waits on other games.
+- Saved legs now also store the model's per-leg probability (powers the report card and sim).
+- Fixed: Tracking-tab buttons showed literal "\ud83e..." text instead of emoji.
