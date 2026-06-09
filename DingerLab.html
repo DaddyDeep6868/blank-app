@@ -853,7 +853,7 @@ body.mobile-layout .drawer-b{padding:10px}
   <div data-panel="allinone" style="display:none">
     <div class="game-card open"><div class="game-body" style="display:block;padding:18px">
       <div class="section-title">🧭 All-in-one HQ</div>
-      <p class="help-note">One faster-scanning command tab that combines the best picks, best visuals, and the most actionable slate data in one place.</p>
+      <p class="help-note">One faster-scanning command tab that now combines coach mode, market disagreement, why-not logic, correlation mapping, ladder building, architect picks, and the best visuals in one place.</p>
       <div id="allInOneResults" style="margin-top:10px"></div>
     </div></div>
   </div>
@@ -1032,8 +1032,8 @@ body.mobile-layout .drawer-b{padding:10px}
 </div>
 
 <script>
-const APP_VERSION = 'v1.33';
-const APP_UPDATED = 'Updated Jun 8, 2026 7:24 PM ET';
+const APP_VERSION = 'v1.34';
+const APP_UPDATED = 'Updated Jun 8, 2026 7:48 PM ET';
 const APP_PASSWORD = 'adi11';
 {
   const av=document.getElementById('appVersion');
@@ -3670,13 +3670,38 @@ function renderAllInOne(){
     if(x.readyNow) notes.push('confirmed lineup');
     else notes.push('projected lineup');
     if((x.edge||0)>=0.05) notes.push('strong edge');
+    else if((x.edge||0)>=0.025) notes.push('solid edge');
     if((x.ev||0)>=0.10) notes.push('premium EV');
     else if((x.ev||0)>0) notes.push('positive EV');
     if((x.tier||'')==='Great') notes.push('top confidence');
+    else if((x.tier||'')==='Good') notes.push('good confidence');
     if(x.booksAvailable>=3) notes.push('multi-book coverage');
     if(x.p && x.p._env && x.p._env.parkHR!=null && Number(x.p._env.parkHR)>=1.05) notes.push('park boost');
     return notes.slice(0,4);
   }
+  function blockerNotes(x){
+    var out=[];
+    if(!x.readyNow) out.push('lineup not confirmed');
+    if((x.tier||'')==='Low') out.push('low confidence');
+    else if((x.tier||'')==='Good' && (x.radarScore||0)<78) out.push('not elite confidence');
+    if((x.ev||0)<=0) out.push('price is not good enough');
+    else if((x.edge||0)<0.02) out.push('edge is still small');
+    if((x.booksAvailable||0)<2) out.push('thin book coverage');
+    if((x.move||0)<=-0.012) out.push('price drifted');
+    if(x.p && x.p._env && x.p._env.parkHR!=null && Number(x.p._env.parkHR)<0.98) out.push('park is not helping');
+    if((x.prob||0)<0.18) out.push('hit rate is fragile');
+    return out.slice(0,3);
+  }
+  function payload(legs){ return architectPayload(legs||[]); }
+  function coachCard(title, subtitle, body, buttonLabel, b64){
+    return '<div class="game-card open" style="padding:14px 16px"><div class="section-title">'+title+'</div><div style="font-size:18px;font-weight:800;line-height:1.2">'+subtitle+'</div><div class="help-note" style="margin-top:8px">'+body+'</div>'+(b64?('<div style="margin-top:12px"><button onclick="loadArchitectSlip(\''+b64+'\')">'+buttonLabel+'</button></div>'):'')+'</div>';
+  }
+  function americanSpread(books){
+    var vals=['draftkings','fanatics','betmgm','caesars'].map(function(book){ return books&&books[book]!=null?Number(books[book]):null; }).filter(function(v){ return v!=null && !isNaN(v); });
+    if(vals.length<2) return 0;
+    return Math.max.apply(null, vals) - Math.min.apply(null, vals);
+  }
+
   var radar=all.map(function(x){
     var move=(x.p&&x.p._mktMove&&x.p._mktMove[x.mk]!=null)?Number(x.p._mktMove[x.mk]):0;
     var readyNow=!!(x.g&&x.g.env&&x.g.env.lineupsConfirmed);
@@ -3700,15 +3725,80 @@ function renderAllInOne(){
     if(Math.abs((b.edge||0)-(a.edge||0))>1e-9) return (b.edge||0)-(a.edge||0);
     return (b.prob||0)-(a.prob||0);
   });
+
   var ready=radar.filter(function(x){ return x.readyNow && (x.ev||0)>0; });
+  var waiting=radar.filter(function(x){ return !x.readyNow && ((x.edge||0)>0 || (x.ev||0)>0); });
   var positive=radar.filter(function(x){ return (x.ev||0)>0; });
   var avgEdge=ready.length ? ready.reduce(function(a,x){ return a+(x.edge||0); },0)/ready.length : (positive.length ? positive.reduce(function(a,x){ return a+(x.edge||0); },0)/positive.length : null);
-  var architectPlans=buildArchitectPlans(radar).slice(0,4);
+  var architectPlans=buildArchitectPlans(radar);
+  var topSingle=ready[0] || positive[0] || radar[0] || null;
+  var waitPlay=waiting.slice().sort(function(a,b){ return (b.edge||0)-(a.edge||0) || (b.radarScore||0)-(a.radarScore||0); })[0] || null;
+  var ceilingDart=radar.filter(function(x){ return (x.edge||0)>0 && Number(x.american||-99999)>=300; }).slice().sort(function(a,b){ return Number(b.american||-99999)-Number(a.american||-99999) || (b.ev||0)-(a.ev||0); })[0] || null;
+  var avoidPlay=all.slice().sort(function(a,b){ return (b.prob||0)-(a.prob||0) || (a.ev||0)-(b.ev||0); }).find(function(x){ return (x.ev||0)<=0 || x.tier==='Low' || availableBooks(x).length<2; }) || null;
+
+  var pairSeed=choosePortfolioSingles(radar,{singles:Math.min(6, radar.length), maxGame:2});
+  var sameBookPairs=buildPortfolioPairs(pairSeed,{pairs:8}).filter(function(x){ return x.sameBookBestDec!=null; }).sort(function(a,b){ return (b._ev||0)-(a._ev||0) || (b.adjJoint||0)-(a.adjJoint||0); });
+  var bestSameBook=sameBookPairs[0] || null;
+  var sameBookDepth=sameBookPairs.length;
+
   var hrRows=insightRows().filter(function(r){ return r.mk==='hr'; }).map(function(r){ return Object.assign({power:cheatSheetPowerScore(r)}, r); });
   hrRows.sort(function(a,b){ return (b.power-a.power) || (b.prob-a.prob) || (b.edge-a.edge); });
-  hrRows=hrRows.slice(0,6);
+  hrRows=hrRows.slice(0,5);
+
+  var coachCards=[];
+  if(topSingle){ coachCards.push(coachCard('🎯 Best straight bet', topSingle.p.name, MARKET_META[topSingle.mk].leg+' · '+(topSingle.bestBook?shortBookLabel(topSingle.bestBook)+' ':'')+fmtAmerican(topSingle.american)+' · '+topSingle.reasons.join(' · '), 'Load best single', payload([topSingle]))); }
+  if(bestSameBook){ coachCards.push(coachCard('🧩 Best same-book pair', bestSameBook.picks.map(function(x){ return x.p.name; }).join(' + '), shortBookLabel(bestSameBook.sameBookBest)+' '+decToAmerican(bestSameBook.sameBookBestDec)+' · EV '+((bestSameBook._ev||0)>=0?'+':'')+((bestSameBook._ev||0)*100).toFixed(1)+'%', 'Load same-book pair', payload(bestSameBook.picks))); }
+  var valuePlan=architectPlans.find(function(x){ return x.id==='value'; }) || architectPlans[0] || null;
+  if(valuePlan){ coachCards.push(coachCard('💎 Best value slip', valuePlan.picks.map(function(x){ return x.p.name; }).join(' + '), 'Win '+fmtPct(valuePlan.joint)+' · Odds '+(valuePlan.payoutDec?decToAmerican(valuePlan.payoutDec):'—')+' · '+valuePlan.note, 'Load value slip', payload(valuePlan.picks))); }
+  if(ceilingDart){ coachCards.push(coachCard('🚀 Ceiling dart', ceilingDart.p.name, MARKET_META[ceilingDart.mk].leg+' · '+fmtAmerican(ceilingDart.american)+' · '+ceilingDart.reasons.join(' · '), 'Load ceiling dart', payload([ceilingDart]))); }
+  if(waitPlay){ coachCards.push(coachCard('⏳ Wait-for-lineup play', waitPlay.p.name, MARKET_META[waitPlay.mk].leg+' · '+(waitPlay.edge>=0?'+':'')+(waitPlay.edge*100).toFixed(1)+'% edge once lineups lock.', 'Load watch play', payload([waitPlay]))); }
+  if(avoidPlay){ coachCards.push('<div class="game-card open" style="padding:14px 16px"><div class="section-title">🛑 Avoid today</div><div style="font-size:18px;font-weight:800;line-height:1.2">'+avoidPlay.p.name+'</div><div class="help-note" style="margin-top:8px">'+MARKET_META[avoidPlay.mk].leg+' · '+(blockerNotes(Object.assign({readyNow:!!(avoidPlay.g&&avoidPlay.g.env&&avoidPlay.g.env.lineupsConfirmed), booksAvailable:availableBooks(avoidPlay).length, radarScore:avoidPlay.score||0, move:(avoidPlay.p&&avoidPlay.p._mktMove&&avoidPlay.p._mktMove[avoidPlay.mk])||0}, avoidPlay)).join(' · ') || 'not clean enough to trust')+'</div></div>'); }
+
+  var disagreementRows=radar.filter(function(x){ return (x.booksAvailable||0)>=2; }).map(function(x){
+    var candidates=['draftkings','fanatics','betmgm','caesars'].filter(function(book){ return x.books&&x.books[book]!=null; }).map(function(book){ return {book:book, american:Number(x.books[book]), dec:amToDecimal(x.books[book])}; });
+    candidates.sort(function(a,b){ return (b.dec||0)-(a.dec||0); });
+    var best=candidates[0], worst=candidates[candidates.length-1];
+    var gap=((best&&worst)?((best.dec||0)-(worst.dec||0)):0);
+    return { x:x, best:best, worst:worst, gap:gap, americanGap:americanSpread(x.books), stale:(gap>=0.18 || americanSpread(x.books)>=45) };
+  }).sort(function(a,b){ return (b.gap||0)-(a.gap||0) || (b.x.edge||0)-(a.x.edge||0); }).slice(0,8);
+
+  var whyNotRows=radar.slice(8,22).map(function(x){ return {x:x, blockers:blockerNotes(x)}; }).filter(function(r){ return r.blockers.length; }).slice(0,6);
+
+  var ladderGroups={};
+  radar.forEach(function(x){
+    var key=x.p.name+'|'+((x.g&&x.g.id)||'g');
+    if(!ladderGroups[key]) ladderGroups[key]={name:x.p.name, game:x.g?x.g.away+' @ '+x.g.home:'', team:(x.p.side==='home'?(x.g&&x.g.homeAbbr||x.g&&x.g.home):(x.g&&x.g.awayAbbr||x.g&&x.g.away))||'', rows:[]};
+    ladderGroups[key].rows.push(x);
+  });
+  var ladders=Object.keys(ladderGroups).map(function(k){
+    var g=ladderGroups[k];
+    var byMk={};
+    g.rows.forEach(function(r){ if(!byMk[r.mk]) byMk[r.mk]=r; });
+    var picks=[];
+    ['hits','tb','hr','hits2','rbi'].forEach(function(mk){ if(byMk[mk] && picks.indexOf(byMk[mk])===-1) picks.push(byMk[mk]); });
+    if(picks.length<2){
+      var extras=g.rows.slice().sort(function(a,b){ return (b.radarScore||0)-(a.radarScore||0); });
+      extras.forEach(function(r){ if(picks.indexOf(r)===-1 && picks.length<3) picks.push(r); });
+    }
+    picks=picks.slice(0,3);
+    return { name:g.name, game:g.game, team:g.team, picks:picks, score:picks.reduce(function(a,x){ return a+(x.radarScore||0); },0) };
+  }).filter(function(x){ return x.picks.length>=2; }).sort(function(a,b){ return (b.score||0)-(a.score||0); }).slice(0,3);
+
   var shock=loadLineupShockReport();
-  var sameBookDepth=buildPortfolioPairs(choosePortfolioSingles(radar,{singles:Math.min(6, radar.length), maxGame:2}), {pairs:6}).filter(function(x){ return x.sameBookBestDec!=null; }).length;
+  var previewPlan=architectPlans.find(function(x){ return x.id==='balanced'; }) || architectPlans[0] || null;
+  var corrSource = SLIP.length ? slipLegsResolved() : (previewPlan ? previewPlan.picks : []);
+  var corrLabel = SLIP.length ? 'Current betslip' : (previewPlan ? 'Balanced architect preview' : 'No slip loaded');
+  var corrNorm = corrSource.map(function(l){
+    var g=l.g||null, p=l.p||{};
+    var team=(p.side==='home'?(g&&g.homeAbbr||g&&g.home):(g&&g.awayAbbr||g&&g.away))||l.team||'';
+    return {name:p.name||l.name||'', game:(g?(g.away+' @ '+g.home):(l.game||'')), team:team, mk:l.mk||'hr'};
+  });
+  var gameCounts={}, teamCounts={};
+  corrNorm.forEach(function(l){ gameCounts[l.game]=(gameCounts[l.game]||0)+1; teamCounts[l.team]=(teamCounts[l.team]||0)+1; });
+  var sameGame=Object.keys(gameCounts).filter(function(k){ return gameCounts[k]>1; });
+  var sameTeam=Object.keys(teamCounts).filter(function(k){ return teamCounts[k]>1; });
+  var overlapScore=Math.min(99, sameGame.length*35 + sameTeam.length*20 + Math.max(0,corrNorm.length-3)*8);
+  var corrStatus=overlapScore>=65?'Fragile':(overlapScore>=35?'Connected':'Balanced');
 
   var summary='<div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:12px">'
     +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Best picks live</div><div style="font-size:28px;font-weight:800;line-height:1">'+radar.length+'</div><div class="help-note" style="margin-top:8px">Ranked playable prices</div></div>'
@@ -3717,16 +3807,28 @@ function renderAllInOne(){
     +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Same-book depth</div><div style="font-size:28px;font-weight:800;line-height:1">'+sameBookDepth+'</div><div class="help-note" style="margin-top:8px">Clean routing paths available</div></div>'
   +'</div>';
 
-  var architectHtml='<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">🏗️ Architect picks</div><div class="help-note" style="margin-bottom:12px">Your fastest four ways to attack the slate without tab-hopping.</div><div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">'+architectPlans.map(function(plan){ var b64=architectPayload(plan.picks); return '<div class="game-card open" style="padding:14px 16px"><div class="section-title">'+plan.title+'</div><div style="font-size:18px;font-weight:800;line-height:1.2">'+plan.picks.map(function(x){ return x.p.name; }).join(' + ')+'</div><div class="help-note" style="margin-top:8px">'+plan.note+'</div><div class="help-note" style="margin-top:10px">'+plan.picks.length+' leg'+(plan.picks.length===1?'':'s')+' · Win '+fmtPct(plan.joint)+' · Odds '+(plan.payoutDec?decToAmerican(plan.payoutDec):'—')+'</div><div style="margin-top:12px"><button onclick="loadArchitectSlip(\''+b64+'\')">Load this slip</button></div></div>'; }).join('')+'</div></div></div>';
+  var coachHtml='<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">🧠 Coach mode</div><div class="help-note" style="margin-bottom:12px">Your fastest daily gameplan: what to bet, what to wait on, and what to avoid.</div><div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">'+coachCards.join('')+'</div></div></div>';
+
+  var architectHtml='<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">🏗️ Architect picks</div><div class="help-note" style="margin-bottom:12px">Your fastest four ways to attack the slate without tab-hopping.</div><div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">'+architectPlans.slice(0,4).map(function(plan){ var b64=payload(plan.picks); return '<div class="game-card open" style="padding:14px 16px"><div class="section-title">'+plan.title+'</div><div style="font-size:18px;font-weight:800;line-height:1.2">'+plan.picks.map(function(x){ return x.p.name; }).join(' + ')+'</div><div class="help-note" style="margin-top:8px">'+plan.note+'</div><div class="help-note" style="margin-top:10px">'+plan.picks.length+' leg'+(plan.picks.length===1?'':'s')+' · Win '+fmtPct(plan.joint)+' · Odds '+(plan.payoutDec?decToAmerican(plan.payoutDec):'—')+'</div><div style="margin-top:12px"><button onclick="loadArchitectSlip(\''+b64+'\')">Load this slip</button></div></div>'; }).join('')+'</div></div></div>';
+
+  var disagreementHtml='<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">📚 Market disagreement board</div><div class="help-note" style="margin-bottom:12px">Shows where books disagree most so you can spot stale lines and price-shopping value fast.</div>'+(disagreementRows.length?('<table class="players"><thead><tr><th>Play</th><th>Best book</th><th>Worst book</th><th class="num">Gap</th><th>Read</th></tr></thead><tbody>'+disagreementRows.map(function(r){ return '<tr><td><b>'+r.x.p.name+'</b><div style="font-size:12px;color:#888">'+MARKET_META[r.x.mk].leg+' · '+r.x.g.away+' @ '+r.x.g.home+'</div></td><td>'+shortBookLabel(r.best.book)+' '+fmtAmerican(r.best.american)+'</td><td>'+shortBookLabel(r.worst.book)+' '+fmtAmerican(r.worst.american)+'</td><td class="num">'+(r.americanGap>=0?'+':'')+r.americanGap+'</td><td><div style="font-size:12px;color:#4b5563">'+(r.stale?'stale line / grab-now gap':'healthy disagreement but still worth shopping')+'</div></td></tr>'; }).join('')+'</tbody></table>'):'<div class="help-note">Not enough multi-book prices yet.</div>')+'</div></div>';
+
+  var whyNotHtml='<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">❓ Why not this?</div><div class="help-note" style="margin-bottom:12px">Near-miss plays that are close, but not clean enough yet — and exactly what is holding them back.</div>'+(whyNotRows.length?('<table class="players"><thead><tr><th>Play</th><th class="num">Radar</th><th>What is holding it back</th></tr></thead><tbody>'+whyNotRows.map(function(r){ return '<tr><td><b>'+r.x.p.name+'</b><div style="font-size:12px;color:#888">'+MARKET_META[r.x.mk].leg+' · '+r.x.g.away+' @ '+r.x.g.home+'</div></td><td class="num"><span class="chip" style="min-width:52px;justify-content:center;background:#11182712;color:#111827;font-weight:800">'+r.x.radarScore+'</span></td><td><div style="font-size:12px;color:#4b5563">'+r.blockers.join(' · ')+'</div></td></tr>'; }).join('')+'</tbody></table>'):'<div class="help-note">No obvious near-misses right now.</div>')+'</div></div>';
+
+  var corrHtml='<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">🕸️ Correlation map</div><div class="help-note" style="margin-bottom:12px">Reads how connected your slip is so you can see whether the card is balanced or secretly fragile.</div><div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:12px">'
+    +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Source</div><div style="font-size:18px;font-weight:800;line-height:1.2">'+corrLabel+'</div><div class="help-note" style="margin-top:8px">'+corrNorm.length+' leg'+(corrNorm.length===1?'':'s')+'</div></div>'
+    +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Overlap score</div><div style="font-size:28px;font-weight:800;line-height:1">'+overlapScore+'</div><div class="help-note" style="margin-top:8px">'+corrStatus+' exposure</div></div>'
+    +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Same-game stacks</div><div style="font-size:28px;font-weight:800;line-height:1">'+sameGame.length+'</div><div class="help-note" style="margin-top:8px">'+(sameGame.length?sameGame.join(' · '):'None')+'</div></div>'
+    +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Same-team clusters</div><div style="font-size:28px;font-weight:800;line-height:1">'+sameTeam.length+'</div><div class="help-note" style="margin-top:8px">'+(sameTeam.length?sameTeam.join(' · '):'None')+'</div></div>'
+  +'</div>'
+  +(corrNorm.length?('<table class="players"><thead><tr><th>Leg</th><th>Game link</th><th>Team link</th></tr></thead><tbody>'+corrNorm.map(function(l){ return '<tr><td><b>'+l.name+'</b><div style="font-size:12px;color:#888">'+MARKET_META[l.mk].leg+' · '+l.game+'</div></td><td>'+(gameCounts[l.game]>1?'<span class="chip" style="background:#f59e0b22;color:#b45309">same game</span>':'<span class="chip" style="background:#16a34a22;color:#16a34a">standalone</span>')+'</td><td>'+(teamCounts[l.team]>1?'<span class="chip" style="background:#2563eb22;color:#2563eb">same team</span>':'<span class="chip" style="background:#11182712;color:#111827">spread out</span>')+'</td></tr>'; }).join('')+'</tbody></table>'):'<div class="help-note">Load or architect a slip to see the map.</div>')+'</div></div>';
+
+  var ladderHtml='<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">🪜 Ladder builder</div><div class="help-note" style="margin-bottom:12px">Build multiple ways to attack the same hitter — safer, core, and ceiling versions — without rebuilding from scratch.</div><div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">'+(ladders.length?ladders.map(function(l){ var b64=payload(l.picks); return '<div class="game-card open" style="padding:14px 16px"><div class="section-title">'+l.name+'</div><div class="help-note">'+l.team+' · '+l.game+'</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">'+l.picks.map(function(p){ return '<span class="chip" style="background:#2d7ff922;color:#2d7ff9">'+MARKET_META[p.mk].short+' '+fmtAmerican(p.american)+'</span>'; }).join('')+'</div><div class="help-note" style="margin-top:10px">Safe to ceiling path using '+l.picks.length+' linked markets.</div><div style="margin-top:12px"><button onclick="loadArchitectSlip(\''+b64+'\')">Load ladder</button></div></div>'; }).join(''):'<div class="help-note">Need more multi-market prices on the same hitter to build ladders.</div>')+'</div></div></div>';
 
   var radarHtml='<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">📡 Fast-scan best picks</div><table class="players"><thead><tr><th>Play</th><th>Market</th><th class="num">Radar</th><th class="num">Model</th><th class="num">Edge</th><th>Why it stands out</th></tr></thead><tbody>'
-    +radar.slice(0,8).map(function(x){
-      return '<tr><td><b>'+x.p.name+'</b><div style="font-size:12px;color:#888">'+x.g.away+' @ '+x.g.home+'</div></td><td>'+MARKET_META[x.mk].leg+'</td><td class="num"><span class="chip" style="min-width:52px;justify-content:center;background:#11182712;color:#111827;font-weight:800">'+x.radarScore+'</span></td><td class="num">'+fmtPct(x.prob)+'</td><td class="num" style="color:'+(x.edge>=0?'#16a34a':'#db4437')+'">'+(x.edge>=0?'+':'')+(x.edge*100).toFixed(1)+'%</td><td><div style="font-size:12px;color:#4b5563">'+(x.reasons.join(' · ')||'priced and playable')+'</div></td></tr>';
-    }).join('')+'</tbody></table></div></div>';
+    +radar.slice(0,8).map(function(x){ return '<tr><td><b>'+x.p.name+'</b><div style="font-size:12px;color:#888">'+x.g.away+' @ '+x.g.home+'</div></td><td>'+MARKET_META[x.mk].leg+'</td><td class="num"><span class="chip" style="min-width:52px;justify-content:center;background:#11182712;color:#111827;font-weight:800">'+x.radarScore+'</span></td><td class="num">'+fmtPct(x.prob)+'</td><td class="num" style="color:'+(x.edge>=0?'#16a34a':'#db4437')+'">'+(x.edge>=0?'+':'')+(x.edge*100).toFixed(1)+'%</td><td><div style="font-size:12px;color:#4b5563">'+(x.reasons.join(' · ')||'priced and playable')+'</div></td></tr>'; }).join('')+'</tbody></table></div></div>';
 
-  var powerHtml='<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">🔥 Visual power board</div><div class="help-note" style="margin-bottom:12px">The most glanceable HR targets from the slate.</div><div class="parlay-grid">'
-    +(hrRows.length?hrRows.map(function(r,idx){ return '<div class="parlay-card" style="background:linear-gradient(180deg,#d9770612, rgba(255,255,255,0.92));border-color:#d9770633"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-size:28px;font-weight:900;line-height:1">#'+(idx+1)+'</div><div class="section-title" style="margin:4px 0 0;color:#d97706">'+r.name+'</div></div><div style="text-align:right"><div style="font-size:22px;font-weight:900;color:#d97706">'+r.power+'</div><div style="font-size:11px;color:#6b7280">PWR</div></div></div><div class="help-note" style="margin-top:8px">'+r.team+' · '+r.game+'</div><div class="parlay-stat" style="margin-top:10px"><span class="lbl">Model HR%</span><span class="val">'+fmtPct(r.prob)+'</span></div><div class="parlay-stat"><span class="lbl">Best odds</span><span class="val">'+(r.bestBook?shortBookLabel(r.bestBook)+' ':'')+fmtAmerican(r.best)+'</span></div><div class="parlay-stat"><span class="lbl">Edge</span><span class="val" style="color:'+(r.edge>=0?'#16a34a':'#dc2626')+'">'+(r.edge>=0?'+':'')+(r.edge*100).toFixed(1)+'%</span></div></div>'; }).join(''):'<div class="help-note">No HR board yet. Load all-market odds first.</div>')
-    +'</div></div></div>';
+  var powerHtml='<div class="game-card open"><div class="game-body" style="display:block;padding:18px"><div class="section-title">🔥 Visual power board</div><div class="help-note" style="margin-bottom:12px">The most glanceable HR targets from the slate.</div><div class="parlay-grid">'+(hrRows.length?hrRows.map(function(r,idx){ return '<div class="parlay-card" style="background:linear-gradient(180deg,#d9770612, rgba(255,255,255,0.92));border-color:#d9770633"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-size:28px;font-weight:900;line-height:1">#'+(idx+1)+'</div><div class="section-title" style="margin:4px 0 0;color:#d97706">'+r.name+'</div></div><div style="text-align:right"><div style="font-size:22px;font-weight:900;color:#d97706">'+r.power+'</div><div style="font-size:11px;color:#6b7280">PWR</div></div></div><div class="help-note" style="margin-top:8px">'+r.team+' · '+r.game+'</div><div class="parlay-stat" style="margin-top:10px"><span class="lbl">Model HR%</span><span class="val">'+fmtPct(r.prob)+'</span></div><div class="parlay-stat"><span class="lbl">Best odds</span><span class="val">'+(r.bestBook?shortBookLabel(r.bestBook)+' ':'')+fmtAmerican(r.best)+'</span></div><div class="parlay-stat"><span class="lbl">Edge</span><span class="val" style="color:'+(r.edge>=0?'#16a34a':'#dc2626')+'">'+(r.edge>=0?'+':'')+(r.edge*100).toFixed(1)+'%</span></div></div>'; }).join(''):'<div class="help-note">No HR board yet. Load all-market odds first.</div>')+'</div></div></div>';
 
   var shockHtml='';
   if(shock && shock.counts){
@@ -3739,7 +3841,7 @@ function renderAllInOne(){
     +'</div></div>';
   }
 
-  wrap.innerHTML = summary + architectHtml + radarHtml + powerHtml + shockHtml;
+  wrap.innerHTML = summary + coachHtml + architectHtml + disagreementHtml + whyNotHtml + corrHtml + ladderHtml + radarHtml + powerHtml + shockHtml;
 }
 
 function renderInsights(){
