@@ -631,7 +631,7 @@ tr.flash{animation:flash 1.2s ease}
 .drawer-h .sub{font-size:12px;color:var(--notion-text-soft)}
 .drawer-h .sp{flex:1}
 .drawer-h button{padding:6px 10px;font-size:12px}
-.drawer-b{padding:12px 14px;overflow:auto}
+.drawer-b{padding:12px 14px;overflow:auto;flex:1 1 auto;min-height:0;overscroll-behavior:contain}
 @media (max-width: 720px){
   .drawer{left:12px;right:12px;bottom:12px;width:auto;max-height:min(68vh, calc(100vh - 24px))}
 }
@@ -642,7 +642,7 @@ tr.flash{animation:flash 1.2s ease}
 .leg .rm:hover{color:var(--notion-text)}
 .avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid var(--notion-border-soft);background:var(--notion-gray-bg)}
 .nameRow{display:flex;align-items:center;gap:10px}
-.drawer-sum{padding:12px 14px;border-top:1px solid var(--notion-border-soft);background:color-mix(in srgb,var(--notion-bg-soft) 70%, transparent)}
+.drawer-sum{padding:12px 14px;border-top:1px solid var(--notion-border-soft);background:color-mix(in srgb,var(--notion-bg-soft) 70%, transparent);position:sticky;bottom:0}
 .drawer-sum .row{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:3px 0}
 .drawer-sum .row .lbl{color:var(--notion-text-soft)}
 .drawer-sum .row .val{font-weight:800;font-variant-numeric:tabular-nums}
@@ -685,10 +685,13 @@ body.mobile-layout .parlay-card{padding:12px!important;background:var(--notion-s
 body.mobile-layout .parlay-card h4{font-size:13px;margin-top:10px}
 body.mobile-layout .parlay-stat{font-size:12px}
 body.mobile-layout table.players{display:block;overflow-x:auto;font-size:12px}
-body.mobile-layout .drawer{left:8px;right:8px;bottom:8px;width:auto;max-height:72vh}
-body.mobile-layout .drawer-h{padding:10px;gap:6px}
+body.mobile-layout.mobile-slip-open{overflow:hidden}
+body.mobile-layout .drawer{left:max(8px, env(safe-area-inset-left, 0px));right:max(8px, env(safe-area-inset-right, 0px));bottom:max(8px, env(safe-area-inset-bottom, 0px));width:auto;max-height:min(82dvh, calc(100dvh - 16px));border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,.34)}
+body.mobile-layout .drawer-h{padding:10px;gap:6px;position:sticky;top:0;z-index:2}
+body.mobile-layout .drawer-h .sp{display:none}
 body.mobile-layout .drawer-h button{padding:5px 8px;font-size:11px}
 body.mobile-layout .drawer-b{padding:10px}
+body.mobile-layout .drawer-sum{padding-bottom:calc(12px + env(safe-area-inset-bottom, 0px))}
 body.mobile-layout .toolbar{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--notion-bg) 94%, transparent);backdrop-filter:blur(10px);border:1px solid var(--notion-border-soft);border-radius:16px}
 body.mobile-layout .statusbar,body.mobile-layout .log{display:none}
 body.mobile-layout .mobile-summary-bar{display:flex;position:sticky;top:88px;z-index:39;gap:8px;overflow-x:auto;padding:8px 0 10px;margin:0 0 6px;scrollbar-width:none;-ms-overflow-style:none}
@@ -1065,8 +1068,8 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
 <button class="mobile-slip-fab hidden" id="mobileSlipFab">🧾 Open slip</button>
 
 <script>
-const APP_VERSION = 'v1.35';
-const APP_UPDATED = 'Updated Jun 9, 2026 2:05 AM ET';
+const APP_VERSION = 'v1.36';
+const APP_UPDATED = 'Updated Jun 9, 2026 2:52 AM ET';
 const APP_PASSWORD = 'adi11';
 {
   const av=document.getElementById('appVersion');
@@ -1121,8 +1124,11 @@ function renderMobileChrome(){
   }
   if(fab){
     var hidden=(document.getElementById('betslip')||{classList:{contains:function(){return true;}}}).classList.contains('hidden');
+    document.body.classList.toggle('mobile-slip-open', !!(mobile && !hidden));
     fab.classList.toggle('hidden', !mobile || !hidden);
     fab.textContent='🧾 '+(SLIP.length?('Slip · '+SLIP.length):'Open slip');
+  } else {
+    document.body.classList.remove('mobile-slip-open');
   }
 }
 function toggleMobileSlip(){
