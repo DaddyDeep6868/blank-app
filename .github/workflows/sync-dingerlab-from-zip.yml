@@ -35,8 +35,8 @@ jobs:
         id: zip
         shell: bash
         run: |
-          if [ -n "$ github.event.inputs.zip_path " ]; then
-            ZIP_PATH="$ github.event.inputs.zip_path "
+          if [ -n "${{ github.event.inputs.zip_path }}" ]; then
+            ZIP_PATH="${{ github.event.inputs.zip_path }}"
           else
             ZIP_PATH="$(ls -t incoming/*.zip 2>/dev/null | head -n 1 || true)"
           fi
@@ -56,7 +56,7 @@ jobs:
 
       - name: Run sync script
         run: |
-          python scripts/sync_dingerlab_from_zip.py "$ steps.zip.outputs.zip_path "
+          python scripts/sync_dingerlab_from_zip.py "${{ steps.zip.outputs.zip_path }}"
 
       - name: Commit synced files
         shell: bash
@@ -71,6 +71,6 @@ jobs:
             exit 0
           fi
 
-          ZIP_NAME="$(basename "$ steps.zip.outputs.zip_path ")"
+          ZIP_NAME="$(basename "${{ steps.zip.outputs.zip_path }}")"
           git commit -m "Sync DingerLab from ${ZIP_NAME}"
           git push
