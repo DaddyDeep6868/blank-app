@@ -1072,7 +1072,7 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
 <button class="mobile-slip-fab hidden" id="mobileSlipFab">🧾 Open slip</button>
 
 <script>
-const APP_VERSION = 'v1.41';
+const APP_VERSION = 'v1.42';
 const APP_UPDATED = 'Updated Jun 9, 2026 — Sharp + Analytics + Awareness + Matchup DNA (pitch-type modeling)';
 const APP_PASSWORD = 'adi11';
 {
@@ -3560,6 +3560,25 @@ function renderGames(){
   $$('#gamesContainer .game-head').forEach(h=>h.onclick=()=>h.parentElement.classList.toggle('open'));
 }
 
+/* ===== v1.42: wager / payout / profit rows on parlay cards ===== */
+let _WAGER_SEQ=0;
+function wagerRowsHTML(dec, defStake){
+  if(!dec || dec<=1) return '';
+  const id='wg_'+(++_WAGER_SEQ);
+  const stk=(defStake!=null && defStake>0)?defStake:10;
+  return '<div class="parlay-stat"><span class="lbl">Wager</span><span class="val">$ <input id="'+id+'" type="number" min="0" step="1" value="'+stk.toFixed(2)+'" data-dec="'+dec+'" oninput="onWagerInput(\''+id+'\')" style="width:84px;padding:2px 6px;border-radius:6px;border:1px solid rgba(128,128,128,.45);background:transparent;color:inherit;font:inherit;text-align:right"></span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Potential payout</span><span class="val" id="'+id+'_pay">$'+(stk*dec).toFixed(2)+'</span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Potential profit</span><span class="val ev-pos" id="'+id+'_prof">+$'+(stk*(dec-1)).toFixed(2)+'</span></div>';
+}
+function onWagerInput(id){
+  const el=document.getElementById(id); if(!el) return;
+  const dec=Number(el.dataset.dec)||0;
+  const stk=Math.max(0, parseFloat(el.value)||0);
+  const pay=document.getElementById(id+'_pay'), prof=document.getElementById(id+'_prof');
+  if(pay) pay.textContent='$'+(stk*dec).toFixed(2);
+  if(prof) prof.textContent=(stk>0?'+$':'$')+(stk*(dec-1)).toFixed(2);
+}
+
 function globalParlayCardHTML(pr,rank){
   const bookLine = pr.sameBookBestDec ? (pr.bestBook==='draftkings'?'DK':'Fanatics') + ' ' + decToAmerican(pr.sameBookBestDec) : '—';
   const tA = pr.aGameObj && pr.aGameObj.gameDate ? fmtLocalTime(pr.aGameObj.gameDate) : '';
@@ -3603,6 +3622,7 @@ function globalParlayCardHTML(pr,rank){
     <div class="parlay-stat"><span class="lbl">Best same-book</span><span class="val">${bookLine}</span></div>
     <div class="parlay-stat"><span class="lbl">Expected value</span><span class="val ${_evCls}">${_evTxt}</span></div>
     <div class="parlay-stat"><span class="lbl">Suggested stake</span><span class="val">${_stkTxt}</span></div>
+    ${wagerRowsHTML(_dec, (_stk&&_stk.stake>0)?_stk.stake:null)}
     <div class="parlay-stat"><span class="lbl">Confidence</span><span class="val"><span class="chip" style="background:${_wkCol}22;color:${_wkCol}" title="${_reasons||'No standout factors'}">${_wk}</span></span></div>
     <div class="parlay-stat"><span class="lbl">Add to betslip</span><span class="val"><button class="ghost" style="padding:2px 10px" onclick="addSlipGP('${pr.aGameObj.id}','${encodeURIComponent(pr.a.name)}'); addSlipGP('${pr.bGameObj.id}','${encodeURIComponent(pr.b.name)}');">Add both</button></span></div>
   </div>`;
@@ -5414,6 +5434,7 @@ function globalNLegCardHTML(b,rank){
     <div class="parlay-stat"><span class="lbl">Model edge vs market</span><span class="val ${_edge==null?'':(_edge>=0?'ev-pos':'ev-neg')}">${_edgeTxt}</span></div>
     <div class="parlay-stat"><span class="lbl">Expected value</span><span class="val ${_evCls}">${_evTxt}</span></div>
     <div class="parlay-stat"><span class="lbl">Suggested stake</span><span class="val">${_stkTxt}</span></div>
+    ${wagerRowsHTML(_bd, (_stk&&_stk.stake>0)?_stk.stake:null)}
     <div class="parlay-stat"><span class="lbl">Confidence</span><span class="val"><span class="chip" style="background:${_wkCol}22;color:${_wkCol}" title="${_reasons||'No standout factors'}">${_wk}</span></span></div>
     <div class="parlay-stat"><span class="lbl">Fair odds</span><span class="val">${fairLine}</span></div>
     <div class="parlay-stat"><span class="lbl">Best same-book</span><span class="val">${sameBookLine}</span></div>

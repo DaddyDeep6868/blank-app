@@ -109,3 +109,9 @@ Don't hardcode your key if the repo is public. Instead:
 - Empty states are now diagnostic: they distinguish "no HR odds loaded at all" (key/quota or
   books haven't posted props yet), "lineups filter hiding everyone" (Confirmed-only before
   lineups post), and "filters too strict".
+
+## v1.42 — Wager calculator on parlay cards
+- Cross-game pair cards and N-leg builder cards now show **Wager / Potential payout /
+  Potential profit** rows under Suggested stake. The wager input is editable and recalculates
+  live using the same best decimal odds the card's EV uses (same-book best, falling back to
+  mixed-books). Defaults to the Kelly suggested stake when it's a bet, otherwise $10.
