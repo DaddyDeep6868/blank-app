@@ -689,6 +689,31 @@ body.mobile-layout .drawer{left:8px;right:8px;bottom:8px;width:auto;max-height:7
 body.mobile-layout .drawer-h{padding:10px;gap:6px}
 body.mobile-layout .drawer-h button{padding:5px 8px;font-size:11px}
 body.mobile-layout .drawer-b{padding:10px}
+body.mobile-layout .toolbar{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--notion-bg) 94%, transparent);backdrop-filter:blur(10px);border:1px solid var(--notion-border-soft);border-radius:16px}
+body.mobile-layout .statusbar,body.mobile-layout .log{display:none}
+body.mobile-layout .mobile-summary-bar{display:flex;position:sticky;top:88px;z-index:39;gap:8px;overflow-x:auto;padding:8px 0 10px;margin:0 0 6px;scrollbar-width:none;-ms-overflow-style:none}
+body.mobile-layout .mobile-summary-bar::-webkit-scrollbar{display:none}
+body.mobile-layout .mobile-summary-pill{flex:0 0 auto;min-width:120px;padding:10px 12px;border-radius:14px;border:1px solid var(--notion-border-soft);background:color-mix(in srgb,var(--notion-surface) 90%, transparent);box-shadow:var(--notion-shadow)}
+body.mobile-layout .mobile-summary-pill .k{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--notion-text-soft)}
+body.mobile-layout .mobile-summary-pill .v{font-size:18px;font-weight:900;line-height:1.1;margin-top:4px}
+body.mobile-layout .mobile-summary-pill .s{font-size:11px;color:var(--notion-text-soft);margin-top:4px}
+body.mobile-layout .mobile-quickbar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;position:sticky;top:154px;z-index:38;padding:0 0 10px;margin-bottom:4px;background:linear-gradient(180deg,var(--notion-bg) 75%, rgba(255,255,255,0))}
+body.mobile-layout .mobile-quickbar button{padding:9px 8px;font-size:11px;border-radius:12px;background:var(--notion-surface);color:var(--notion-text);border:1px solid var(--notion-border-soft);box-shadow:var(--notion-shadow)}
+body.mobile-layout .mobile-quickbar button.active{background:#111827;color:#fff;border-color:#111827}
+body.mobile-layout .mobile-fold{display:block;margin-top:10px;border:1px solid var(--notion-border-soft);border-radius:16px;background:var(--notion-surface);box-shadow:var(--notion-shadow);overflow:hidden}
+body.mobile-layout .mobile-fold>summary{display:flex;justify-content:space-between;align-items:center;gap:12px;list-style:none;cursor:pointer;padding:13px 14px;font-weight:800;font-size:13px;background:color-mix(in srgb,var(--notion-bg-soft) 90%, transparent)}
+body.mobile-layout .mobile-fold>summary::-webkit-details-marker{display:none}
+body.mobile-layout .mobile-fold-note{font-size:11px;font-weight:600;color:var(--notion-text-soft);text-align:right}
+body.mobile-layout .mobile-fold-body{padding:0 0 2px}
+body.mobile-layout .mobile-fold .game-card{margin-top:0;border:none;box-shadow:none;border-radius:0;background:transparent}
+body.mobile-layout .mobile-fold .game-card>.game-body{padding:12px}
+body.mobile-layout .mobile-fold .game-card>.game-body>.section-title:first-child,
+body.mobile-layout .mobile-fold .game-card>.game-body>.help-note:first-of-type{display:none}
+body.mobile-layout #allInOneResults .manual-grid{gap:10px}
+body.mobile-layout #allInOneResults table.players td,body.mobile-layout #allInOneResults table.players th{padding:8px 6px;font-size:11px}
+body.mobile-layout .chip{font-size:10.5px;padding:2px 7px}
+body.mobile-layout .mobile-slip-fab{display:inline-flex;position:fixed;right:10px;bottom:84px;z-index:9100;padding:10px 14px;border-radius:999px;box-shadow:0 12px 30px rgba(0,0,0,.18);background:#111827;color:#fff;border:1px solid rgba(255,255,255,.08)}
+body.mobile-layout .mobile-slip-fab.hidden{display:none}
 </style>
 </head>
 <body class="locked">
@@ -731,6 +756,7 @@ body.mobile-layout .drawer-b{padding:10px}
   </div>
   <div class="statusbar" id="status">Ready. Pick a date and load the slate, or try a sample game.</div>
   <div class="log" id="log"></div>
+  <div class="mobile-summary-bar" id="mobileSummaryBar"></div>
 
   <div class="tabbar">
     <button class="active" data-tab="games">Games &amp; Parlays</button>
@@ -742,6 +768,12 @@ body.mobile-layout .drawer-b{padding:10px}
     <button data-tab="track">Tracking</button>
     <button data-tab="parks">Ballpark factors</button>
     <button data-tab="method">Methodology</button>
+  </div>
+  <div class="mobile-quickbar" id="mobileQuickbar">
+    <button data-mobile-jump="allinone">HQ</button>
+    <button data-mobile-jump="command">Command</button>
+    <button data-mobile-jump="slip">Betslip</button>
+    <button data-mobile-jump="top">Top</button>
   </div>
 
   <!-- SETTINGS (hidden) -->
@@ -1030,10 +1062,11 @@ body.mobile-layout .drawer-b{padding:10px}
     <div class="row"><span class="lbl">Potential profit</span><span class="val" id="slipProfit">—</span></div>
   </div>
 </div>
+<button class="mobile-slip-fab hidden" id="mobileSlipFab">🧾 Open slip</button>
 
 <script>
-const APP_VERSION = 'v1.34';
-const APP_UPDATED = 'Updated Jun 8, 2026 7:48 PM ET';
+const APP_VERSION = 'v1.35';
+const APP_UPDATED = 'Updated Jun 9, 2026 2:05 AM ET';
 const APP_PASSWORD = 'adi11';
 {
   const av=document.getElementById('appVersion');
@@ -1058,6 +1091,48 @@ function applyMobileLayout(){
     btn.classList.toggle('active', enabled);
     btn.textContent='📱 Mobile layout: '+(enabled?'On':'Off');
   }
+  renderMobileChrome();
+}
+function renderMobileChrome(){
+  var mobile=currentMobileLayoutEnabled();
+  var summary=document.getElementById('mobileSummaryBar');
+  var quick=document.getElementById('mobileQuickbar');
+  var fab=document.getElementById('mobileSlipFab');
+  if(summary){
+    if(!mobile){ summary.innerHTML=''; summary.style.display='none'; }
+    else{
+      summary.style.display='flex';
+      var priced=0, confirmed=0;
+      try{
+        var all=collectPortfolioCandidates?collectPortfolioCandidates():[];
+        priced=all.length||0;
+        confirmed=all.filter(function(x){ return x.g&&x.g.env&&x.g.env.lineupsConfirmed&&((x.ev||0)>0); }).length;
+      }catch(e){}
+      var label=activeTab==='allinone'?'All-in-one':(activeTab==='command'?'Command':(activeTab==='portfolio'?'Portfolio':(activeTab==='games'?'Games':'Live')));
+      summary.innerHTML='<div class="mobile-summary-pill"><div class="k">Tab</div><div class="v">'+label+'</div><div class="s">Quick-nav ready</div></div>'
+        +'<div class="mobile-summary-pill"><div class="k">Slip</div><div class="v">'+SLIP.length+'</div><div class="s">leg'+(SLIP.length===1?'':'s')+'</div></div>'
+        +'<div class="mobile-summary-pill"><div class="k">Confirmed</div><div class="v">'+confirmed+'</div><div class="s">ready +EV</div></div>'
+        +'<div class="mobile-summary-pill"><div class="k">Priced</div><div class="v">'+priced+'</div><div class="s">live candidates</div></div>';
+    }
+  }
+  if(quick){
+    quick.style.display=mobile?'grid':'none';
+    quick.querySelectorAll('button').forEach(function(b){ b.classList.toggle('active', (b.dataset.mobileJump||'')===activeTab); });
+  }
+  if(fab){
+    var hidden=(document.getElementById('betslip')||{classList:{contains:function(){return true;}}}).classList.contains('hidden');
+    fab.classList.toggle('hidden', !mobile || !hidden);
+    fab.textContent='🧾 '+(SLIP.length?('Slip · '+SLIP.length):'Open slip');
+  }
+}
+function toggleMobileSlip(){
+  var d=document.getElementById('betslip');
+  if(!d) return;
+  if(d.classList.contains('hidden')) openSlip(); else closeSlip();
+}
+function mobileSection(label,note,content,open){
+  if(!currentMobileLayoutEnabled()) return content;
+  return '<details class="mobile-fold"'+(open?' open':'')+'><summary><span>'+label+'</span><span class="mobile-fold-note">'+(note||'')+'</span></summary><div class="mobile-fold-body">'+content+'</div></details>';
 }
 
 /* =========================================================================
@@ -1987,11 +2062,13 @@ function openSlip(){
   const d=$('#betslip');
   if(!d) return;
   d.classList.remove('hidden');
+  renderMobileChrome();
 }
 function closeSlip(){
   const d=$('#betslip');
   if(!d) return;
   d.classList.add('hidden');
+  renderMobileChrome();
 }
 
 function addToSlip(p, g){
@@ -2297,6 +2374,7 @@ function renderSlip(){
     wagerInput.onchange=function(){ updateSlipPayoutOutputs(st); };
     updateSlipPayoutOutputs(st);
   })();
+  renderMobileChrome();
 }
 
 
@@ -3292,6 +3370,7 @@ function switchTab(t){
   if(t==='insights')renderInsights();
   if(t==='command')renderCommandCenter();
   if(t==='portfolio')renderPortfolio();
+  renderMobileChrome();
 }
 
 // Clipboard helper (works without fiddly escaping in onclick handlers)
@@ -3320,7 +3399,9 @@ function init(){
   $$('.tabbar button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   $('#btnSettings').onclick=()=>{const p=$('#settingsPanel');p.style.display=p.style.display==='none'?'':'none';};
   if($('#btnMobileMode')) $('#btnMobileMode').onclick=()=>{ var enabled=currentMobileLayoutEnabled(); localStorage.setItem(MOBILE_LAYOUT_KEY, enabled ? 'off' : 'on'); applyMobileLayout(); };
-  window.addEventListener('resize', ()=>{ if(localStorage.getItem(MOBILE_LAYOUT_KEY)==null) applyMobileLayout(); });
+  if($('#mobileSlipFab')) $('#mobileSlipFab').onclick=()=>toggleMobileSlip();
+  $$('#mobileQuickbar [data-mobile-jump]').forEach(function(btn){ btn.onclick=function(){ var target=btn.dataset.mobileJump; if(target==='slip'){ toggleMobileSlip(); return; } if(target==='top'){ window.scrollTo({top:0,behavior:'smooth'}); return; } switchTab(target); window.scrollTo({top:0,behavior:'smooth'}); }; });
+  window.addEventListener('resize', ()=>{ if(localStorage.getItem(MOBILE_LAYOUT_KEY)==null) applyMobileLayout(); else renderMobileChrome(); });
   const loadAll=async()=>{
     await loadSlate($('#dateInput').value);
     try{
@@ -3841,7 +3922,17 @@ function renderAllInOne(){
     +'</div></div>';
   }
 
-  wrap.innerHTML = summary + coachHtml + architectHtml + disagreementHtml + whyNotHtml + corrHtml + ladderHtml + radarHtml + powerHtml + shockHtml;
+  wrap.innerHTML = summary
+    + mobileSection('Coach mode','Daily gameplan', coachHtml, true)
+    + mobileSection('Architect picks','Fast slip presets', architectHtml, false)
+    + mobileSection('Market disagreement','Best book gaps', disagreementHtml, false)
+    + mobileSection('Why not this?','Near-miss blockers', whyNotHtml, false)
+    + mobileSection('Correlation map','Slip overlap view', corrHtml, false)
+    + mobileSection('Ladder builder','Safe to ceiling paths', ladderHtml, false)
+    + mobileSection('Fast-scan best picks','Highest radar plays', radarHtml, true)
+    + mobileSection('Visual power board','Top HR targets', powerHtml, false)
+    + (shockHtml ? mobileSection('Lineup shock','Latest moves', shockHtml, false) : '');
+  renderMobileChrome();
 }
 
 function renderInsights(){
