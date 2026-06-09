@@ -1072,7 +1072,7 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
 <button class="mobile-slip-fab hidden" id="mobileSlipFab">🧾 Open slip</button>
 
 <script>
-const APP_VERSION = 'v1.40';
+const APP_VERSION = 'v1.41';
 const APP_UPDATED = 'Updated Jun 9, 2026 — Sharp + Analytics + Awareness + Matchup DNA (pitch-type modeling)';
 const APP_PASSWORD = 'adi11';
 {
@@ -4123,13 +4123,27 @@ function slateSummary(){
   $('#builderResults').innerHTML=head+'<table class="players"><thead><tr><th>Market</th><th class="num">Priced</th><th class="num">+EV</th><th class="num">Avg edge</th><th>Best play</th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
 
+function insightsEmptyMsg(){
+  var anyHrOdds=false, anyVisible=false;
+  GAMES.forEach(function(g){ (g.players||[]).forEach(function(p){
+    if(p._mktOdds&&p._mktOdds.hr&&p._mktOdds.hr.best!=null) anyHrOdds=true;
+    if(playerBuildAllowed(p,g)) anyVisible=true;
+  }); });
+  if(!anyHrOdds) return '<div class="help-note">\u26a0\ufe0f <b>No HR odds loaded.</b> Click <b>Load slate + all-market odds</b> (or \ud83d\udd04 Refresh odds). If the sidebar shows <b>Live odds ready: 0/4 books</b>, the OddsBlaze key or quota is the problem. If books are fine but nothing applies, sportsbooks may simply not have posted HR props for this slate yet \u2014 they often appear late morning ET.</div>';
+  if(!anyVisible) return '<div class="help-note">\u26a0\ufe0f HR odds are loaded, but the <b>Lineups filter</b> is hiding every hitter (e.g. \u201cConfirmed only\u201d before lineups post). Switch it to <b>All hitters</b> or run \u2705 Confirm lineups.</div>';
+  return '<div class="help-note">HR odds are loaded but no rows passed the filters \u2014 try relaxing Min leg HR% or the value filters.</div>';
+}
 function insightRows(){
   var rows=[];
   GAMES.forEach(function(g){ (g.players||[]).forEach(function(p){
     if(!playerBuildAllowed(p,g)) return;
     Object.keys(MARKET_META).forEach(function(mk){
       var mc=p._mkt&&p._mkt[mk]; var mo=p._mktOdds&&p._mktOdds[mk];
-      if(!mc||mc.p==null||!mo||mo.best==null||mo.mktProb==null) return;
+      if(!mc||mc.p==null||!mo||mo.best==null) return;
+      /* v1.41: novig fair prob needs a two-sided (Over+Under) market, but HR props are often
+         one-sided. Fall back to the implied prob of the best price so the board still fills. */
+      var fairP=(mo.mktProb!=null)?mo.mktProb:amToImplied(mo.best);
+      if(fairP==null) return;
       var dec=amToDecimal(mo.best); if(!dec||dec<=1) return;
       var pa=Math.max(1, Number(p.PA||0));
       var ab=Math.max(1, Number(p.AB||0)||pa);
@@ -4141,11 +4155,12 @@ function insightRows(){
       var iso=(ba!=null&&slg!=null) ? (slg-ba) : null;
       var seasonRate = mk==='hr' ? hr/pa : (mk==='hits' ? h/pa : (mk==='hits2' ? (dbl+tr+hr)/pa : (mk==='tb' ? totalBases/pa : Number(p.RBI||0)/pa)));
       var recentRate=(Number(p.recPA||0)>0) ? (Number(p.recHR||0)/Number(p.recPA||0)) : null;
-      var edge=mc.p-mo.mktProb;
+      var edge=mc.p-fairP;
       var conf=confidenceLabel(p);
       var ev=parlayEV(calibratedJoint(mc.p,conf),dec);
       rows.push({
         mk:mk,
+        fairSrc:(mo.mktProb!=null?'novig':'implied'),
         name:p.name,
         game:g.away+' @ '+g.home,
         team:(p.side==='home'?(g.homeAbbr||g.home):(g.awayAbbr||g.away))||'',
@@ -4423,7 +4438,7 @@ function renderInsights(){
   if(cheat){
     var boardRows=hrRows.slice(0,12);
     if(!boardRows.length){
-      cheat.innerHTML='<div class="help-note">No HR prices yet. Load all-market odds first.</div>';
+      cheat.innerHTML=insightsEmptyMsg();
     } else {
       var bestProb=boardRows.slice().sort(function(a,b){ return (b.prob-a.prob); })[0];
       var bestEdge=boardRows.slice().sort(function(a,b){ return (b.edge-a.edge); })[0];
@@ -4462,7 +4477,7 @@ function renderInsights(){
   }
   if(topFive){
     if(!hrRows.length){
-      topFive.innerHTML='<div class="help-note">No HR prices yet. Load all-market odds first.</div>';
+      topFive.innerHTML=insightsEmptyMsg();
     } else {
       var cards=insightTopFiveCards(hrRows).slice(0,5);
       topFive.innerHTML='<div class="parlay-grid">'+cards.map(function(card,idx){

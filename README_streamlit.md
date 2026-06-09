@@ -99,3 +99,13 @@ Don't hardcode your key if the repo is public. Instead:
 - **Graceful degradation**: if Savant data can't be fetched (or when running the HTML without
   the wrapper), every multiplier is ×1.00 and the app behaves exactly as before. Applies to the
   HR market only.
+
+## v1.41 — Insights fix
+- **Fixed: "No HR prices yet" on a loaded slate.** The cheat sheet / Top 5 / heatmap / Coach
+  mode / Command Center all required a *two-sided* (Over+Under) market to compute a devigged
+  fair probability — but HR props are often posted one-sided, so the whole Insights layer could
+  stay empty even with prices loaded. Now falls back to the implied probability of the best
+  price when no Under exists (rows carry a fairSrc flag: novig vs implied).
+- Empty states are now diagnostic: they distinguish "no HR odds loaded at all" (key/quota or
+  books haven't posted props yet), "lineups filter hiding everyone" (Confirmed-only before
+  lineups post), and "filters too strict".
