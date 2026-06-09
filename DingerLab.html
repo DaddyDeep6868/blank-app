@@ -762,21 +762,17 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
   <div class="mobile-summary-bar" id="mobileSummaryBar"></div>
 
   <div class="tabbar">
-    <button class="active" data-tab="games">Games &amp; Parlays</button>
-    <button data-tab="allinone">All-in-one</button>
-    <button data-tab="insights">Insights</button>
-    <button data-tab="command">Command Center</button>
-    <button data-tab="portfolio">Portfolio</button>
-    <button data-tab="manual">Manual entry</button>
+    <button class="active" data-tab="dashboard">Dashboard</button>
+    <button data-tab="games">Games</button>
+    <button data-tab="builder">Builder</button>
     <button data-tab="track">Tracking</button>
-    <button data-tab="parks">Ballpark factors</button>
-    <button data-tab="method">Methodology</button>
+    <button data-tab="tools">Tools</button>
   </div>
   <div class="mobile-quickbar" id="mobileQuickbar">
-    <button data-mobile-jump="allinone">HQ</button>
-    <button data-mobile-jump="command">Command</button>
+    <button data-mobile-jump="dashboard">Home</button>
+    <button data-mobile-jump="games">Games</button>
+    <button data-mobile-jump="builder">Builder</button>
     <button data-mobile-jump="slip">Betslip</button>
-    <button data-mobile-jump="top">Top</button>
   </div>
 
   <!-- SETTINGS (hidden) -->
@@ -787,8 +783,23 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
     </div></div>
   </div>
 
+  <!-- TAB: DASHBOARD -->
+  <div data-panel="dashboard">
+    <div class="game-card open"><div class="game-body" style="display:block;padding:18px">
+      <div class="section-title">Dashboard</div>
+      <p class="help-note">The new home screen: fast summary first, then command reads, insight previews, and one deeper HQ section if you want more context.</p>
+      <div id="dashboardSummary" style="margin-top:10px"></div>
+    </div></div>
+    <div id="dashboardCommandSlot" style="margin-top:14px"></div>
+    <div id="dashboardInsightsSlot" style="margin-top:14px"></div>
+    <details class="game-card open" style="margin-top:14px">
+      <summary style="cursor:pointer;list-style:none;padding:18px;font-weight:800">Deep scan HQ</summary>
+      <div id="dashboardAllInOneSlot" style="padding:0 18px 18px"></div>
+    </details>
+  </div>
+
   <!-- TAB: GAMES -->
-  <div data-panel="games">
+  <div data-panel="games" style="display:none">
     <div class="game-card open" id="marketBar"><div class="game-body" style="display:block;padding:14px 18px">
       <div class="section-title">&#x1F3AF; Prop market</div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">
@@ -884,6 +895,38 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
     <div id="feedContainer"></div>
     <div id="steamContainer"></div>
     <div id="gamesContainer"><div class="empty">No games loaded yet. Use <b>Load slate + all-market odds</b> for live data.</div></div>
+  </div>
+
+  <!-- TAB: BUILDER -->
+  <div data-panel="builder" style="display:none">
+    <div class="game-card open"><div class="game-body" style="display:block;padding:18px">
+      <div class="section-title">Builder</div>
+      <p class="help-note">One place for slip construction, routing, round-robin logic, and portfolio building. Basic actions stay up front, deeper controls stay below.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+        <button class="mktbtn" data-mkt="hr" onclick="setMarket('hr')">💣 Home Run</button>
+        <button class="mktbtn" data-mkt="hits" onclick="setMarket('hits')">🏏 1+ Hit</button>
+        <button class="mktbtn" data-mkt="hits2" onclick="setMarket('hits2')">🏏 2+ Hits</button>
+        <button class="mktbtn" data-mkt="tb" onclick="setMarket('tb')">📐 2+ TB</button>
+        <button class="mktbtn" data-mkt="rbi" onclick="setMarket('rbi')">🏃 1+ RBI</button>
+      </div>
+    </div></div>
+    <div id="builderBookSlot" style="margin-top:14px"></div>
+    <div id="builderPairsSlot" style="margin-top:14px"></div>
+    <div id="builderMainSlot" style="margin-top:14px"></div>
+    <div id="builderFeedSlot" style="margin-top:14px"></div>
+    <div id="builderSteamSlot" style="margin-top:14px"></div>
+    <div id="builderPortfolioSlot" style="margin-top:14px"></div>
+  </div>
+
+  <!-- TAB: TOOLS -->
+  <div data-panel="tools" style="display:none">
+    <div class="game-card open"><div class="game-body" style="display:block;padding:18px">
+      <div class="section-title">Tools</div>
+      <p class="help-note">Manual entry, reference data, and methodology live here now so the main workflow stays cleaner.</p>
+    </div></div>
+    <div id="toolsManualSlot" style="margin-top:14px"></div>
+    <div id="toolsParksSlot" style="margin-top:14px"></div>
+    <div id="toolsMethodSlot" style="margin-top:14px"></div>
   </div>
 
   <!-- TAB: ALL IN ONE -->
@@ -1072,8 +1115,8 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
 <button class="mobile-slip-fab hidden" id="mobileSlipFab">🧾 Open slip</button>
 
 <script>
-const APP_VERSION = 'v1.42';
-const APP_UPDATED = 'Updated Jun 9, 2026 — Sharp + Analytics + Awareness + Matchup DNA (pitch-type modeling)';
+const APP_VERSION = 'v1.43';
+const APP_UPDATED = 'Updated Jun 9, 2026 — cleaner layout + workflow redesign';
 const APP_PASSWORD = 'adi11';
 {
   const av=document.getElementById('appVersion');
@@ -1115,7 +1158,7 @@ function renderMobileChrome(){
         priced=all.length||0;
         confirmed=all.filter(function(x){ return x.g&&x.g.env&&x.g.env.lineupsConfirmed&&((x.ev||0)>0); }).length;
       }catch(e){}
-      var label=activeTab==='allinone'?'All-in-one':(activeTab==='command'?'Command':(activeTab==='portfolio'?'Portfolio':(activeTab==='games'?'Games':'Live')));
+      var label=activeTab==='dashboard'?'Dashboard':(activeTab==='games'?'Games':(activeTab==='builder'?'Builder':(activeTab==='track'?'Tracking':(activeTab==='tools'?'Tools':'Live'))));
       summary.innerHTML='<div class="mobile-summary-pill"><div class="k">Tab</div><div class="v">'+label+'</div><div class="s">Quick-nav ready</div></div>'
         +'<div class="mobile-summary-pill"><div class="k">Slip</div><div class="v">'+SLIP.length+'</div><div class="s">leg'+(SLIP.length===1?'':'s')+'</div></div>'
         +'<div class="mobile-summary-pill"><div class="k">Confirmed</div><div class="v">'+confirmed+'</div><div class="s">ready +EV</div></div>'
@@ -1577,7 +1620,7 @@ function jointHRprob(pA,pB,sameTeam){
 /* ============================ STATE ============================ */
 let GAMES=[];           // [{id,away,home,env,players:[...]}]
 let MANUAL={meta:null, players:[]};
-let activeTab='games';
+let activeTab='dashboard';
 const TRACK_KEY='dingerlab_saved_parlays_v1';
 const LINEUP_SHOCK_KEY='dingerlab_lineup_shock_v1';
 const SLIP_WAGER_KEY='dingerlab_slip_wager_v1';
@@ -1870,16 +1913,15 @@ function renderTracking(){
   const profit = returned - staked;
   const roi = staked>0 ? (profit/staked) : null;
   const roiTxt = roi==null ? '—' : ((roi>=0?'+':'')+(roi*100).toFixed(1)+'%');
-  const summaryHtml=`
-    <div class="notion-callout" data-tone="blue" style="margin:0 0 12px">
-      <div>📊</div>
-      <div>
-        <strong>Summary</strong>
-        <p>Total saved: <b>${arr.length}</b> · Wins: <b>${wins}</b> · Losses: <b>${losses}</b> · Win rate: <b>${wr==null?'—':(wr*100).toFixed(1)+'%'}</b></p>
-        <p style="margin-top:6px">Settled stake: <b>$${staked.toFixed(2)}</b> · Returned: <b>$${returned.toFixed(2)}</b> · Profit: <b>$${profit.toFixed(2)}</b> · ROI: <b>${roiTxt}</b></p>
-        <p style="margin-top:6px">${legSummary}</p>
-      </div>
-    </div>`;
+  const pending=arr.filter(x=>!x.result || x.result==='pending').length;
+  const avgLegs=arr.length ? (arr.reduce(function(a,x){ return a+Number(x.legCount||0); },0)/arr.length) : null;
+  const summaryHtml='<div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin:0 0 12px">'
+    +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Total slips</div><div style="font-size:26px;font-weight:800;line-height:1">'+arr.length+'</div><div class="help-note" style="margin-top:8px">Saved in this browser</div></div>'
+    +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Win rate</div><div style="font-size:26px;font-weight:800;line-height:1">'+(wr==null?'—':(wr*100).toFixed(1)+'%')+'</div><div class="help-note" style="margin-top:8px">'+wins+' wins · '+losses+' losses</div></div>'
+    +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">ROI</div><div style="font-size:26px;font-weight:800;line-height:1">'+roiTxt+'</div><div class="help-note" style="margin-top:8px">Profit $'+profit.toFixed(2)+'</div></div>'
+    +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Pending</div><div style="font-size:26px;font-weight:800;line-height:1">'+pending+'</div><div class="help-note" style="margin-top:8px">Still waiting to settle</div></div>'
+    +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Avg legs</div><div style="font-size:26px;font-weight:800;line-height:1">'+(avgLegs==null?'—':avgLegs.toFixed(1))+'</div><div class="help-note" style="margin-top:8px">'+legSummary+'</div></div>'
+    +'</div>';
 
   const _wrRoi=function(items){
     let w=0,l=0,st=0,ret=0,ps=0,pn=0;
@@ -3481,6 +3523,8 @@ async function confirmLineups(){
   saveLineupShockReport(shockReport);
   renderGames();
   renderSlip();
+  if(activeTab==='dashboard') renderDashboard();
+  if(activeTab==='builder') renderBuilderPage();
   if(activeTab==='command') renderCommandCenter();
   if(activeTab==='allinone') renderAllInOne();
   try{ updateAwarenessFeed('lineups'); }catch(e){ console.warn('awareness', e); }
@@ -3514,6 +3558,9 @@ async function refreshOdds(){
     var res=applyOddsToLoadedGames(merged);
     setStatus('Odds refreshed. Applied to '+res.applied+'/'+res.total+' hitters.',false);
     renderGames();
+    if(activeTab==='dashboard') renderDashboard();
+    if(activeTab==='builder') renderBuilderPage();
+    if(activeTab==='track') renderTracking();
     toast('Refreshed','Latest prices applied to '+res.applied+' hitters.','+');
   }catch(e){ console.error(e); setStatus('Odds refresh failed: '+e.message); toast('Error','Could not refresh odds.','!'); }
 }
@@ -3845,12 +3892,86 @@ function populateParkSelect(){
   const opts=Object.entries(PARKS).sort((a,b)=>a[1].park.localeCompare(b[1].park)).map(([id,p])=>`<option value="${id}">${p.park} (${p.team})</option>`).join('');
   $('#mPark').innerHTML=opts;$('#mPark').value=147;
 }
+
+function moveNodeToSlot(nodeId, slotId){
+  var node=document.getElementById(nodeId);
+  var slot=document.getElementById(slotId);
+  if(!node || !slot) return;
+  if(node.parentElement!==slot) slot.appendChild(node);
+}
+function movePanelCard(panelName, slotId){
+  var panel=document.querySelector('[data-panel="'+panelName+'"]');
+  var slot=document.getElementById(slotId);
+  if(!panel || !slot) return;
+  var child=panel.firstElementChild;
+  if(child && child.parentElement!==slot) slot.appendChild(child);
+}
+function renderDashboard(){
+  var summary=document.getElementById('dashboardSummary');
+  if(!summary) return;
+  movePanelCard('command','dashboardCommandSlot');
+  movePanelCard('insights','dashboardInsightsSlot');
+  movePanelCard('allinone','dashboardAllInOneSlot');
+  renderCommandCenter();
+  renderInsights();
+  renderAllInOne();
+  if(GAMES.length<1){
+    summary.innerHTML='<div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">'
+      +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Start here</div><div class="help-note">Fetch a slate, then use Dashboard to scan the best plays quickly.</div></div>'
+      +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Then go to Builder</div><div class="help-note">Once you spot your targets, open Builder to turn them into a slip or portfolio.</div></div>'
+      +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Track later</div><div class="help-note">Use Tracking to grade saved slips and review performance.</div></div>'
+      +'</div>';
+    return;
+  }
+  var all=collectPortfolioCandidates();
+  if(!all.length){
+    summary.innerHTML='<div class="help-note">Load all-market odds first so Dashboard can build the quick summary.</div>';
+    return;
+  }
+  var sorted=all.slice().sort(function(a,b){ return (b.ev-a.ev) || (b.edge-a.edge) || (b.prob-a.prob); });
+  var bestSingle=sorted[0]||null;
+  var safe=all.slice().sort(function(a,b){ return ((b.g&&b.g.env&&b.g.env.lineupsConfirmed)?1:0)-((a.g&&a.g.env&&a.g.env.lineupsConfirmed)?1:0) || (b.prob-a.prob) || (b.ev-a.ev); })[0] || bestSingle;
+  var longshot=all.slice().sort(function(a,b){ return Number(b.american||-99999)-Number(a.american||-99999) || (b.ev-a.ev); })[0] || bestSingle;
+  var singles=choosePortfolioSingles(all, portfolioConfig());
+  var bestPair=(buildPortfolioPairs(singles, portfolioConfig()).sort(function(a,b){ return ((b._ev||0)-(a._ev||0)) || ((b.adjJoint||0)-(a.adjJoint||0)); })[0]) || null;
+  var positive=all.filter(function(x){ return (x.ev||0)>0; }).length;
+  summary.innerHTML='<div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">'
+    +(bestSingle?('<div class="game-card open" style="padding:14px 16px"><div class="section-title">Best straight bet</div><div style="font-size:22px;font-weight:800;line-height:1.1">'+bestSingle.p.name+'</div><div class="help-note" style="margin-top:8px">'+MARKET_META[bestSingle.mk].leg+' · '+fmtPct(bestSingle.prob)+' · EV '+((bestSingle.ev||0)>=0?'+':'')+((bestSingle.ev||0)*100).toFixed(1)+'%</div></div>'):'')
+    +(bestPair?('<div class="game-card open" style="padding:14px 16px"><div class="section-title">Best 2-leg build</div><div style="font-size:20px;font-weight:800;line-height:1.1">'+bestPair.picks.map(function(x){ return x.p.name; }).join(' + ')+'</div><div class="help-note" style="margin-top:8px">'+(bestPair.sameBookBest?shortBookLabel(bestPair.sameBookBest)+' ':'')+(bestPair.sameBookBestDec?decToAmerican(bestPair.sameBookBestDec):'—')+' · EV '+((bestPair._ev||0)>=0?'+':'')+((bestPair._ev||0)*100).toFixed(1)+'%</div></div>'):'')
+    +(safe?('<div class="game-card open" style="padding:14px 16px"><div class="section-title">Safest live play</div><div style="font-size:22px;font-weight:800;line-height:1.1">'+safe.p.name+'</div><div class="help-note" style="margin-top:8px">'+(((safe.g&&safe.g.env&&safe.g.env.lineupsConfirmed)?'Confirmed':'Projected'))+' lineup · '+fmtPct(safe.prob)+'</div></div>'):'')
+    +(longshot?('<div class="game-card open" style="padding:14px 16px"><div class="section-title">Best longshot</div><div style="font-size:22px;font-weight:800;line-height:1.1">'+longshot.p.name+'</div><div class="help-note" style="margin-top:8px">'+fmtAmerican(longshot.american)+' · '+(longshot.bestBook?shortBookLabel(longshot.bestBook):'best book')+'</div></div>'):'')
+    +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Slate status</div><div style="font-size:22px;font-weight:800;line-height:1.1">'+positive+'</div><div class="help-note" style="margin-top:8px">Positive-EV playable prices across the slate</div></div>'
+    +'</div>';
+}
+function renderBuilderPage(){
+  moveNodeToSlot('bookValueContainer','builderBookSlot');
+  moveNodeToSlot('globalPairsContainer','builderPairsSlot');
+  moveNodeToSlot('builderCard','builderMainSlot');
+  moveNodeToSlot('feedContainer','builderFeedSlot');
+  moveNodeToSlot('steamContainer','builderSteamSlot');
+  movePanelCard('portfolio','builderPortfolioSlot');
+  renderGames();
+  renderPortfolio();
+  paintMarketButtons();
+}
+function renderToolsPage(){
+  movePanelCard('manual','toolsManualSlot');
+  movePanelCard('parks','toolsParksSlot');
+  movePanelCard('method','toolsMethodSlot');
+  renderParks();
+  renderMethod();
+}
+
 function switchTab(t){
   activeTab=t;
   $$('.tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
   $$('[data-panel]').forEach(p=>p.style.display=(p.dataset.panel===t)?'':'none');
+  if(t==='dashboard') renderDashboard();
+  if(t==='games') renderGames();
+  if(t==='builder') renderBuilderPage();
+  if(t==='track') renderTracking();
+  if(t==='tools') renderToolsPage();
   if(t==='parks')renderParks();if(t==='method')renderMethod();
-  if(t==='track')renderTracking();
   if(t==='allinone')renderAllInOne();
   if(t==='insights')renderInsights();
   if(t==='command')renderCommandCenter();
@@ -3900,6 +4021,10 @@ function init(){
       logln('Applied odds to '+res.applied+'/'+res.total+' loaded hitters.');
       setStatus('Slate + odds loaded. Applied to '+res.applied+'/'+res.total+' hitters. Open a game card to see EV.',false);
       renderGames();
+      if(activeTab==='dashboard') renderDashboard();
+      if(activeTab==='builder') renderBuilderPage();
+      if(activeTab==='track') renderTracking();
+      if(activeTab==='tools') renderToolsPage();
       if(activeTab==='allinone') renderAllInOne();
       if(activeTab==='insights') renderInsights();
       if(activeTab==='command') renderCommandCenter();
@@ -3919,6 +4044,7 @@ function init(){
   $$('.mktbtn').forEach(function(b){ b.onclick=function(){ setMarket(b.dataset.mkt); }; });
   paintMarketButtons();
   restorePrefs(); wirePrefs();
+  switchTab(activeTab);
 
   // Toast
   $('#toastClose').onclick=()=>$('#toast').classList.remove('show');
