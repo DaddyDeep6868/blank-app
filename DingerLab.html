@@ -881,6 +881,7 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
     </div></div>
     <div id="globalPairsContainer"></div>
     <div id="bookValueContainer"></div>
+    <div id="steamContainer"></div>
     <div id="gamesContainer"><div class="empty">No games loaded yet. Use <b>Load slate + all-market odds</b> for live data.</div></div>
   </div>
 
@@ -1068,8 +1069,8 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
 <button class="mobile-slip-fab hidden" id="mobileSlipFab">🧾 Open slip</button>
 
 <script>
-const APP_VERSION = 'v1.36';
-const APP_UPDATED = 'Updated Jun 9, 2026 2:52 AM ET';
+const APP_VERSION = 'v1.37';
+const APP_UPDATED = 'Updated Jun 9, 2026 — Sharp Layer (CLV tracker + Steam radar)';
 const APP_PASSWORD = 'adi11';
 {
   const av=document.getElementById('appVersion');
@@ -1891,7 +1892,7 @@ function renderTracking(){
       <td class="num">${(p.combinedPct||0).toFixed(2)}%</td>
       <td class="num">${p.bestSameBook||'—'}</td>
       <td class="num">${p.stake?('$'+Number(p.stake).toFixed(2)):'—'}</td>
-      <td>${resChip}</td>
+      <td>${resChip} ${clvChip(parlayCLV(p))}</td>
       <td>
         <button class="ghost" style="padding:2px 10px" data-act="win" data-id="${p.id}">Win</button>
         <button class="ghost" style="padding:2px 10px" data-act="loss" data-id="${p.id}">Loss</button>
@@ -1900,7 +1901,7 @@ function renderTracking(){
     </tr>`;
   }).join('');
   const bankHtml=bankrollChartHtml(arr);
-  $('#trackTable').innerHTML=summaryHtml+bankHtml+btHtml+`<table class="players"><thead><tr>
+  $('#trackTable').innerHTML=summaryHtml+clvScorecardHtml(loadSaved())+bankHtml+btHtml+`<table class="players"><thead><tr>
     <th>Saved</th><th class="num">Legs</th><th>Bet slip</th><th class="num">Combined</th><th class="num">Best same-book</th><th class="num">Stake</th><th>Status</th><th></th>
   </tr></thead><tbody>${rows}</tbody></table>`;
 
@@ -1932,7 +1933,7 @@ function saveParlay(b64, legCount, combinedPct, bestSameBook, decOdds, stake, ti
     ev: (ev==null?null:Number(ev)),
     predProb: (predProb==null?null:Number(predProb)),
     legs,
-    legData: (function(){ if(!ld64) return null; try{ return JSON.parse(decodeURIComponent(escape(atob(ld64)))); }catch(e){ return null; } })(),
+    legData: (function(){ if(!ld64) return null; try{ return enrichLegBetOdds(JSON.parse(decodeURIComponent(escape(atob(ld64))))); }catch(e){ return null; } })(),
     result: 'pending'
   });
   setStatus('Saved parlay. See Tracking tab.');
@@ -1974,6 +1975,7 @@ async function gradePending(){
   pend.forEach(function(pp){
     let ready = true, win = true;
     for(const l of pp.legData){
+      if((l.mk||'hr')!=='hr'){ ready = false; break; } /* non-HR legs: settle by hand for now */
       if(status[l.gamePk] !== "Final"){ ready = false; break; }
       const set = hr[l.gamePk];
       if(!set || l.mlbId==null || set[l.mlbId]===undefined){ ready = false; break; }
@@ -2588,8 +2590,182 @@ function applyOddsToLoadedGames(merged){
   const _moved = checkLineMovement();
   try{ checkLineMovementAll(true); }catch(e){}
   recomputeAll();
+  try{ recordOddsHistory(); renderSteam(); updateClosingLines(); }catch(e){ console.warn('sharp layer', e); }
   if(_moved && _moved.length){ const top=_moved.slice(0,3).map(function(m){return m.name+' '+(m.delta>0?'+':'')+m.delta;}).join(', '); try{ toast('Line movement', _moved.length+' price change(s) since last load. Biggest: '+top, '⚡'); }catch(_e){} }
   return { applied, total };
+}
+
+
+/* ===== v1.37 Sharp Layer: odds history, steam radar, CLV tracking ===== */
+const STEAM_WINDOW_MS = 15*60*1000;   // look-back window for steam
+const STEAM_MIN_MOVE  = 0.025;        // implied-prob points to qualify as steam
+const STEAM_LAG_RATIO = 0.4;          // laggard moved < 40% of the steam move
+const STEAM_BOOKS = ['draftkings','fanatics','betmgm','caesars'];
+const ODDS_HIST = new Map();          // "TEAM::namekey::mk" -> { book: [{t,price}] }
+const TOASTED_STEAM = new Set();
+let LAST_STEAM = [];
+
+function recordOddsHistory(){
+  const now=Date.now();
+  for(const g of GAMES){
+    const started = g.gameDate ? (now >= new Date(g.gameDate).getTime()) : false;
+    if(started) continue;
+    for(const p of g.players){
+      if(!p._mktOdds) continue;
+      const teamAbbr=(p.side==='home'?g.homeAbbr:g.awayAbbr)||'';
+      for(const mk of Object.keys(p._mktOdds)){
+        const mo=p._mktOdds[mk]; if(!mo||!mo.books) continue;
+        const key=teamAbbr+'::'+normalizeName(p.name)+'::'+mk;
+        let rec=ODDS_HIST.get(key); if(!rec){ rec={}; ODDS_HIST.set(key,rec); }
+        for(const bk of STEAM_BOOKS){
+          const price=mo.books[bk]; if(price==null) continue;
+          let arr=rec[bk]; if(!arr){ arr=[]; rec[bk]=arr; }
+          const last=arr[arr.length-1];
+          if(!last || last.price!==price) arr.push({t:now,price:price});
+          while(arr.length && (now-arr[0].t > 45*60*1000 || arr.length>60)) arr.shift();
+        }
+      }
+    }
+  }
+}
+
+function detectSteam(){
+  const now=Date.now(), out=[];
+  for(const [key,rec] of ODDS_HIST.entries()){
+    const moves={}, current={};
+    let maxBook=null, maxMove=0;
+    for(const bk of STEAM_BOOKS){
+      const arr=rec[bk]; if(!arr||!arr.length) continue;
+      current[bk]=arr[arr.length-1].price;
+      const inWin=arr.filter(x=>now-x.t<=STEAM_WINDOW_MS);
+      if(inWin.length<2){ moves[bk]=0; continue; }
+      const d=(amToImplied(inWin[inWin.length-1].price)||0)-(amToImplied(inWin[0].price)||0);
+      moves[bk]=d;
+      if(Math.abs(d)>Math.abs(maxMove)){ maxMove=d; maxBook=bk; }
+    }
+    if(!maxBook || Math.abs(maxMove)<STEAM_MIN_MOVE) continue;
+    const steamImp=amToImplied(current[maxBook]);
+    const laggards=[];
+    for(const bk of STEAM_BOOKS){
+      if(bk===maxBook || current[bk]==null) continue;
+      if(Math.abs(moves[bk]||0) >= Math.abs(maxMove)*STEAM_LAG_RATIO) continue;
+      const imp=amToImplied(current[bk]);
+      if(maxMove>0 && steamImp!=null && imp!=null && imp < steamImp-0.008) laggards.push({book:bk,price:current[bk]});
+    }
+    const parts=key.split('::');
+    out.push({team:parts[0], nameKey:parts[1], mk:parts[2], steamBook:maxBook,
+              move:maxMove, steamPrice:current[maxBook], laggards:laggards});
+  }
+  out.sort((a,b)=>Math.abs(b.move)-Math.abs(a.move));
+  return out.slice(0,12);
+}
+
+function steamDisplayName(item){
+  for(const g of GAMES){ for(const p of g.players){
+    const abbr=(p.side==='home'?g.homeAbbr:g.awayAbbr)||'';
+    if(abbr===item.team && normalizeName(p.name)===item.nameKey) return p.name;
+  }}
+  return item.nameKey;
+}
+
+function renderSteam(){
+  const c=$('#steamContainer'); if(!c) return;
+  const list=detectSteam(); LAST_STEAM=list;
+  if(!list.length){ c.innerHTML=''; return; }
+  const fresh=list.filter(it=>it.laggards.length && !TOASTED_STEAM.has(it.team+it.nameKey+it.mk));
+  if(fresh.length){ fresh.forEach(it=>TOASTED_STEAM.add(it.team+it.nameKey+it.mk)); try{ toast('Steam detected', fresh.length+' play(s) with a lagging book \u2014 see \ud83d\udd25 Steam radar.', '\ud83d\udd25'); }catch(e){} }
+  const rows=list.map(it=>{
+    const nm=steamDisplayName(it);
+    const dir=it.move>0?'shortening \u2b07':'drifting \u2b06';
+    const lag=it.laggards.length
+      ? it.laggards.map(l=>shortBookLabel(l.book)+' still '+fmtAmerican(l.price)).join(', ')
+      : '\u2014';
+    const mkLbl=(MARKET_META[it.mk]&&MARKET_META[it.mk].leg)||it.mk;
+    const valueChip=it.laggards.length?' <span class="chip" style="background:#2b8a3e22;color:#2b8a3e">stale value</span>':'';
+    return '<tr><td><b>'+nm+'</b> <span class="notion-faint">'+it.team+'</span></td>'+
+      '<td>'+mkLbl+'</td>'+
+      '<td>'+shortBookLabel(it.steamBook)+' '+fmtAmerican(it.steamPrice)+' \u00b7 '+dir+' '+((it.move>0?'+':'')+(it.move*100).toFixed(1))+' pts</td>'+
+      '<td>'+lag+valueChip+'</td></tr>';
+  }).join('');
+  c.innerHTML='<div class="game-card open"><div class="game-body" style="display:block;padding:14px 18px">'+
+    '<div class="section-title">\ud83d\udd25 Steam radar <span class="notion-faint" style="font-weight:400">(book-vs-book, last 15 min)</span></div>'+
+    '<div class="help-note" style="margin:4px 0 8px">When one book moves sharply and another lags behind, the lagging book may be briefly mispriced. \u201cShortening\u201d = the market is backing this play; a lagging book still posting the old, longer price is potential stale value.</div>'+
+    '<table class="players"><thead><tr><th>Player</th><th>Market</th><th>Steam move</th><th>Lagging books</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+    '</div></div>';
+}
+
+/* ---- CLV (Closing Line Value) ---- */
+function enrichLegBetOdds(legData){
+  if(!Array.isArray(legData)) return legData;
+  for(const l of legData){
+    if(!l || l.betPrice!=null) continue;
+    const g=GAMES.find(gg=>String(gg.id)===String(l.gamePk)); if(!g) continue;
+    const p=g.players.find(x=>(l.mlbId!=null && String(x.mlbId)===String(l.mlbId)) || x.name===l.name); if(!p) continue;
+    const mk=l.mk||ACTIVE_MARKET||'hr'; l.mk=mk;
+    const mo=p._mktOdds && p._mktOdds[mk]; if(!mo || mo.best==null) continue;
+    l.betPrice=mo.best;
+    l.betBook=(mo.books&&mo.books.autoBest)||null;
+    l.betFair=(mo.mktProb!=null?mo.mktProb:null);
+    l.betAt=Date.now();
+  }
+  return legData;
+}
+
+function updateClosingLines(){
+  let all; try{ all=loadSaved(); }catch(e){ return; }
+  let touched=false; const now=Date.now();
+  for(const pp of all){
+    if((pp.result||'pending')!=='pending') continue;
+    if(!Array.isArray(pp.legData)) continue;
+    for(const l of pp.legData){
+      if(!l || l.closingFinal) continue;
+      const g=GAMES.find(gg=>String(gg.id)===String(l.gamePk)); if(!g) continue;
+      const started = g.gameDate ? (now >= new Date(g.gameDate).getTime()) : false;
+      if(started){ if(l.closing){ l.closingFinal=true; touched=true; } continue; }
+      const p=g.players.find(x=>(l.mlbId!=null && String(x.mlbId)===String(l.mlbId)) || x.name===l.name); if(!p) continue;
+      const mk=l.mk||'hr';
+      const mo=p._mktOdds && p._mktOdds[mk]; if(!mo||mo.best==null) continue;
+      l.closing={price:mo.best, fair:(mo.mktProb!=null?mo.mktProb:null), t:now};
+      touched=true;
+    }
+  }
+  if(touched){ try{ saveSaved(all); }catch(e){} }
+}
+
+function legCLV(l){
+  if(!l || !l.closing || l.betPrice==null || l.closing.price==null) return null;
+  if(l.betFair!=null && l.closing.fair!=null) return l.closing.fair - l.betFair;
+  const b=amToImplied(l.betPrice), c=amToImplied(l.closing.price);
+  if(!(b>0)||!(c>0)) return null;
+  return c-b; /* + prob-points = you beat the close */
+}
+
+function parlayCLV(pp){
+  if(!pp || !Array.isArray(pp.legData)) return null;
+  const vals=pp.legData.map(legCLV).filter(v=>v!=null);
+  if(!vals.length) return null;
+  return vals.reduce((a,b)=>a+b,0)/vals.length;
+}
+
+function clvChip(v){
+  if(v==null) return '';
+  const col=v>=0?'#2b8a3e':'#c92a2a';
+  return '<span class="chip" style="background:'+col+'22;color:'+col+'" title="Closing Line Value: avg implied-prob edge vs the last line seen before first pitch. Positive = you beat the close.">CLV '+(v>=0?'+':'')+(v*100).toFixed(1)+'</span>';
+}
+
+function clvScorecardHtml(arr){
+  let legs=0, beat=0, sum=0;
+  for(const pp of (arr||[])){
+    if(!Array.isArray(pp.legData)) continue;
+    for(const l of pp.legData){ const v=legCLV(l); if(v==null) continue; legs++; sum+=v; if(v>0) beat++; }
+  }
+  if(!legs) return '';
+  const avg=sum/legs, br=beat/legs;
+  return '<div class="notion-callout" data-tone="blue" style="margin:0 0 12px"><div>\ud83d\udcc8</div><div>'+
+    '<strong>Closing Line Value</strong>'+
+    '<p class="notion-faint" style="margin:2px 0 6px">Beating the close consistently means real edge \u2014 it shows up in weeks instead of waiting months for win/loss variance to settle. \u201cClosing\u201d = the last odds the app saw before first pitch, so keep odds refreshing near game time for best accuracy.</p>'+
+    '<p>Legs with closing data: <b>'+legs+'</b> \u00b7 Beat the close: <b>'+(br*100).toFixed(1)+'%</b> \u00b7 Avg CLV: <b style="color:'+(avg>=0?'#2b8a3e':'#c92a2a')+'">'+(avg>=0?'+':'')+(avg*100).toFixed(2)+' pts</b></p>'+
+    '</div></div>';
 }
 
 async function loadSlate(dateStr){
@@ -4920,7 +5096,7 @@ function globalNLegCardHTML(b,rank){
     return `${p.name} HR | DK ${dk} | Fanatics ${fan} | Best ${bestBook} ${best}`;
   }).join('\n');
   const b64 = btoa(unescape(encodeURIComponent(txt)));
-  const _legData = b.picks.map(function(x){ return { name:x.p.name, mlbId:(x.p.mlbId||null), gamePk:(x.g.id||null), date:(x.g.gameDate? String(x.g.gameDate).slice(0,10):null) }; });
+  const _legData = b.picks.map(function(x){ return { name:x.p.name, mlbId:(x.p.mlbId||null), gamePk:(x.g.id||null), mk:(x.mk||ACTIVE_MARKET||'hr'), date:(x.g.gameDate? String(x.g.gameDate).slice(0,10):null) }; });
   const _ld64 = btoa(unescape(encodeURIComponent(JSON.stringify(_legData))));
   const _mktArr = b.picks.map(function(x){ return x.p._mktProb; });
   const _mktRaw = _mktArr.every(function(v){ return v!=null; }) ? _mktArr.reduce(function(a,v){ return a*v; }, 1) : null;

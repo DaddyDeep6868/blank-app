@@ -47,3 +47,15 @@ Don't hardcode your key if the repo is public. Instead:
   some browsers; if so the parlay still saves (stake blank) and you can ignore it.
 - Free Streamlit apps sleep after inactivity and wake on the next visit.
 - `oddsblaze_proxy.py` is only needed for running locally; it is not used on Streamlit.
+
+## New in v1.37 — The Sharp Layer
+- **🔥 Steam radar** (Games tab): compares all 4 books against each other over a rolling
+  15-minute window. When one book moves sharply (>=2.5 implied-prob pts) and another lags,
+  the lagging book is flagged as potential **stale value**, with a toast alert on new hits.
+  Works best with auto-refresh (60s) on.
+- **📈 CLV tracker** (Tracking tab): every saved parlay leg now stores its bet-time price and
+  devigged fair probability. While odds keep refreshing, the app snapshots each leg's line and
+  freezes the last one seen before first pitch as the *closing line*. The Tracking tab shows a
+  CLV scorecard (beat-the-close %, avg CLV in prob points) plus a per-parlay CLV chip.
+  Beating the close consistently = real edge, visible in weeks instead of months.
+- Auto-grader now skips non-HR legs instead of silently grading them as HR bets.
