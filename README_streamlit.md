@@ -74,3 +74,28 @@ Don't hardcode your key if the repo is public. Instead:
   legs get graded even while a parlay waits on other games.
 - Saved legs now also store the model's per-leg probability (powers the report card and sim).
 - Fixed: Tracking-tab buttons showed literal "\ud83e..." text instead of emoji.
+
+## New in v1.39 — The Awareness Layer
+- **👀 "What changed" feed** (top of Games tab): a persistent, chronological diff of the slate
+  across refreshes *and* sessions — lineups locking 📋, probable-starter changes 🔁, temp swings
+  ≥5°F 🌡️, wind-to-CF shifts ≥5 mph 💨, roof open/close calls 🏟️, and the biggest price moves
+  📈📉 (≥1.5 implied pts). Events touching players in your saved pending parlays or current slip
+  get a blue **"your play"** tag plus a heads-up toast. Survives closing the browser; Clear
+  button wipes it. Updates on slate load, odds refresh, and lineup checks.
+
+## New in v1.40 — Matchup DNA (pitch-type modeling)
+- **🧬 New model factor**: the HR model now adjusts for *how this batter's power profile matches
+  this pitcher's actual arsenal*. The Streamlit wrapper fetches Baseball Savant's public
+  pitch-arsenal leaderboards server-side (cached 6h): each pitcher's usage% by pitch type, and
+  each batter's ISO + PA by pitch type.
+- **The math**: batter's usage-weighted expected ISO vs this arsenal ÷ his overall ISO, with
+  each pitch-type ISO shrunk toward his overall by sample size (k=30 PA), clamped ×0.70–×1.35,
+  neutral below 40 total PA. A fastball crusher facing a slider-heavy starter gets faded; facing
+  a fastball-heavy starter gets boosted.
+- **In the UI**: a purple 🧬 chip appears on player rows when the factor moves ≥5% (hover for
+  the arsenal breakdown), and "Matchup DNA (pitch types)" shows in every player's factors
+  dropdown. The sidebar reports how many arsenals/profiles loaded; the activity log confirms it
+  in-app.
+- **Graceful degradation**: if Savant data can't be fetched (or when running the HTML without
+  the wrapper), every multiplier is ×1.00 and the app behaves exactly as before. Applies to the
+  HR market only.

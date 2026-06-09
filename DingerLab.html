@@ -881,6 +881,7 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
     </div></div>
     <div id="globalPairsContainer"></div>
     <div id="bookValueContainer"></div>
+    <div id="feedContainer"></div>
     <div id="steamContainer"></div>
     <div id="gamesContainer"><div class="empty">No games loaded yet. Use <b>Load slate + all-market odds</b> for live data.</div></div>
   </div>
@@ -1071,8 +1072,8 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
 <button class="mobile-slip-fab hidden" id="mobileSlipFab">🧾 Open slip</button>
 
 <script>
-const APP_VERSION = 'v1.38';
-const APP_UPDATED = 'Updated Jun 9, 2026 — Sharp Layer (CLV + Steam) + Analytics Layer (Monte Carlo sim + Model report card)';
+const APP_VERSION = 'v1.40';
+const APP_UPDATED = 'Updated Jun 9, 2026 — Sharp + Analytics + Awareness + Matchup DNA (pitch-type modeling)';
 const APP_PASSWORD = 'adi11';
 {
   const av=document.getElementById('appVersion');
@@ -1358,6 +1359,38 @@ function headshotUrl(mlbId){
 
 /* ---------- Core HR model ---------- */
 // returns {p, lambda, factors:{}, perPA}
+/* ===== v1.40 Matchup DNA: pitch-type matchup modeling =====
+   Data injected by the Streamlit wrapper as window.DL_MATCHUP:
+   pitchers[id][pitchType] = {u: usage%}, batters[id][pitchType] = {iso, pa}.
+   Multiplier = batter's usage-weighted expected ISO vs this arsenal / batter's overall ISO,
+   per-pitch-type shrunk toward overall by sample size, clamped. Neutral (x1.00) when data
+   is missing - the app degrades gracefully without the wrapper. */
+const MATCHUP_SHRINK_PA=30, MATCHUP_MIN=0.70, MATCHUP_MAX=1.35, MATCHUP_MIN_PA=40;
+function _matchupData(){ try{ return (typeof window!=='undefined' && window.DL_MATCHUP && window.DL_MATCHUP.pitchers) ? window.DL_MATCHUP : null; }catch(e){ return null; } }
+function matchupMultiplier(batterId, pitcherId){
+  const M=_matchupData();
+  if(!M || batterId==null || pitcherId==null) return {mult:1, why:null};
+  const arse=M.pitchers[String(pitcherId)], bat=M.batters[String(batterId)];
+  if(!arse || !bat) return {mult:1, why:null};
+  let paT=0, isoW=0;
+  for(const pt in bat){ const b=bat[pt]; if(b && b.pa>0 && b.iso!=null){ paT+=b.pa; isoW+=b.iso*b.pa; } }
+  if(paT<MATCHUP_MIN_PA) return {mult:1, why:null};
+  const isoO=Math.max(0.02, isoW/paT);
+  let uT=0, eS=0; const bits=[];
+  for(const pt in arse){
+    const u=(arse[pt] && arse[pt].u!=null) ? arse[pt].u/100 : null;
+    if(!(u>0)) continue;
+    const b=bat[pt]; let iso=isoO;
+    if(b && b.pa>0 && b.iso!=null) iso=(b.iso*b.pa + isoO*MATCHUP_SHRINK_PA)/(b.pa+MATCHUP_SHRINK_PA);
+    uT+=u; eS+=u*iso; bits.push({pt:pt,u:u,iso:iso});
+  }
+  if(!(uT>0.5)) return {mult:1, why:null};
+  const mult=clamp((eS/uT)/isoO, MATCHUP_MIN, MATCHUP_MAX);
+  bits.sort(function(a,b){return b.u-a.u;});
+  const top=bits.slice(0,3).map(function(x){ return x.pt+' '+Math.round(x.u*100)+'%: ISO '+x.iso.toFixed(3); }).join(' \u00b7 ');
+  return {mult:mult, why:'Arsenal '+top+' vs batter overall ISO '+isoO.toFixed(3)};
+}
+
 function playerHRProb(pl, env){
   const lg=CFG.leagueHRperPA;
   const seasonRate=(pl.PA>0)?pl.HR/pl.PA:lg;
@@ -1394,14 +1427,16 @@ function playerHRProb(pl, env){
     f.humidity=clamp(1+(env.humidity-50)*CFG.humidityPer,0.95,1.06);
   }
   f.daynight=(env.dayNight==='day')?1+CFG.dayBoost:1.0;
-  const mult=f.park*f.pitcher*f.platoon*f.temp*f.wind*f.humidity*f.daynight;
+  let _mw=null;
+  try{ const _mm=matchupMultiplier(pl.mlbId, env.oppPitcherId); f.matchup=_mm.mult; _mw=_mm.why; }catch(e){ f.matchup=1; }
+  const mult=f.park*f.pitcher*f.platoon*f.temp*f.wind*f.humidity*f.daynight*f.matchup;
   const perPA=clamp(base*mult,0,0.13);
   const pa=PA_BY_SPOT[pl.spot]||4.2;
   // If lineups aren't confirmed, apply a small PA uncertainty penalty.
   const paAdj = env.lineupsConfirmed ? pa : pa*0.95;
   const lambda=perPA*paAdj;            // expected HR in game (Poisson mean)
   const p=1-Math.exp(-lambda);      // P(>=1 HR)
-  return {p,lambda,perPA,base,factors:f,pa:paAdj};
+  return {p,lambda,perPA,base,factors:f,pa:paAdj,matchupWhy:_mw};
 }
 
 /* ---------- Multi-market models (per-PA rates, binomial over expected PA) ---------- */
@@ -2606,9 +2641,10 @@ function applyOddsToLoadedGames(merged){
     }
   }
   const _moved = checkLineMovement();
-  try{ checkLineMovementAll(true); }catch(e){}
+  let _allMoves=[]; try{ _allMoves=checkLineMovementAll(true)||[]; }catch(e){}
   recomputeAll();
   try{ recordOddsHistory(); renderSteam(); updateClosingLines(); }catch(e){ console.warn('sharp layer', e); }
+  try{ updateAwarenessFeed('odds', _allMoves); }catch(e){ console.warn('awareness', e); }
   if(_moved && _moved.length){ const top=_moved.slice(0,3).map(function(m){return m.name+' '+(m.delta>0?'+':'')+m.delta;}).join(', '); try{ toast('Line movement', _moved.length+' price change(s) since last load. Biggest: '+top, '⚡'); }catch(_e){} }
   return { applied, total };
 }
@@ -2924,6 +2960,93 @@ function simulateCard(){
   toast('Simulator','Ran '+SIM_N.toLocaleString()+' simulated days. P(profit) '+(pProfit*100).toFixed(1)+'%.','\ud83c\udfb2');
 }
 
+
+/* ===== v1.39 Awareness Layer: "what changed since you last looked" feed ===== */
+const FEED_KEY='dingerlab_feed_v1';
+const SNAP_KEY='dingerlab_slate_snap_v1';
+const FEED_MAX=80;
+function loadFeed(){ try{ return JSON.parse(localStorage.getItem(FEED_KEY)||'[]'); }catch(e){ return []; } }
+function saveFeed(a){ try{ localStorage.setItem(FEED_KEY, JSON.stringify(a.slice(0,FEED_MAX))); }catch(e){} }
+function windOutMph(env){ if(env&&env.windSpeed>0&&env.windDir!=null&&env.cf!=null) return env.windSpeed*Math.cos(toRad(env.windDir-env.cf)); return 0; }
+
+function takeSlateSnap(){
+  const snap={t:Date.now(), games:{}};
+  for(const g of GAMES){
+    snap.games[g.id]={ lc:!!(g.env&&g.env.lineupsConfirmed),
+      hp:(g.homePitcher&&g.homePitcher.name)||null, ap:(g.awayPitcher&&g.awayPitcher.name)||null,
+      temp:(g.env?g.env.temp:null), wo:Math.round(windOutMph(g.env)||0), rc:!!(g.env&&g.env.roofClosed),
+      label:(g.awayAbbr||'')+'@'+(g.homeAbbr||''), park:(g.env&&g.env.park)||'' };
+  }
+  return snap;
+}
+
+function watchedKeySet(){
+  const s=new Set();
+  try{ loadSaved().forEach(function(pp){ if((pp.result||'pending')!=='pending'||!Array.isArray(pp.legData)) return; pp.legData.forEach(function(l){ if(l&&l.name) s.add(normalizeName(l.name)); }); }); }catch(e){}
+  try{ SLIP.forEach(function(x){ if(x&&x.name) s.add(normalizeName(x.name)); }); }catch(e){}
+  return s;
+}
+
+function fmtAgo(t){
+  const sec=Math.max(0,(Date.now()-t)/1000);
+  if(sec<60) return Math.round(sec)+'s ago';
+  if(sec<3600) return Math.round(sec/60)+'m ago';
+  if(sec<86400) return Math.round(sec/3600)+'h ago';
+  return Math.round(sec/86400)+'d ago';
+}
+
+function clearFeed(){ try{ localStorage.removeItem(FEED_KEY); }catch(e){} renderFeed(); }
+
+function renderFeed(){
+  const c=$('#feedContainer'); if(!c) return;
+  const feed=loadFeed();
+  if(!feed.length){ c.innerHTML=''; return; }
+  const rows=feed.slice(0,20).map(function(ev){
+    return '<div style="display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-bottom:1px solid rgba(128,128,128,.12)"><div>'+ev.icon+'</div><div style="flex:1">'+ev.text+(ev.mine?' <span class="chip" style="background:#2d7ff922;color:#2d7ff9">your play</span>':'')+'</div><div class="notion-faint" style="white-space:nowrap;font-size:11px">'+fmtAgo(ev.t)+'</div></div>';
+  }).join('');
+  c.innerHTML='<div class="game-card open"><div class="game-body" style="display:block;padding:14px 18px">'+
+    '<div class="section-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>\ud83d\udc40 What changed <span class="notion-faint" style="font-weight:400">(since you last looked)</span></span><button class="ghost" style="padding:2px 10px" onclick="clearFeed()">Clear</button></div>'+
+    '<div class="help-note" style="margin:2px 0 6px">Slate-wide diffs across refreshes and sessions: lineups locking, starter changes, weather flips, roof calls, and the biggest price moves. Plays in your saved parlays or current slip get tagged.</div>'+
+    rows+'</div></div>';
+}
+
+function updateAwarenessFeed(src, moves){
+  if(!GAMES.length) return;
+  let prev=null; try{ prev=JSON.parse(localStorage.getItem(SNAP_KEY)||'null'); }catch(e){}
+  const cur=takeSlateSnap();
+  const watched=watchedKeySet();
+  const gMine={};
+  GAMES.forEach(function(g){ gMine[g.id]=(g.players||[]).some(function(p){ return watched.has(normalizeName(p.name)); }); });
+  const events=[]; const now=Date.now();
+  if(prev && prev.games){
+    for(const gid of Object.keys(cur.games)){
+      const a=prev.games[gid], b=cur.games[gid];
+      if(!a) continue;
+      const mine=!!gMine[gid];
+      if(!a.lc && b.lc) events.push({t:now,icon:'\ud83d\udccb',text:'<b>'+b.label+'</b>: lineups confirmed.',mine:mine});
+      if(a.hp && b.hp && a.hp!==b.hp) events.push({t:now,icon:'\ud83d\udd01',text:'<b>'+b.label+'</b>: home starter now <b>'+b.hp+'</b> (was '+a.hp+') \u2014 matchup numbers recomputed.',mine:mine});
+      if(a.ap && b.ap && a.ap!==b.ap) events.push({t:now,icon:'\ud83d\udd01',text:'<b>'+b.label+'</b>: away starter now <b>'+b.ap+'</b> (was '+a.ap+') \u2014 matchup numbers recomputed.',mine:mine});
+      if(a.temp!=null && b.temp!=null && Math.abs(b.temp-a.temp)>=5) events.push({t:now,icon:'\ud83c\udf21\ufe0f',text:'<b>'+b.label+'</b> ('+b.park+'): temp now <b>'+b.temp+'\u00b0F</b> (was '+a.temp+'\u00b0F).',mine:mine});
+      if(Math.abs((b.wo||0)-(a.wo||0))>=5) events.push({t:now,icon:'\ud83d\udca8',text:'<b>'+b.label+'</b> ('+b.park+'): wind toward CF now <b>'+(b.wo>0?'+':'')+b.wo+' mph</b> (was '+(a.wo>0?'+':'')+a.wo+' mph).',mine:mine});
+      if(a.rc!==b.rc) events.push({t:now,icon:'\ud83c\udfdf\ufe0f',text:'<b>'+b.label+'</b>: roof now expected <b>'+(b.rc?'closed':'open')+'</b> \u2014 weather factors '+(b.rc?'neutralized':'active')+'.',mine:mine});
+    }
+  }
+  (moves||[]).slice(0,8).forEach(function(m){
+    if(Math.abs(m.deltaImp)<0.015) return;
+    const mine=watched.has(normalizeName(m.name));
+    const mkLbl=(MARKET_META[m.mk]&&MARKET_META[m.mk].leg)||m.mk;
+    events.push({t:now,icon:(m.deltaImp>0?'\ud83d\udcc9':'\ud83d\udcc8'),text:'<b>'+m.name+'</b> '+mkLbl+': '+fmtAmerican(m.from)+' \u2192 <b>'+fmtAmerican(m.to)+'</b> ('+(m.deltaImp>0?'+':'')+(m.deltaImp*100).toFixed(1)+' pts'+(m.deltaImp>0?', shortening':', drifting')+').',mine:mine});
+  });
+  try{ localStorage.setItem(SNAP_KEY, JSON.stringify(cur)); }catch(e){}
+  if(!events.length){ renderFeed(); return; }
+  const feed=loadFeed();
+  for(let i=events.length-1;i>=0;i--) feed.unshift(events[i]);
+  saveFeed(feed);
+  renderFeed();
+  const mineN=events.filter(function(e){return e.mine;}).length;
+  if(mineN){ try{ toast('Heads up', mineN+' change(s) affect plays in your saved parlays or slip \u2014 see \ud83d\udc40 What changed.', '\ud83d\udc40'); }catch(e){} }
+}
+
 async function loadSlate(dateStr){
   if($('#srcSelect').value==='manual'){setStatus('Manual mode selected — use the Manual entry tab or the sample game.');return;}
   clearLog();setStatus('Fetching MLB schedule…',true);GAMES=[];
@@ -2968,6 +3091,7 @@ async function loadSlate(dateStr){
     }
     setStatus(`Loaded ${GAMES.length} games. Probabilities computed.`);
     renderGames();
+    try{ updateAwarenessFeed('slate'); }catch(e){ console.warn('awareness', e); }
   }catch(e){
     console.error(e);
     setStatus('Could not load live data ('+e.message+'). Your browser may block cross-site requests — try the sample game or Manual entry.');
@@ -2992,7 +3116,7 @@ async function teamPitchingHR9(teamId){
 }
 
 async function pitcherInfo(pp){
-  if(!pp||!pp.id)return {hand:'R',hr9:LEAGUE_HR9,name:'TBD'};
+  if(!pp||!pp.id)return {id:null,hand:'R',hr9:LEAGUE_HR9,name:'TBD'};
   try{
     const data=await jget(`https://statsapi.mlb.com/api/v1/people/${pp.id}?hydrate=stats(group=[pitching],type=[season])`);
     const per=data.people[0];
@@ -3000,8 +3124,8 @@ async function pitcherInfo(pp){
     let hr9=LEAGUE_HR9, name=per.fullName||pp.fullName;
     const sp=per.stats&&per.stats[0]&&per.stats[0].splits&&per.stats[0].splits[0];
     if(sp&&sp.stat){const ip=parseFloat(sp.stat.inningsPitched||'0');const hr=sp.stat.homeRuns||0;if(ip>0)hr9=hr*9/ip;}
-    return {hand,hr9,name};
-  }catch(e){return {hand:'R',hr9:LEAGUE_HR9,name:pp.fullName||'TBD'};}
+    return {id:pp.id,hand,hr9,name};
+  }catch(e){return {id:pp.id||null,hand:'R',hr9:LEAGUE_HR9,name:pp.fullName||'TBD'};}
 }
 
 async function teamHitters(teamId, side, oppPitcher, env){
@@ -3020,7 +3144,7 @@ async function teamHitters(teamId, side, oppPitcher, env){
       spot++;
       const bats=(per.batSide&&per.batSide.code)||'R';
       out.push(makePlayer({name:per.fullName,mlbId:per.id,side,bats,HR,PA,H,_2B,_3B,RBI,AB,recHR:0,recPA:0,spot:Math.min(spot,9),
-        oppHand:oppPitcher.hand,oppHR9:oppPitcher.hr9},env));
+        oppHand:oppPitcher.hand,oppHR9:oppPitcher.hr9,oppId:oppPitcher.id||null},env));
     }
     // keep top 9 by projected probability per team (likely starters)
     out.sort((a,b)=>b.calc.perPA-a.calc.perPA);
@@ -3033,8 +3157,8 @@ function makePlayer(o,env){
   const pl={name:o.name,mlbId:o.mlbId||null,side:o.side,bats:o.bats,HR:o.HR,PA:o.PA,
     H:o.H||0,_2B:o._2B||0,_3B:o._3B||0,RBI:o.RBI||0,AB:o.AB||0,
     recHR:o.recHR||0,recPA:o.recPA||0,spot:o.spot||5,_projectedSpot:o.spot||5,_lineupSpot:null,_lineupStatus:'projected',
-    oppHand:o.oppHand||'R',oppHR9:o.oppHR9||LEAGUE_HR9,odds:o.odds||null};
-  const e2=Object.assign({},env,{oppHand:pl.oppHand,oppHR9:pl.oppHR9});
+    oppHand:o.oppHand||'R',oppHR9:o.oppHR9||LEAGUE_HR9,oppId:o.oppId||null,odds:o.odds||null};
+  const e2=Object.assign({},env,{oppHand:pl.oppHand,oppHR9:pl.oppHR9,oppPitcherId:pl.oppId});
   pl._env=e2;pl._mkt=computeMarkets(pl,e2);pl.calc=pl._mkt[ACTIVE_MARKET];pl.p=pl.calc.p;return pl;
 }
 
@@ -3359,6 +3483,7 @@ async function confirmLineups(){
   renderSlip();
   if(activeTab==='command') renderCommandCenter();
   if(activeTab==='allinone') renderAllInOne();
+  try{ updateAwarenessFeed('lineups'); }catch(e){ console.warn('awareness', e); }
   setStatus("Lineups checked — "+lineupsFound+" game(s) posted, weather on "+wxFound+".");
   var shockBits=[];
   if(shockReport && shockReport.counts){
@@ -3576,6 +3701,8 @@ function playerRowHTML(p,g){
   const c=p.calc;const f=c.factors;
   const _lu = (p._lineupStatus==="out") ? ' <span class="chip" style="background:#db443722;color:#db4437" title="Not in the posted starting lineup">\u26a0\ufe0f Out</span>' : (p._lineupStatus==="in" ? ` <span class="chip" style="background:#0f9d5822;color:#0f9d58" title="Confirmed in lineup">\u2705 #${p._lineupSpot||p.spot||""}</span>` : ` <span class="chip" style="background:#f59e0b22;color:#b45309" title="Projected lineup spot until confirmed">⏳ Proj #${p._projectedSpot||p.spot||""}</span>`);
   const _sm = (p._lineMove!=null && p._lineMove!==0) ? (' <span class="chip" style="background:'+(p._lineMove<0?'#0f9d5822;color:#0f9d58':'#db443722;color:#db4437')+'" title="Line moved '+(p._lineMove<0?'IN since last load (shortening = steam toward this bet)':'OUT since last load (drifting = market cooling)')+'">'+(p._lineMove<0?'\ud83d\udd25':'\u2744\ufe0f')+' '+(p._lineMove>0?'+':'')+p._lineMove+'</span>') : "";
+  const _mx=(f&&f.matchup!=null)?f.matchup:1;
+  const _dna=(Math.abs(_mx-1)>=0.05)?(' <span class="chip" style="background:'+(_mx>1?'#7c3aed22;color:#7c3aed':'#64748b22;color:#64748b')+'" title="'+String((c&&c.matchupWhy)||'Pitch-type matchup').replace(/"/g,'&quot;')+'">\ud83e\uddec \u00d7'+_mx.toFixed(2)+'</span>'):'';
   const dk = p._oddsBooks && p._oddsBooks.draftkings!=null ? p._oddsBooks.draftkings : null;
   const fan = p._oddsBooks && p._oddsBooks.fanatics!=null ? p._oddsBooks.fanatics : null;
   const best = p.odds!=null ? p.odds : null;
@@ -3583,10 +3710,10 @@ function playerRowHTML(p,g){
   const edge=impl!=null?p.p-impl:null;
   const fairAm=decToAmerican(1/p.p);
   const fb=k=>`<div class="factor-row"><span>${k.label}</span><span class="mult ${k.v>1.001?'up':k.v<0.999?'down':''}">×${k.v.toFixed(3)}</span></div>`;
-  const FLABEL={park:'Park',pitcher:'Opposing pitcher',platoon:'Handedness/platoon',temp:'Temperature',wind:'Wind',humidity:'Humidity',daynight:'Day/Night'};
+  const FLABEL={park:'Park',pitcher:'Opposing pitcher',platoon:'Handedness/platoon',temp:'Temperature',wind:'Wind',humidity:'Humidity',daynight:'Day/Night',matchup:'Matchup DNA (pitch types)'};
   const factorsHTML=Object.keys(f||{}).map(k=>fb({label:FLABEL[k]||k,v:f[k]})).join('');
   return `<tr>
-    <td>${p.name} <span class="handed">(${p.bats})</span>${_lu}${_sm}</td>
+    <td>${p.name} <span class="handed">(${p.bats})</span>${_lu}${_sm}${_dna}</td>
     <td>${p.side==='home'?g.homeAbbr||g.home:g.awayAbbr||g.away}</td>
     <td class="num">${(p._lineupStatus==='in'&&p._lineupSpot)?p._lineupSpot:(p._projectedSpot||p.spot)}</td>
     <td class="num">${ACTIVE_MARKET==='tb'?c.perPA.toFixed(2):(c.perPA*100).toFixed(2)+'%'}</td>
@@ -3735,6 +3862,8 @@ function init(){
   const today=new Date();$('#dateInput').value=today.toISOString().slice(0,10);
   populateParkSelect();renderSettings();renderManualRoster();
   $$('.tabbar button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+  try{ renderFeed(); }catch(e){}
+  try{ const _M=_matchupData(); if(_M) logln('\ud83e\uddec Matchup DNA loaded: '+Object.keys(_M.pitchers).length+' pitcher arsenals, '+Object.keys(_M.batters).length+' batter profiles ('+(_M.year||'')+').'); }catch(e){}
   $('#btnSettings').onclick=()=>{const p=$('#settingsPanel');p.style.display=p.style.display==='none'?'':'none';};
   if($('#btnMobileMode')) $('#btnMobileMode').onclick=()=>{ var enabled=currentMobileLayoutEnabled(); localStorage.setItem(MOBILE_LAYOUT_KEY, enabled ? 'off' : 'on'); applyMobileLayout(); };
   if($('#mobileSlipFab')) $('#mobileSlipFab').onclick=()=>toggleMobileSlip();

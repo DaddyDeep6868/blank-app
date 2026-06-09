@@ -1,5 +1,8 @@
 import base64
+import csv as _csv
+import io as _io
 import json
+from datetime import date
 
 import requests
 import streamlit as st
@@ -23,6 +26,58 @@ try:
     DEFAULT_KEY = st.secrets["ODDSBLAZE_KEY"]
 except Exception:
     DEFAULT_KEY = "14485da5-3b9e-4061-aea1-9d1ed356b253"
+
+
+@st.cache_data(ttl=6 * 3600, show_spinner=False)
+def fetch_matchup_data(year):
+    """Pitch-type matchup data from Baseball Savant (public CSV leaderboards).
+
+    Pitchers: usage%% per pitch type. Batters: ISO + PA per pitch type.
+    Cached 6h - this is season-level data, not live odds.
+    """
+    base = "https://baseballsavant.mlb.com/leaderboard/pitch-arsenal-stats"
+    headers = {"accept": "text/csv", "user-agent": "Mozilla/5.0 (DingerLab)"}
+
+    def grab(kind):
+        r = requests.get(
+            base,
+            params={"type": kind, "pitchType": "", "year": str(year),
+                    "position": "", "team": "", "min": "5", "csv": "true"},
+            headers=headers, timeout=45,
+        )
+        r.raise_for_status()
+        return list(_csv.DictReader(_io.StringIO(r.text)))
+
+    def fnum(x):
+        try:
+            return float(x)
+        except (TypeError, ValueError):
+            return None
+
+    pitchers = {}
+    for row in grab("pitcher"):
+        pid, pt = row.get("player_id"), row.get("pitch_type")
+        if not pid or not pt:
+            continue
+        u = fnum(row.get("pitch_usage"))
+        if u is None:
+            continue
+        pitchers.setdefault(str(pid).strip(), {})[pt.strip()] = {"u": round(u, 1)}
+
+    batters = {}
+    for row in grab("batter"):
+        pid, pt = row.get("player_id"), row.get("pitch_type")
+        if not pid or not pt:
+            continue
+        slg, ba, pa = fnum(row.get("slg")), fnum(row.get("ba")), fnum(row.get("pa"))
+        if slg is None or ba is None or not pa:
+            continue
+        batters.setdefault(str(pid).strip(), {})[pt.strip()] = {
+            "iso": round(max(0.0, slg - ba), 3), "pa": int(pa)}
+
+    if not pitchers or not batters:
+        raise RuntimeError("Savant returned no usable rows (CSV format may have changed)")
+    return {"pitchers": pitchers, "batters": batters, "year": year}
 
 
 @st.cache_data(ttl=20, show_spinner=False)
@@ -161,6 +216,16 @@ else:
         f"Live odds ready: {n}/{len(BOOKS)} books. Click **Load slate + all-market odds** in the app."
     )
 
+MATCHUP = None
+try:
+    MATCHUP = fetch_matchup_data(date.today().year)
+    st.sidebar.caption(
+        f"\U0001F9EC Matchup DNA: {len(MATCHUP['pitchers'])} pitcher arsenals \u00b7 "
+        f"{len(MATCHUP['batters'])} batter profiles ({MATCHUP['year']})."
+    )
+except Exception as e:  # noqa: BLE001
+    st.sidebar.warning(f"Matchup DNA unavailable: {e}")
+
 st.markdown(
     """
     <style>
@@ -188,10 +253,12 @@ st.markdown(
 
 html = load_html()
 payload = json.dumps(raw).replace("</", "<\\/")
+matchup_payload = (json.dumps(MATCHUP).replace("</", "<\\/") if MATCHUP else "null")
 inject = (
     "<script>"
     "sessionStorage.setItem('dingerlab_unlocked_v1','1');"
     "window.DL_RAW_ODDS = " + payload + ";"
+    "window.DL_MATCHUP = " + matchup_payload + ";"
     "</script>"
 )
 if "</head>" in html:
