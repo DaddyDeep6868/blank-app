@@ -1146,7 +1146,7 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
 <button class="mobile-slip-fab hidden" id="mobileSlipFab">🧾 Open slip</button>
 
 <script>
-const APP_VERSION = 'v1.45.1';
+const APP_VERSION = 'v1.45';
 const APP_UPDATED = 'Updated Jun 10, 2026 — slate date refresh fix';
 const APP_PASSWORD = 'adi11';
 {
@@ -1925,7 +1925,7 @@ function _setLiveHrStatus(txt, meta){
 }
 
 async function pollGameForHrs(gamePk){
-  const feed=await jget('https://statsapi.mlb.com/api/v1/game/'+encodeURIComponent(gamePk)+'/feed/live');
+  const feed=await jget('https://statsapi.mlb.com/api/v1.1/game/'+encodeURIComponent(gamePk)+'/feed/live');
   const plays=(((feed||{}).liveData||{}).plays||{}).allPlays||[];
   const out=[];
   plays.forEach(function(p){
@@ -3922,7 +3922,7 @@ async function confirmLineups(){
   let lineupsFound=0, wxFound=0;
   for(const g of real){
     try{
-      const feed = await jget("https://statsapi.mlb.com/api/v1/game/"+encodeURIComponent(g.id)+"/feed/live");
+      const feed = await jget("https://statsapi.mlb.com/api/v1.1/game/"+encodeURIComponent(g.id)+"/feed/live");
       const bs = feed && feed.liveData && feed.liveData.boxscore;
       const gd = feed && feed.gameData;
       if(gd && gd.weather && (gd.weather.temp || gd.weather.wind)){
