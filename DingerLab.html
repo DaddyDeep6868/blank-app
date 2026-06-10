@@ -790,6 +790,7 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
       <div class="section-title">Dashboard</div>
       <p class="help-note">The new home screen: fast summary first, then command reads, insight previews, and one deeper HQ section if you want more context.</p>
       <div id="dashboardSummary" style="margin-top:10px"></div>
+      <div id="dashboardModelScorecard" style="margin-top:12px"></div>
     </div></div>
     <div id="dashboardCommandSlot" style="margin-top:14px"></div>
     <div id="dashboardInsightsSlot" style="margin-top:14px"></div>
@@ -944,6 +945,10 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
         <button class="ghost" id="btnLiveHrStop">Stop</button>
         <button class="ghost" id="btnLiveHrExport">⬇ Export data</button>
         <button class="ghost" id="btnLiveHrSelfTest" title="Run a board entry through the comparison engine to prove matching works">🧪 Self-test</button>
+        <button class="ghost" id="btnAutoCaptureNow" title="Load slate + odds and freeze today’s board now">📸 Capture board now</button>
+        <label class="chip" title="Runs only while this browser tab/app is open"><input type="checkbox" id="autoBoardCapture" style="vertical-align:-2px"> Auto-capture</label>
+        <input id="autoBoardTime" type="time" value="10:30" style="width:96px;padding:7px 8px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0b1220;color:#fff" title="Auto-capture time on this device">
+        <span class="chip" id="autoBoardStatus">Auto: off</span>
         <span class="chip" id="liveHrStatus">Idle</span>
         <span class="chip" id="liveHrBoardChip" title="Whether a ranked model board exists for the selected HR date">Board: —</span>
         <span class="help-note" id="liveHrMeta" style="margin:0">—</span>
@@ -1090,6 +1095,7 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
         <div class="field" id="syncPanel" style="display:none;flex:1 1 100%"><label>Sync data \u2014 copy to move to another device, or paste exported data and load</label><textarea id="syncBox" style="width:100%;min-height:64px;font-family:monospace;font-size:11px"></textarea><div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap"><button class="ghost" id="btnSyncCopy">📋 Copy</button><button class="ghost" id="btnSyncLoad">Load pasted data</button><button class="ghost" id="btnSyncClose">Close</button></div></div>
       </div>
       <div id="simPanel" style="margin-top:10px"></div>
+      <div id="modelScorecardPanel" style="margin-top:10px"></div>
       <div id="trackTable" style="margin-top:10px"></div>
     </div></div>
   </div>
@@ -1658,6 +1664,8 @@ let activeTab='dashboard';
 const TRACK_KEY='dingerlab_saved_parlays_v1';
 const LINEUP_SHOCK_KEY='dingerlab_lineup_shock_v1';
 const SLIP_WAGER_KEY='dingerlab_slip_wager_v1';
+const AUTO_BOARD_KEY='dingerlab_auto_board_capture_v1';
+const MODEL_EXPORTS_KEY='dingerlab_model_scorecard_exports_v1';
 
 /* ============================ Live HR Feed (v1.45) ============================ */
 let LIVE_HR_EVENTS=[];          // newest-first [{id,gamePk,playId,...,model:{...}}]
@@ -1787,13 +1795,152 @@ function saveBoardSnapshotForDate(dateStr){
   // This lets historical HR queries compare against the slate board from that same date.
   const snap=_boardSnapshot();
   const store=_loadBoardSnapshots();
-  store[String(dateStr||'')]={capturedAt:Date.now(), date:String(dateStr||''), byId:snap.byId||{}, byName:snap.byName||{}};
+  store[String(dateStr||'')]={capturedAt:Date.now(), date:String(dateStr||''), rows:(snap.arr||[]).map(function(x,idx){ const p=(x&&x.p)||{}; return {rank:idx+1,name:p.name||null,mlbId:p.mlbId!=null?String(p.mlbId):null,mk:x.mk||'hr',prob:Number(x.prob||0),edge:Number(x.edge||0),ev:Number(x.ev||0),american:x.american!=null?Number(x.american):null,bestBook:x.bestBook||null,gamePk:(x.g&&(x.g.id||x.g.gamePk))!=null?String(x.g.id||x.g.gamePk):null}; }), byId:snap.byId||{}, byName:snap.byName||{}};
   _saveBoardSnapshots(store);
 }
 function loadBoardSnapshotForDate(dateStr){
   const store=_loadBoardSnapshots();
   const s=store[String(dateStr||'')];
   return s||null;
+}
+
+
+/* ============================ Auto board capture + model scorecard ============================ */
+function _autoBoardCfg(){
+  try{ return Object.assign({enabled:false,time:'10:30',lastDate:null,lastAttemptAt:null,lastStatus:'Auto: off'}, JSON.parse(localStorage.getItem(AUTO_BOARD_KEY)||'{}')||{}); }
+  catch(e){ return {enabled:false,time:'10:30',lastDate:null,lastAttemptAt:null,lastStatus:'Auto: off'}; }
+}
+function _saveAutoBoardCfg(cfg){ try{ localStorage.setItem(AUTO_BOARD_KEY, JSON.stringify(cfg||{})); }catch(e){} }
+function _autoBoardDateStr(){
+  try{ return ($('#dateInput') && $('#dateInput').value) || (new Date()).toISOString().slice(0,10); }
+  catch(e){ return (new Date()).toISOString().slice(0,10); }
+}
+function _renderAutoBoardStatus(){
+  try{
+    const cfg=_autoBoardCfg();
+    const chk=$('#autoBoardCapture'); if(chk) chk.checked=!!cfg.enabled;
+    const tm=$('#autoBoardTime'); if(tm && cfg.time) tm.value=cfg.time;
+    const st=$('#autoBoardStatus');
+    if(st){
+      const d=_autoBoardDateStr();
+      const bi=_boardForDateInfo(d);
+      st.textContent=(cfg.enabled?('Auto: '+(cfg.time||'10:30')):'Auto: off')+(bi.available?(' · board filled '+d):'');
+      st.style.background=cfg.enabled?'#10b98122':'#64748b22';
+      st.style.color=cfg.enabled?'#10b981':'#94a3b8';
+      st.title='Auto-capture runs only while this file is open in your browser. Last: '+(cfg.lastStatus||'—');
+    }
+  }catch(e){}
+}
+async function runAutoBoardCapture(manual){
+  const d=_autoBoardDateStr();
+  try{
+    const cfg=_autoBoardCfg();
+    cfg.lastAttemptAt=Date.now(); cfg.lastStatus='Running for '+d; _saveAutoBoardCfg(cfg); _renderAutoBoardStatus();
+    if($('#dateInput')) $('#dateInput').value=d;
+    if($('#liveHrDate')) $('#liveHrDate').value=d;
+    if(!window.DL_loadAll){ toast('Auto-capture unavailable','Reload the app once, then try again.','⚠️'); return 0; }
+    setStatus((manual?'Capturing':'Auto-capturing')+' board for '+d+'…', true);
+    await window.DL_loadAll();
+    const n=captureBoardSnapshotAndNotify(d, !!manual);
+    const cfg2=_autoBoardCfg();
+    cfg2.lastDate=d; cfg2.lastAttemptAt=Date.now(); cfg2.lastStatus=(n>0?('Captured '+n+' rows for '+d):('Board empty for '+d)); _saveAutoBoardCfg(cfg2);
+    _renderAutoBoardStatus();
+    try{ renderModelScorecard(); }catch(e){}
+    return n;
+  }catch(err){
+    const cfg=_autoBoardCfg(); cfg.lastAttemptAt=Date.now(); cfg.lastStatus='Failed: '+String((err&&err.message)||err); _saveAutoBoardCfg(cfg); _renderAutoBoardStatus();
+    try{ toast('Auto-capture failed', String((err&&err.message)||err), '⚠️'); }catch(e){}
+    return 0;
+  }
+}
+function autoBoardTick(){
+  const cfg=_autoBoardCfg();
+  if(!cfg.enabled) return;
+  const d=_autoBoardDateStr();
+  if(cfg.lastDate===d) return;
+  const now=new Date();
+  const hh=String(now.getHours()).padStart(2,'0'), mm=String(now.getMinutes()).padStart(2,'0');
+  const cur=hh+':'+mm;
+  const target=cfg.time||'10:30';
+  if(cur>=target){ runAutoBoardCapture(false); }
+}
+function initAutoBoardCaptureUI(){
+  const cfg=_autoBoardCfg();
+  try{ if($('#autoBoardCapture')) $('#autoBoardCapture').checked=!!cfg.enabled; if($('#autoBoardTime')) $('#autoBoardTime').value=cfg.time||'10:30'; }catch(e){}
+  if($('#autoBoardCapture')) $('#autoBoardCapture').onchange=function(){ const c=_autoBoardCfg(); c.enabled=!!this.checked; c.lastStatus=c.enabled?'Armed':'Off'; _saveAutoBoardCfg(c); _renderAutoBoardStatus(); };
+  if($('#autoBoardTime')) $('#autoBoardTime').onchange=function(){ const c=_autoBoardCfg(); c.time=this.value||'10:30'; c.lastStatus='Time set to '+c.time; _saveAutoBoardCfg(c); _renderAutoBoardStatus(); };
+  if($('#btnAutoCaptureNow')) $('#btnAutoCaptureNow').onclick=function(){ runAutoBoardCapture(true); };
+  if(!window.DL_AUTO_BOARD_TIMER) window.DL_AUTO_BOARD_TIMER=setInterval(autoBoardTick, 60*1000);
+  setTimeout(autoBoardTick, 2500);
+  _renderAutoBoardStatus();
+}
+
+function loadModelExports(){ try{ return JSON.parse(localStorage.getItem(MODEL_EXPORTS_KEY)||'[]')||[]; }catch(e){ return []; } }
+function saveModelExports(arr){ try{ localStorage.setItem(MODEL_EXPORTS_KEY, JSON.stringify(arr||[])); }catch(e){} }
+function _exportKey(ex){ return String(ex&&ex.slateDate||'')+'::'+String(ex&&ex.exportedAt||'')+'::'+String(ex&&ex.summary&&ex.summary.totalHRs); }
+function addModelExport(ex){
+  if(!ex || ex.kind!=='live_hr_export') return false;
+  const arr=loadModelExports(); const key=_exportKey(ex);
+  const i=arr.findIndex(function(x){ return _exportKey(x)===key || (x.slateDate===ex.slateDate && JSON.stringify(x.summary||{})===JSON.stringify(ex.summary||{})); });
+  const slim={ app:'DingerLab', kind:'live_hr_export', version:ex.version||1, importedAt:Date.now(), exportedAt:ex.exportedAt||new Date().toISOString(), slateDate:ex.slateDate, summary:ex.summary||{}, homeRuns:ex.homeRuns||[], missedByModel:ex.missedByModel||[], modelBoardSnapshot:ex.modelBoardSnapshot||[], boardAvailable:!!ex.boardAvailable, boardSize:Number(ex.boardSize||((ex.modelBoardSnapshot||[]).length||0)) };
+  if(i>=0) arr[i]=slim; else arr.unshift(slim);
+  arr.sort(function(a,b){ return String(b.slateDate||'').localeCompare(String(a.slateDate||'')); });
+  saveModelExports(arr.slice(0,120));
+  return true;
+}
+function importModelExportsFromText(txt){
+  let data=JSON.parse((txt||'').trim());
+  if(!Array.isArray(data)) data=[data];
+  let n=0; data.forEach(function(x){ if(addModelExport(x)) n++; });
+  return n;
+}
+function _boardRowsFromExport(ex){
+  if(ex && Array.isArray(ex.modelBoardSnapshot) && ex.modelBoardSnapshot.length) return ex.modelBoardSnapshot;
+  try{ const s=loadBoardSnapshotForDate(ex&&ex.slateDate); if(s){ if(Array.isArray(s.rows)&&s.rows.length) return s.rows; const out=[]; const seen={}; Object.keys(s.byId||{}).forEach(function(k){ const r=s.byId[k]; const key=(r.rank||'?')+'|'+(r.name||''); if(!seen[key]){seen[key]=1; out.push(r);} }); out.sort(function(a,b){return (a.rank||9999)-(b.rank||9999);}); return out; } }catch(e){}
+  return [];
+}
+function scorecardStats(exports){
+  const days=(exports||[]).filter(function(ex){ return ex && ex.kind==='live_hr_export'; });
+  let totalHR=0, boardHits=0, top10Hits=0, top25Hits=0, expAll=0, actualAll=0, boardRows=0;
+  const bins=[{name:'Low',lo:0,hi:.07,exp:0,act:0,n:0},{name:'Good',lo:.07,hi:.115,exp:0,act:0,n:0},{name:'Great',lo:.115,hi:9,exp:0,act:0,n:0}];
+  const rows=[];
+  days.forEach(function(ex){
+    const hrs=ex.homeRuns||[]; const board=_boardRowsFromExport(ex); const hitIds={}, hitNames={};
+    hrs.forEach(function(h){ if(h.hitterId!=null) hitIds[String(h.hitterId)]=1; const nm=normalizeName(h.hitter||''); if(nm) hitNames[nm]=1; });
+    let dBoard=0,dTop10=0,dTop25=0,dExp=0,dActual=0;
+    board.forEach(function(r){
+      const prob=Number(r.prob||0); const hit=(r.mlbId!=null && hitIds[String(r.mlbId)]) || hitNames[normalizeName(r.name||'')];
+      dExp+=prob; expAll+=prob; boardRows++; if(hit){ dActual++; actualAll++; }
+      const bin=bins.find(function(b){ return prob>=b.lo && prob<b.hi; }) || bins[0]; bin.exp+=prob; bin.n++; if(hit) bin.act++;
+    });
+    hrs.forEach(function(h){ if(h.onBoard) dBoard++; if(h.top10) dTop10++; if(h.top25) dTop25++; });
+    totalHR+=hrs.length; boardHits+=dBoard; top10Hits+=dTop10; top25Hits+=dTop25;
+    rows.push({date:ex.slateDate||'—', totalHR:hrs.length, boardSize:board.length||ex.boardSize||0, boardHits:dBoard, top10Hits:dTop10, top25Hits:dTop25, expected:dExp, actual:dActual, boardAvailable:!!(board.length||ex.boardAvailable)});
+  });
+  return {days:days.length,totalHR,boardHits,top10Hits,top25Hits,expAll,actualAll,boardRows,bins,rows};
+}
+function renderModelScorecard(targetId){
+  const target=targetId?document.getElementById(targetId):(document.getElementById('modelScorecardPanel')||document.getElementById('dashboardModelScorecard'));
+  if(!target) return;
+  const ex=loadModelExports(); const st=scorecardStats(ex);
+  if(!ex.length){
+    target.innerHTML='<div class="notion-callout" data-tone="blue"><div>📊</div><div><strong>Model scorecard</strong><p class="notion-faint" style="margin:2px 0 8px">No HR exports saved yet. Use Live → Fetch HRs → Export data, or paste old dingerlab_hr_export JSON here.</p><textarea id="modelExportBox" style="width:100%;min-height:74px;font-family:monospace;font-size:11px" placeholder="Paste one export JSON, or an array of exports…"></textarea><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="ghost" id="btnImportModelExport">Import export(s)</button><button class="ghost" id="btnClearModelExports">Clear scorecard</button></div></div></div>';
+  } else {
+    const bh=st.totalHR?st.boardHits/st.totalHR:null, t10=st.totalHR?st.top10Hits/st.totalHR:null, cal=st.expAll?st.actualAll/st.expAll:null;
+    const dayRows=st.rows.map(function(r){ return '<tr><td>'+esc(r.date)+'</td><td class="num">'+r.totalHR+'</td><td class="num">'+r.boardSize+'</td><td class="num">'+r.boardHits+'</td><td class="num">'+r.top10Hits+'</td><td class="num">'+(r.expected?r.expected.toFixed(2):'—')+'</td><td class="num">'+r.actual+'</td><td class="num">'+(r.expected?((r.actual/r.expected).toFixed(2)+'×'):'—')+'</td></tr>'; }).join('');
+    const binRows=st.bins.map(function(b){ return '<tr><td>'+b.name+'</td><td class="num">'+b.n+'</td><td class="num">'+(b.exp?b.exp.toFixed(2):'—')+'</td><td class="num">'+b.act+'</td><td class="num">'+(b.exp?((b.act/b.exp).toFixed(2)+'×'):'—')+'</td></tr>'; }).join('');
+    target.innerHTML='<div class="notion-callout" data-tone="blue"><div>📊</div><div style="flex:1"><strong>Model scorecard over time</strong><p class="notion-faint" style="margin:2px 0 8px">Uses saved Live HR exports. Board-hit rate = actual HRs that were on the frozen board. Calibration = actual board HRs ÷ expected board HRs from model probabilities.</p>'+
+      '<div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:8px 0 12px">'+
+      '<div class="game-card open" style="padding:12px"><div class="section-title">Days</div><div style="font-size:24px;font-weight:800">'+st.days+'</div></div>'+
+      '<div class="game-card open" style="padding:12px"><div class="section-title">Board-hit rate</div><div style="font-size:24px;font-weight:800">'+(bh==null?'—':fmtPct(bh))+'</div><div class="help-note">'+st.boardHits+'/'+st.totalHR+' HRs</div></div>'+
+      '<div class="game-card open" style="padding:12px"><div class="section-title">Top-10 hit rate</div><div style="font-size:24px;font-weight:800">'+(t10==null?'—':fmtPct(t10))+'</div><div class="help-note">'+st.top10Hits+'/'+st.totalHR+' HRs</div></div>'+
+      '<div class="game-card open" style="padding:12px"><div class="section-title">Calibration</div><div style="font-size:24px;font-weight:800">'+(cal==null?'—':cal.toFixed(2)+'×')+'</div><div class="help-note">Actual '+st.actualAll+' vs expected '+st.expAll.toFixed(2)+'</div></div></div>'+
+      '<details open><summary style="cursor:pointer;font-weight:800">Daily results</summary><table class="players"><thead><tr><th>Date</th><th class="num">HRs</th><th class="num">Board</th><th class="num">Board hits</th><th class="num">Top 10</th><th class="num">Expected</th><th class="num">Actual</th><th class="num">Calib.</th></tr></thead><tbody>'+dayRows+'</tbody></table></details>'+
+      '<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:800">Calibration bins</summary><table class="players"><thead><tr><th>Predicted tier</th><th class="num">Board rows</th><th class="num">Expected</th><th class="num">Actual</th><th class="num">Actual/Expected</th></tr></thead><tbody>'+binRows+'</tbody></table></details>'+
+      '<textarea id="modelExportBox" style="width:100%;min-height:64px;font-family:monospace;font-size:11px;margin-top:10px" placeholder="Paste more dingerlab_hr_export JSON here…"></textarea><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="ghost" id="btnImportModelExport">Import export(s)</button><button class="ghost" id="btnClearModelExports">Clear scorecard</button></div></div></div>';
+  }
+  if($('#btnImportModelExport')) $('#btnImportModelExport').onclick=function(){ try{ const n=importModelExportsFromText($('#modelExportBox').value||''); toast('Imported', 'Added '+n+' export(s) to the model scorecard.', '📊'); renderModelScorecard(targetId); }catch(e){ toast('Import failed', String((e&&e.message)||e), '⚠️'); } };
+  if($('#btnClearModelExports')) $('#btnClearModelExports').onclick=function(){ if(confirm('Clear saved model scorecard exports?')){ localStorage.removeItem(MODEL_EXPORTS_KEY); renderModelScorecard(targetId); } };
 }
 
 function _loadTrackedSlips(){
@@ -1853,6 +2000,7 @@ function compareHrToModel(hr, dateStr){
 
   return {
     onBoard, inSlip, inTracked, rank, top10, top25, plusEv,
+    prob: hit?Number(hit.prob||0):null, ev: hit?Number(hit.ev||0):null,
     confidenceTier: (rank && rank<=10)?'Top 10':(rank && rank<=25)?'Top 25':(rank?('Board #'+rank):'Off board'),
     label,
   };
@@ -2083,7 +2231,9 @@ function exportLiveHrData(){
         confidenceTier:m.confidenceTier||null,
         plusEv:!!m.plusEv, top10:!!m.top10, top25:!!m.top25,
         inSlip:!!m.inSlip, inTracked:!!m.inTracked,
-        modelLabel:m.label||null
+        modelLabel:m.label||null,
+        modelProb:(m.prob!=null?m.prob:null),
+        modelEV:(m.ev!=null?m.ev:null)
       };
     });
     const missed=flat.filter(function(r){ return !r.onBoard; });
@@ -2118,6 +2268,7 @@ function exportLiveHrData(){
       missedByModel:missed,
       modelBoardSnapshot:board
     };
+    try{ addModelExport(out); renderModelScorecard(); }catch(e){}
     const json=JSON.stringify(out,null,2);
     const blob=new Blob([json],{type:'application/json'});
     const url=URL.createObjectURL(blob);
@@ -2432,6 +2583,7 @@ function renderTracking(){
     }
     return true;
   });
+  try{ renderModelScorecard('modelScorecardPanel'); }catch(e){}
   if(!arr.length){
     $('#trackTable').innerHTML='<div class="help-note">No saved parlays yet. Use the Cross-game builder and click <b>Save</b> on a parlay.</div>';
     return;
@@ -4521,6 +4673,7 @@ function renderDashboard(){
   renderCommandCenter();
   renderInsights();
   renderAllInOne();
+  try{ renderModelScorecard('dashboardModelScorecard'); }catch(e){}
   if(GAMES.length<1){
     summary.innerHTML='<div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">'
       +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Start here</div><div class="help-note">Fetch a slate, then use Dashboard to scan the best plays quickly.</div></div>'
@@ -4645,6 +4798,7 @@ function init(){
       logln('If this is a CORS error, OddsBlaze must be served from a backend (or use the Streamlit deploy).');
     }
   };
+  window.DL_loadAll=loadAll;
   if($('#btnLoad')) $('#btnLoad').onclick=loadAll; if($('#btnLoad2')) $('#btnLoad2').onclick=loadAll;
   if($('#btnRefreshOdds')) $('#btnRefreshOdds').onclick=()=>{ refreshOdds(); };
   if($('#autoRefresh')) $('#autoRefresh').onchange=()=>{ toggleAutoRefresh(); };
@@ -4674,8 +4828,9 @@ function init(){
   };
   if($('#btnLiveHrExport')) $('#btnLiveHrExport').onclick=function(){ exportLiveHrData(); };
   if($('#btnLiveHrSelfTest')) $('#btnLiveHrSelfTest').onclick=function(){ selfTestBoardMatch(); };
-  if($('#liveHrDate')) $('#liveHrDate').addEventListener('change', function(){ try{ updateLiveHrBoardChip(); }catch(e){} });
+  if($('#liveHrDate')) $('#liveHrDate').addEventListener('change', function(){ try{ updateLiveHrBoardChip(); }catch(e){} try{ _renderAutoBoardStatus(); }catch(e){} });
   try{ updateLiveHrBoardChip(); }catch(e){}
+  try{ initAutoBoardCaptureUI(); }catch(e){}
 
   // Keep the Live HR date selector in sync with the slate date picker.
   try{
@@ -4683,6 +4838,7 @@ function init(){
       $('#dateInput').addEventListener('change', function(){
         try{ $('#liveHrDate').value=$('#dateInput').value; }catch(e){}
         try{ updateLiveHrBoardChip(); }catch(e){}
+        try{ _renderAutoBoardStatus(); }catch(e){}
       });
     }
   }catch(e){}
