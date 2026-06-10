@@ -2127,7 +2127,7 @@ function exportLiveHrData(){
     document.body.appendChild(a); a.click();
     setTimeout(function(){ try{ document.body.removeChild(a); URL.revokeObjectURL(url); }catch(e){} }, 1500);
     _setLiveHrStatus('Exported', dateStr+' · '+flat.length+' HRs ('+missed.length+' missed)');
-    try{ toast('Export ready','Saved dingerlab_hr_export_'+dateStr+'.json ('+flat.length+' HRs, '+missed.length+' missed). Attach it in chat.','✅'); }catch(e){}
+    try{ toast('Export ready','Saved dingerlab_hr_export_'+dateStr+'.json ('+flat.length+' HRs, '+missed.length+' missed). Attach it in chat.','���'); }catch(e){}
   }catch(err){
     try{ toast('Export failed', String((err&&err.message)||err), '⚠️'); }catch(e){}
   }
@@ -5999,6 +5999,20 @@ function buildBestBoard(){
   var banner='<div class="help-note">&#x1F3C6; <b>Best Bets Board</b>: the '+top.length+' highest expected-value single legs across every player and market on the slate, devig-calibrated. Positive EV means the best price beats the model fair odds. Tap &#x26a1; to add any to your slip.</div>';
   $('#builderResults').innerHTML=banner+'<div class="parlay-grid">'+top.map(function(r,i){return boardCardHTML(r,i+1);}).join('')+'</div>';
 }
+function hitChanceTier(prob, mk){
+  var p=Number(prob)||0;
+  // Market-relative thresholds [Good, Great] (model hit probability)
+  var T={ hr:[0.07,0.115], hits:[0.45,0.62], hits2:[0.12,0.20], tb:[0.30,0.45], rbi:[0.35,0.50] };
+  var t=T[mk]||[0.10,0.20];
+  if(p>=t[1]) return 'Great';
+  if(p>=t[0]) return 'Good';
+  return 'Low';
+}
+function hitChanceChipHTML(prob, mk){
+  var tier=hitChanceTier(prob, mk);
+  var col = tier==='Great' ? 'background:#16a34a22;color:#16a34a' : (tier==='Good' ? 'background:#2d7ff922;color:#2d7ff9' : 'background:#f59e0b22;color:#f59e0b');
+  return '<span class="chip" title="Chance to hit \u2014 model probability rated relative to this market (Low / Good / Great)" style="'+col+'">Chance: '+tier+'</span>';
+}
 function boardCardHTML(r,rank){
   var g=r.g,p=r.p; var meta=MARKET_META[r.mk];
   var mv=(p._mktMove&&p._mktMove[r.mk]!=null)?p._mktMove[r.mk]:null;
@@ -6009,11 +6023,11 @@ function boardCardHTML(r,rank){
   var evcol=evpos?'#16a34a':'#dc2626';
   return '<div class="parlay-card" style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;background:#fff">'
     +'<div style="display:flex;justify-content:space-between;align-items:center">'
-    +'<div style="font-weight:700">#'+rank+' '+p.name+' <span class="chip" style="background:#2d7ff922;color:#2d7ff9">'+meta.short+'</span>'+steam+'</div>'
+    +'<div style="font-weight:700">#'+rank+' '+p.name+' <span class="chip" style="background:#2d7ff922;color:#2d7ff9">'+meta.short+'</span> '+hitChanceChipHTML(r.prob,r.mk)+steam+'</div>'
     +'<div style="font-weight:800;color:'+evcol+'">EV '+evtxt+'</div></div>'
     +'<div style="color:#6b7280;font-size:12px;margin:2px 0 8px">'+teamAbbr+' &#xB7; '+g.away+' @ '+g.home+' &#xB7; '+meta.leg+'</div>'
     +'<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13px">'
-    +'<div><div style="color:#6b7280;font-size:11px">Model</div><b>'+fmtPct(r.prob)+'</b></div>'
+    +'<div><div style="color:#6b7280;font-size:11px">Hit rate</div><b>'+fmtPct(r.prob)+'</b></div>'
     +'<div><div style="color:#6b7280;font-size:11px">Best price</div><b>'+decToAmerican(r.dec)+'</b></div>'
     +'<div><div style="color:#6b7280;font-size:11px">Fair</div><b>'+decToAmerican(1/clamp(r.prob,1e-9,0.999))+'</b></div>'
     +'</div>'
