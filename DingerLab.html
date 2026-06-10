@@ -767,6 +767,7 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
     <button data-tab="builder">Builder</button>
     <button data-tab="track">Tracking</button>
     <button data-tab="tools">Tools</button>
+    <button data-tab="live">Live</button>
   </div>
   <div class="mobile-quickbar" id="mobileQuickbar">
     <button data-mobile-jump="dashboard">Home</button>
@@ -927,6 +928,33 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
     <div id="toolsManualSlot" style="margin-top:14px"></div>
     <div id="toolsParksSlot" style="margin-top:14px"></div>
     <div id="toolsMethodSlot" style="margin-top:14px"></div>
+  </div>
+
+  <!-- ============================ Live HR Feed ============================ -->
+  <div data-panel="live" style="display:none">
+    <div class="section-title">⚡ Live HR Feed</div>
+    <p class="help-note">Polls today’s active MLB games and appends new home-run events. Load the slate first (so the model board exists), then start polling.</p>
+
+    <div class="game-card open" style="padding:14px 16px">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button class="ghost" id="btnLiveHrStart">Start live polling</button>
+        <button class="ghost" id="btnLiveHrStop">Stop</button>
+        <span class="chip" id="liveHrStatus">Idle</span>
+        <span class="help-note" id="liveHrMeta" style="margin:0">—</span>
+      </div>
+      <div class="help-note" style="margin-top:10px">Dedupe key: <code>gamePk + playId</code>. Polling runs in-browser (no server required).</div>
+    </div>
+
+    <div class="manual-grid" style="grid-template-columns: minmax(280px, 1.2fr) minmax(240px, .8fr); margin-top:12px">
+      <div>
+        <div class="section-title" style="margin-top:10px">Live HR cards</div>
+        <div id="liveHrList"></div>
+      </div>
+      <div>
+        <div class="section-title" style="margin-top:10px">Model Hit Tracker</div>
+        <div id="liveHrSummary"></div>
+      </div>
+    </div>
   </div>
 
   <!-- TAB: ALL IN ONE -->
@@ -1624,6 +1652,268 @@ let activeTab='dashboard';
 const TRACK_KEY='dingerlab_saved_parlays_v1';
 const LINEUP_SHOCK_KEY='dingerlab_lineup_shock_v1';
 const SLIP_WAGER_KEY='dingerlab_slip_wager_v1';
+
+/* ============================ Live HR Feed (v1.45) ============================ */
+let LIVE_HR_EVENTS=[];          // newest-first [{id,gamePk,playId,...,model:{...}}]
+const LIVE_HR_CACHE=new Set();  // id cache for dedupe
+let LIVE_HR_TIMER=null;
+let LIVE_HR_LAST_POLL_TS=0;
+
+function _todayStr(){
+  try{ return (document.getElementById('dateInput') && document.getElementById('dateInput').value) || (new Date()).toISOString().slice(0,10); }
+  catch(e){ return (new Date()).toISOString().slice(0,10); }
+}
+
+async function liveScheduleLoader(dateStr){
+  // Pull today's games and keep only: Live / In Progress / recently finished.
+  const sch=await jget('https://statsapi.mlb.com/api/v1/schedule?sportId=1&date='+encodeURIComponent(dateStr)+'&hydrate=team,linescore');
+  const out=[];
+  const now=Date.now();
+  (sch.dates||[]).forEach(function(dd){
+    (dd.games||[]).forEach(function(g){
+      const st=(g.status && g.status.abstractGameState) || '';
+      const pk=g.gamePk;
+      const startTs=Date.parse(g.gameDate||'')||0;
+      // “Recently finished” window: 4h after scheduled start.
+      const recentlyFinished = (st==='Final' || st==='Game Over') && startTs && (now-startTs) < 4*3600*1000;
+      const active = (st==='Live' || st==='In Progress' || st==='Manager Challenge' || st==='Review');
+      if(active || recentlyFinished){ out.push({gamePk:pk, state:st, startTs:startTs}); }
+    });
+  });
+  return out;
+}
+
+function normalizeHrEvent(gamePk, play){
+  // StatsAPI live feed play shape. Use gamePk+playId for dedupe.
+  const about=(play&&play.about)||{};
+  const res=(play&&play.result)||{};
+  const matchup=(play&&play.matchup)||{};
+  const batter=(matchup&&matchup.batter)||{};
+  const pitcher=(matchup&&matchup.pitcher)||{};
+  const idx=(about.inning!=null? String(about.inning):'');
+  const half=(about.halfInning||'');
+  const inning=idx ? (idx+' '+half) : '—';
+  const playId=String(play.playId!=null?play.playId:(about.atBatIndex!=null?about.atBatIndex:JSON.stringify(about).slice(0,24)));
+  const ev=(play&&play.playEvents&&play.playEvents.length)?(play.playEvents[play.playEvents.length-1]||{}):{};
+  const hit=(ev&&ev.hitData)||{};
+  const distance=(hit.totalDistance!=null?Number(hit.totalDistance):null);
+  const exitVelo=(hit.launchSpeed!=null?Number(hit.launchSpeed):null);
+  const launchAngle=(hit.launchAngle!=null?Number(hit.launchAngle):null);
+  const when=about.startTime || about.endTime || null;
+  const rbi=(res.rbi!=null?Number(res.rbi):null);
+  const scoreHome=(about.homeScore!=null?Number(about.homeScore):null);
+  const scoreAway=(about.awayScore!=null?Number(about.awayScore):null);
+
+  const id=String(gamePk)+'::'+playId;
+  return {
+    id,
+    gamePk:String(gamePk),
+    playId,
+    eventType:res.eventType||res.event||'home_run',
+    description:res.description||'',
+    hitter:String(batter.fullName||batter.lastFirstName||'Unknown'),
+    hitterId:(batter.id!=null?Number(batter.id):null),
+    pitcher:String(pitcher.fullName||pitcher.lastFirstName||'Unknown'),
+    pitcherId:(pitcher.id!=null?Number(pitcher.id):null),
+    inning,
+    isScoringPlay:!!play.isScoringPlay,
+    rbi,
+    score:{away:scoreAway, home:scoreHome},
+    ts: when ? Date.parse(when) : Date.now(),
+    tsRaw: when,
+    metrics:{distance, exitVelo, launchAngle},
+  };
+}
+
+function _boardSnapshot(){
+  // Build a lightweight lookup from the current “board” (portfolio candidates).
+  // Keys by normalized player name.
+  let arr=[];
+  try{ arr=collectPortfolioCandidates()||[]; }catch(e){ arr=[]; }
+  arr=arr.slice().sort(function(a,b){
+    // Reuse the same ordering used elsewhere: EV, edge, then probability.
+    return (Number(b.ev||0)-Number(a.ev||0)) || (Number(b.edge||0)-Number(a.edge||0)) || (Number(b.prob||0)-Number(a.prob||0));
+  });
+  const byName={};
+  arr.forEach(function(x,idx){
+    const nm=String(x && x.p && x.p.name || '').trim().toLowerCase();
+    if(!nm) return;
+    if(byName[nm]) return;
+    byName[nm]={
+      rank:idx+1,
+      mk:x.mk||'hr',
+      prob:Number(x.prob||0),
+      edge:Number(x.edge||0),
+      ev:Number(x.ev||0),
+      american:x.american!=null?Number(x.american):null,
+      bestBook:x.bestBook||null,
+      gamePk:(x.g && (x.g.id||x.g.gamePk))!=null?String(x.g.id||x.g.gamePk):null,
+    };
+  });
+  return {arr, byName};
+}
+
+function _inSlip(hitterName, gamePk){
+  const hn=String(hitterName||'').trim().toLowerCase();
+  const gpk=String(gamePk||'');
+  return (SLIP||[]).some(function(l){
+    const ln=String(l && l.name || (l && l.p && l.p.name) || '').trim().toLowerCase();
+    const lg=String(l && l.game || (l && l.g && (l.g.id||l.g.gamePk)) || '');
+    return ln===hn && (gpk==='' || lg===gpk);
+  });
+}
+
+function compareHrToModel(hr){
+  const snap=_boardSnapshot();
+  const key=String(hr.hitter||'').trim().toLowerCase();
+  const hit=snap.byName[key]||null;
+  const onBoard=!!hit;
+  const rank=hit?hit.rank:null;
+  const top10=!!(rank && rank<=10);
+  const top25=!!(rank && rank<=25);
+  const plusEv=!!(hit && Number(hit.ev||0)>0);
+  const inSlip=_inSlip(hr.hitter, hr.gamePk);
+
+  let label='Missed by model';
+  if(onBoard && inSlip) label='In slip';
+  else if(onBoard && top10 && plusEv) label='Strong model hit';
+  else if(onBoard) label='On board';
+  else label='Longshot HR';
+
+  return {
+    onBoard, inSlip, rank, top10, top25, plusEv,
+    confidenceTier: (rank && rank<=10)?'Top 10':(rank && rank<=25)?'Top 25':(rank?('Board #'+rank):'Off board'),
+    label,
+  };
+}
+
+function liveHrBadgesHtml(m){
+  if(!m) return '';
+  let chips=[];
+  if(m.onBoard) chips.push('<span class="chip">On board</span>');
+  if(m.top10) chips.push('<span class="chip" style="background:#22c55e22;color:#22c55e">Top 10</span>');
+  else if(m.top25) chips.push('<span class="chip" style="background:#38bdf822;color:#38bdf8">Top 25</span>');
+  if(m.inSlip) chips.push('<span class="chip" style="background:#f59e0b22;color:#f59e0b">In slip</span>');
+  if(m.plusEv) chips.push('<span class="chip" style="background:#10b98122;color:#10b981">+EV</span>');
+  if(!m.onBoard) chips.push('<span class="chip" style="background:#ef444422;color:#ef4444">Missed</span>');
+  return chips.join(' ');
+}
+
+function renderLiveHr(){
+  const list=document.getElementById('liveHrList');
+  const sum=document.getElementById('liveHrSummary');
+  if(!list || !sum) return;
+
+  if(!LIVE_HR_EVENTS.length){
+    list.innerHTML='<div class="help-note">No HR events captured yet. Load slate → start polling.</div>';
+  } else {
+    list.innerHTML=LIVE_HR_EVENTS.slice(0,40).map(function(e){
+      const m=e.model||null;
+      const dist=(e.metrics&&e.metrics.distance!=null)?(Math.round(e.metrics.distance)+' ft'):null;
+      const ev=(e.metrics&&e.metrics.exitVelo!=null)?(e.metrics.exitVelo.toFixed(1)+' mph'):null;
+      const ang=(e.metrics&&e.metrics.launchAngle!=null)?(Math.round(e.metrics.launchAngle)+'°'):null;
+      const metricBits=[dist,ev,ang].filter(Boolean).join(' · ');
+      const scoreBits=(e.score && e.score.away!=null && e.score.home!=null)?('Score: '+e.score.away+'–'+e.score.home):'Score: —';
+      const timeBits=e.ts?new Date(e.ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}):'—';
+      return ''
+        +'<div class="game-card open" style="padding:14px 16px; margin-bottom:10px">'
+        +  '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">'
+        +    '<div>'
+        +      '<div style="font-size:18px;font-weight:800">'+esc(e.hitter)+'</div>'
+        +      '<div class="help-note" style="margin-top:4px">'+esc(e.inning)+' · vs '+esc(e.pitcher)+' · gamePk '+esc(e.gamePk)+' · '+esc(timeBits)+'</div>'
+        +    '</div>'
+        +    '<div style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap">'+liveHrBadgesHtml(m)+'</div>'
+        +  '</div>'
+        +  '<div class="help-note" style="margin-top:10px">'+esc(e.description||'Home run')+'</div>'
+        +  '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'
+        +    '<span class="chip">'+esc(scoreBits)+'</span>'
+        +    (metricBits?('<span class="chip">'+esc(metricBits)+'</span>'):'')
+        +    (m && m.label?('<span class="chip" style="background:#111827;border-color:rgba(255,255,255,.12)"><b>'+esc(m.label)+'</b></span>'):'')
+        +  '</div>'
+        +'</div>';
+    }).join('');
+  }
+
+  // Summary counters
+  const total=LIVE_HR_EVENTS.length;
+  const boardHits=LIVE_HR_EVENTS.filter(x=>x.model&&x.model.onBoard).length;
+  const top10Hits=LIVE_HR_EVENTS.filter(x=>x.model&&x.model.top10).length;
+  const slipHits=LIVE_HR_EVENTS.filter(x=>x.model&&x.model.inSlip).length;
+  const misses=LIVE_HR_EVENTS.filter(x=>x.model&&!x.model.onBoard).length;
+  sum.innerHTML=''
+    +'<div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">'
+    +  '<div class="game-card open" style="padding:14px 16px"><div class="section-title">HRs today</div><div style="font-size:26px;font-weight:800">'+total+'</div></div>'
+    +  '<div class="game-card open" style="padding:14px 16px"><div class="section-title">Board hits</div><div style="font-size:26px;font-weight:800">'+boardHits+'</div></div>'
+    +  '<div class="game-card open" style="padding:14px 16px"><div class="section-title">Top-10 hits</div><div style="font-size:26px;font-weight:800">'+top10Hits+'</div></div>'
+    +  '<div class="game-card open" style="padding:14px 16px"><div class="section-title">Slip hits</div><div style="font-size:26px;font-weight:800">'+slipHits+'</div></div>'
+    +  '<div class="game-card open" style="padding:14px 16px"><div class="section-title">Misses</div><div style="font-size:26px;font-weight:800">'+misses+'</div></div>'
+    +'</div>';
+}
+
+function _setLiveHrStatus(txt, meta){
+  const s=document.getElementById('liveHrStatus');
+  const m=document.getElementById('liveHrMeta');
+  if(s) s.textContent=txt||'—';
+  if(m) m.textContent=meta||'—';
+}
+
+async function pollGameForHrs(gamePk){
+  const feed=await jget('https://statsapi.mlb.com/api/v1/game/'+encodeURIComponent(gamePk)+'/feed/live');
+  const plays=(((feed||{}).liveData||{}).plays||{}).allPlays||[];
+  const out=[];
+  plays.forEach(function(p){
+    const res=(p&&p.result)||{};
+    const isHr=(String(res.eventType||res.event||'').toLowerCase()==='home_run');
+    if(!isHr) return;
+    out.push(p);
+  });
+  return out;
+}
+
+async function liveHrPollOnce(){
+  const dateStr=_todayStr();
+  const games=await liveScheduleLoader(dateStr);
+  if(!games.length){
+    _setLiveHrStatus('No active games', dateStr);
+    renderLiveHr();
+    return;
+  }
+  _setLiveHrStatus('Polling…', games.length+' active game(s)');
+
+  let newCount=0;
+  for(let i=0;i<games.length;i++){
+    const pk=games[i].gamePk;
+    let plays=[];
+    try{ plays=await pollGameForHrs(pk); }
+    catch(e){ continue; }
+    plays.forEach(function(play){
+      const ev=normalizeHrEvent(pk, play);
+      if(LIVE_HR_CACHE.has(ev.id)) return;
+      LIVE_HR_CACHE.add(ev.id);
+      ev.model=compareHrToModel(ev);
+      LIVE_HR_EVENTS.unshift(ev);
+      newCount++;
+    });
+  }
+  LIVE_HR_LAST_POLL_TS=Date.now();
+  _setLiveHrStatus(LIVE_HR_TIMER?'Live':'Idle', (games.length+' games · +'+newCount+' new HR(s)'));
+  renderLiveHr();
+}
+
+function startLiveHrPolling(){
+  if(LIVE_HR_TIMER) return;
+  _setLiveHrStatus('Starting…','');
+  liveHrPollOnce();
+  LIVE_HR_TIMER=setInterval(function(){
+    liveHrPollOnce();
+  }, 25*1000);
+  _setLiveHrStatus('Live','Every ~25s');
+}
+
+function stopLiveHrPolling(){
+  if(LIVE_HR_TIMER){ clearInterval(LIVE_HR_TIMER); LIVE_HR_TIMER=null; }
+  _setLiveHrStatus('Stopped', (LIVE_HR_LAST_POLL_TS?('Last poll '+new Date(LIVE_HR_LAST_POLL_TS).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})):'—'));
+}
 
 
 function loadLineupShockReport(){
@@ -2483,6 +2773,17 @@ function renderSlip(){
 
 /* ============================ Fetch layer ============================ */
 async function jget(url){const r=await fetch(url);if(!r.ok)throw new Error('HTTP '+r.status+' '+url);return r.json();}
+
+// Minimal HTML escape helper (used by the Live HR Feed cards).
+function esc(s){
+  s=(s==null)?'':String(s);
+  return s
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'",'&#39;');
+}
 
 /* ============================ OddsBlaze (HR props) ============================
    NOTE: Putting an API key in client-side HTML is NOT secure.
@@ -4013,6 +4314,7 @@ function switchTab(t){
   if(t==='builder') renderBuilderPage();
   if(t==='track') renderTracking();
   if(t==='tools') renderToolsPage();
+  if(t==='live') renderLiveHr();
   if(t==='parks')renderParks();if(t==='method')renderMethod();
   if(t==='allinone')renderAllInOne();
   if(t==='insights')renderInsights();
@@ -4087,6 +4389,18 @@ function init(){
   $$('.mktbtn').forEach(function(b){ b.onclick=function(){ setMarket(b.dataset.mkt); }; });
   paintMarketButtons();
   restorePrefs(); wirePrefs();
+
+  // Live HR Feed wiring
+  if($('#btnLiveHrStart')) $('#btnLiveHrStart').onclick=function(){
+    if(GAMES.length<1){ toast('Load slate first','Click “Load slate + all-market odds” before starting the live feed.','ℹ️'); return; }
+    startLiveHrPolling();
+    try{ renderLiveHr(); }catch(e){}
+  };
+  if($('#btnLiveHrStop')) $('#btnLiveHrStop').onclick=function(){
+    stopLiveHrPolling();
+    try{ renderLiveHr(); }catch(e){}
+  };
+
   switchTab(activeTab);
 
   // Toast
