@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SPORTS BETTING — MLB HR Parlay Predictor</title>
+<title>Dinger Lab — MLB HR Parlay Predictor</title>
 <style>
 /*
  * _base.css — Global design tokens, element defaults, page shell, and tiny utilities.
@@ -732,7 +732,7 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
   </form>
 </div>
 <header class="app-header">
-  <div class="brand"><span class="logo">⚾</span> MLB BETTING LAB</div>
+  <div class="brand"><span class="logo">⚾</span> Dinger Lab</div>
   <span class="pill-tag">MLB Home-Run Parlay Model</span>
   <span class="version-tag" id="appVersion"></span>
   <div class="spacer"></div>
@@ -1115,8 +1115,8 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
 <button class="mobile-slip-fab hidden" id="mobileSlipFab">🧾 Open slip</button>
 
 <script>
-const APP_VERSION = 'v1.43';
-const APP_UPDATED = 'Updated Jun 9, 2026 — cleaner layout + workflow redesign';
+const APP_VERSION = 'v1.44';
+const APP_UPDATED = 'Updated Jun 10, 2026 — slate date refresh fix';
 const APP_PASSWORD = 'adi11';
 {
   const av=document.getElementById('appVersion');
@@ -2608,6 +2608,36 @@ async function loadOddsBlazeHrMerged(){
 }
 
 const LINE_SNAP_KEY = 'dingerlab_line_snapshot_v1';
+let CURRENT_SLATE_DATE = null;
+function resetSlateDateState(dateStr){
+  var changed = CURRENT_SLATE_DATE !== dateStr;
+  CURRENT_SLATE_DATE = dateStr;
+  window.DL_LINEUPS_CONFIRMED = false;
+  try{ saveLineupShockReport(null); }catch(e){}
+  if(changed){
+    try{ localStorage.removeItem(LINE_SNAP_KEY); }catch(e){}
+    try{ localStorage.removeItem('dingerlab_line_snap_all_v1'); }catch(e){}
+    try{ if(typeof ODDS_HIST!=='undefined' && ODDS_HIST && ODDS_HIST.clear) ODDS_HIST.clear(); }catch(e){}
+    try{ if(typeof TOASTED_STEAM!=='undefined' && TOASTED_STEAM && TOASTED_STEAM.clear) TOASTED_STEAM.clear(); }catch(e){}
+    try{ if(typeof LAST_STEAM!=='undefined') LAST_STEAM=[]; }catch(e){}
+  }
+}
+function clearSlateDisplays(dateStr){
+  var msg='Loading '+dateStr+' slate…';
+  if($('#gamesContainer')) $('#gamesContainer').innerHTML='<div class="empty">'+msg+'</div>';
+  if($('#globalPairsContainer')) $('#globalPairsContainer').innerHTML='';
+  if($('#bookValueContainer')) $('#bookValueContainer').innerHTML='';
+  if($('#feedContainer')) $('#feedContainer').innerHTML='';
+  if($('#steamContainer')) $('#steamContainer').innerHTML='';
+  if($('#builderResults')) $('#builderResults').innerHTML='<div class="help-note">'+msg+'</div>';
+  if($('#commandCenterResults')) $('#commandCenterResults').innerHTML='<div class="help-note">'+msg+'</div>';
+  if($('#portfolioResults')) $('#portfolioResults').innerHTML='<div class="help-note">'+msg+'</div>';
+  if($('#allInOneResults')) $('#allInOneResults').innerHTML='<div class="help-note">'+msg+'</div>';
+  if($('#insightsCheatSheet')) $('#insightsCheatSheet').innerHTML='<div class="help-note">'+msg+'</div>';
+  if($('#insightsTopFive')) $('#insightsTopFive').innerHTML='';
+  if($('#insightsTrendHeatmap')) $('#insightsTrendHeatmap').innerHTML='';
+  if($('#insightsTopEdges')) $('#insightsTopEdges').innerHTML='';
+}
 function checkLineMovement(){
   let prev = {};
   try{ prev = JSON.parse(localStorage.getItem(LINE_SNAP_KEY) || '{}'); }catch(e){ prev = {}; }
@@ -3091,12 +3121,19 @@ function updateAwarenessFeed(src, moves){
 
 async function loadSlate(dateStr){
   if($('#srcSelect').value==='manual'){setStatus('Manual mode selected — use the Manual entry tab or the sample game.');return;}
-  clearLog();setStatus('Fetching MLB schedule…',true);GAMES=[];
+  clearLog();
+  resetSlateDateState(dateStr);
+  GAMES=[];
+  clearSlateDisplays(dateStr);
+  renderGames();
+  if(activeTab==='dashboard') renderDashboard();
+  if(activeTab==='builder') renderBuilderPage();
+  setStatus('Fetching MLB schedule for '+dateStr+'…',true);
   try{
     const sched=await jget(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateStr}&hydrate=probablePitcher(note),team,venue,linescore`);
     const dates=sched.dates||[];
     const gamesRaw=dates.length?dates[0].games:[];
-    if(!gamesRaw.length){setStatus('No MLB games scheduled for '+dateStr+'. Try another date or the sample game.');renderGames();return;}
+    if(!gamesRaw.length){setStatus('No MLB games scheduled for '+dateStr+'. Try another date or the sample game.');renderGames(); if(activeTab==='dashboard') renderDashboard(); if(activeTab==='builder') renderBuilderPage(); return;}
     logln(`Found ${gamesRaw.length} games on ${dateStr}.`);
     // gather unique teams
     for(let gi=0; gi<gamesRaw.length; gi++){
@@ -3131,13 +3168,18 @@ async function loadSlate(dateStr){
         env, wx, homePitcher, awayPitcher, players:[...awayHitters,...homeHitters]});
       logln(`  ${awayT.name} @ ${homeT.name}: ${awayHitters.length+homeHitters.length} hitters, ${wx.summary}`);
     }
-    setStatus(`Loaded ${GAMES.length} games. Probabilities computed.`);
+    setStatus(`Loaded ${GAMES.length} games for ${dateStr}. Probabilities computed.`);
     renderGames();
+    if(activeTab==='dashboard') renderDashboard();
+    if(activeTab==='builder') renderBuilderPage();
     try{ updateAwarenessFeed('slate'); }catch(e){ console.warn('awareness', e); }
   }catch(e){
     console.error(e);
-    setStatus('Could not load live data ('+e.message+'). Your browser may block cross-site requests — try the sample game or Manual entry.');
+    setStatus('Could not load live data for '+dateStr+' ('+e.message+'). Your browser may block cross-site requests — try the sample game or Manual entry.');
     logln('ERROR: '+e.message);
+    renderGames();
+    if(activeTab==='dashboard') renderDashboard();
+    if(activeTab==='builder') renderBuilderPage();
   }
 }
 
@@ -4012,6 +4054,7 @@ function init(){
   window.addEventListener('resize', ()=>{ if(localStorage.getItem(MOBILE_LAYOUT_KEY)==null) applyMobileLayout(); else renderMobileChrome(); });
   const loadAll=async()=>{
     await loadSlate($('#dateInput').value);
+    if(GAMES.length<1){ return; }
     try{
       setStatus('Fetching OddsBlaze props \u2014 HR, Hits, Total Bases, RBI (4 books)\u2026',true);
       logln('OddsBlaze: requesting MLB props (Home Runs, Hits, 2+ Hits, Total Bases, RBI) from 4 books\u2026');
