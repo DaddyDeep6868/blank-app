@@ -736,7 +736,7 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
   <span class="pill-tag">MLB Home-Run Parlay Model</span>
   <span class="version-tag" id="appVersion"></span>
   <div class="spacer"></div>
-  <button id="btnLoad">Load slate + all-market odds</button> <button id="btnRefreshOdds" class="ghost">&#x1F504; Refresh odds</button> <button id="btnMobileMode" class="ghost mobile-toggle">📱 Mobile layout: Off</button> <label style="font-size:13px;color:#6b7280"><input type="checkbox" id="autoRefresh"> auto (60s)</label>
+  <button id="btnRefreshOdds" class="ghost">&#x1F504; Refresh odds</button> <button id="btnMobileMode" class="ghost mobile-toggle">📱 Mobile layout: Off</button> <label style="font-size:13px;color:#6b7280"><input type="checkbox" id="autoRefresh"> auto (60s)</label>
 </header>
 
 <main class="app-wrap">
@@ -895,7 +895,7 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
     <div id="bookValueContainer"></div>
     <div id="feedContainer"></div>
     <div id="steamContainer"></div>
-    <div id="gamesContainer"><div class="empty">No games loaded yet. Use <b>Load slate + all-market odds</b> for live data.</div></div>
+    <div id="gamesContainer"><div class="empty">No games loaded yet. Use <b>Fetch slate</b> for live data.</div></div>
   </div>
 
   <!-- TAB: BUILDER -->
@@ -2006,6 +2006,18 @@ function updateLiveHrBoardChip(){
       el.title='No ranked board for '+dateStr+'. Load the slate + odds pre-game to capture it; otherwise every HR shows as off board.';
     }
   }catch(e){}
+}
+
+function captureBoardSnapshotAndNotify(dateStr, notify){
+  let n=0;
+  try{ saveBoardSnapshotForDate(dateStr); const _s=loadBoardSnapshotForDate(dateStr); n=(_s&&_s.byId)?Object.keys(_s.byId).length:0; }catch(e){}
+  try{ if(_liveHrDateStr()===dateStr) LIVE_HR_BOARD_AVAILABLE=(n>0); }catch(e){}
+  try{ updateLiveHrBoardChip(); }catch(e){}
+  if(notify){
+    if(n>0){ try{ toast('Board saved', 'Model board filled for '+dateStr+' — '+n+' ranked player-markets captured. Live HR comparisons for this date are now enabled.', '✅'); }catch(e){} }
+    else { try{ toast('Board empty for '+dateStr, 'Odds loaded but no ranked player-markets qualified for the board (check the lineup/confidence filters, or HR props may not be posted yet).', '⚠️'); }catch(e){} }
+  }
+  return n;
 }
 
 async function fetchHrsForDate(dateStr){
@@ -3689,18 +3701,10 @@ async function loadSlate(dateStr){
         env, wx, homePitcher, awayPitcher, players:[...awayHitters,...homeHitters]});
       logln(`  ${awayT.name} @ ${homeT.name}: ${awayHitters.length+homeHitters.length} hitters, ${wx.summary}`);
     }
-    // Save a snapshot of the ranked board for this slate date.
-    // This enables historical HR pulls (e.g., 6/9) to compare against the 6/9 board later.
-    let _savedBoardN=0;
-    try{ saveBoardSnapshotForDate(dateStr); const _s=loadBoardSnapshotForDate(dateStr); _savedBoardN=(_s&&_s.byId)?Object.keys(_s.byId).length:0; }catch(e){}
-    if(_savedBoardN>0){
-      setStatus(`Loaded ${GAMES.length} games for ${dateStr}. Probabilities computed. ✅ Board filled for ${dateStr} — ${_savedBoardN} ranked player-markets saved (Live HR comparisons enabled).`);
-      try{ toast('Board saved', 'Model board filled for '+dateStr+' — '+_savedBoardN+' ranked player-markets captured. Live HR comparisons for this date are now enabled.', '✅'); }catch(e){}
-    } else {
-      setStatus(`Loaded ${GAMES.length} games for ${dateStr}. Probabilities computed. ⚠️ No ranked board could be built (need live sportsbook odds) — HR comparisons for ${dateStr} will show “off board.”`);
-      try{ toast('Board empty for '+dateStr, 'Slate loaded, but no ranked board could be built — this usually means live odds were unavailable (e.g., games already started/finished). HR comparisons for this date will show off board.', '⚠️'); }catch(e){}
-    }
-    try{ updateLiveHrBoardChip(); }catch(e){}
+    setStatus(`Loaded ${GAMES.length} games for ${dateStr}. Probabilities computed.`);
+    // The ranked board is captured AFTER odds are applied (see loadAll / refreshOdds),
+    // because odds drive the board — a slate-only snapshot here would be empty.
+    try{ saveBoardSnapshotForDate(dateStr); }catch(e){}
     renderGames();
     if(activeTab==='dashboard') renderDashboard();
     if(activeTab==='builder') renderBuilderPage();
@@ -4131,6 +4135,7 @@ async function refreshOdds(){
     var merged=await loadOddsBlazeHrMerged();
     var res=applyOddsToLoadedGames(merged);
     setStatus('Odds refreshed. Applied to '+res.applied+'/'+res.total+' hitters.',false);
+    try{ captureBoardSnapshotAndNotify($('#dateInput').value, false); }catch(e){}
     renderGames();
     if(activeTab==='dashboard') renderDashboard();
     if(activeTab==='builder') renderBuilderPage();
@@ -4164,7 +4169,7 @@ function renderGames(){
     bc.style.display='none';
   }
 
-  if(!all.length){c.innerHTML='<div class="empty">No games loaded yet. Use <b>Load slate + all-market odds</b> for live data.</div>';return;}
+  if(!all.length){c.innerHTML='<div class="empty">No games loaded yet. Use <b>Fetch slate</b> for live data.</div>';return;}
   const visible=all.filter(function(g){ return visiblePlayersForGame(g).length>0; });
   const summary=lineupFilterSummary(all);
   let banner='';
@@ -4596,6 +4601,7 @@ function init(){
       const res = applyOddsToLoadedGames(merged);
       logln('Applied odds to '+res.applied+'/'+res.total+' loaded hitters.');
       setStatus('Slate + odds loaded. Applied to '+res.applied+'/'+res.total+' hitters. Open a game card to see EV.',false);
+      try{ captureBoardSnapshotAndNotify($('#dateInput').value, true); }catch(e){}
       renderGames();
       if(activeTab==='dashboard') renderDashboard();
       if(activeTab==='builder') renderBuilderPage();
@@ -4612,7 +4618,7 @@ function init(){
       logln('If this is a CORS error, OddsBlaze must be served from a backend (or use the Streamlit deploy).');
     }
   };
-  $('#btnLoad').onclick=loadAll;$('#btnLoad2').onclick=loadAll;
+  if($('#btnLoad')) $('#btnLoad').onclick=loadAll; if($('#btnLoad2')) $('#btnLoad2').onclick=loadAll;
   if($('#btnRefreshOdds')) $('#btnRefreshOdds').onclick=()=>{ refreshOdds(); };
   if($('#autoRefresh')) $('#autoRefresh').onchange=()=>{ toggleAutoRefresh(); };
     if($('#lineupMode')) $('#lineupMode').onchange=()=>{ renderGames(); renderSlip(); if($('#builderResults')) $('#builderResults').innerHTML=''; };
@@ -4626,12 +4632,12 @@ function init(){
   try{ if($('#liveHrDate') && $('#dateInput') && $('#dateInput').value) $('#liveHrDate').value=$('#dateInput').value; }catch(e){}
 
   if($('#btnLiveHrStart')) $('#btnLiveHrStart').onclick=function(){
-    if(GAMES.length<1){ toast('Load slate first','Click “Load slate + all-market odds” before starting the live feed.','ℹ️'); return; }
+    if(GAMES.length<1){ toast('Load slate first','Click “Fetch slate” before starting the live feed.','ℹ️'); return; }
     startLiveHrPolling();
     try{ renderLiveHr(); }catch(e){}
   };
   if($('#btnLiveHrFetch')) $('#btnLiveHrFetch').onclick=async function(){
-    if(GAMES.length<1){ toast('Load slate first','Click “Load slate + all-market odds” before fetching HR history (so comparisons work).','ℹ️'); return; }
+    if(GAMES.length<1){ toast('Load slate first','Click “Fetch slate” before fetching HR history (so comparisons work).','ℹ️'); return; }
     const ds=_liveHrDateStr();
     await fetchHrsForDate(ds);
   };
@@ -4884,7 +4890,7 @@ function insightsEmptyMsg(){
     if(p._mktOdds&&p._mktOdds.hr&&p._mktOdds.hr.best!=null) anyHrOdds=true;
     if(playerBuildAllowed(p,g)) anyVisible=true;
   }); });
-  if(!anyHrOdds) return '<div class="help-note">\u26a0\ufe0f <b>No HR odds loaded.</b> Click <b>Load slate + all-market odds</b> (or \ud83d\udd04 Refresh odds). If the sidebar shows <b>Live odds ready: 0/4 books</b>, the OddsBlaze key or quota is the problem. If books are fine but nothing applies, sportsbooks may simply not have posted HR props for this slate yet \u2014 they often appear late morning ET.</div>';
+  if(!anyHrOdds) return '<div class="help-note">\u26a0\ufe0f <b>No HR odds loaded.</b> Click <b>Fetch slate</b> (or \ud83d\udd04 Refresh odds). If the sidebar shows <b>Live odds ready: 0/4 books</b>, the OddsBlaze key or quota is the problem. If books are fine but nothing applies, sportsbooks may simply not have posted HR props for this slate yet \u2014 they often appear late morning ET.</div>';
   if(!anyVisible) return '<div class="help-note">\u26a0\ufe0f HR odds are loaded, but the <b>Lineups filter</b> is hiding every hitter (e.g. \u201cConfirmed only\u201d before lineups post). Switch it to <b>All hitters</b> or run \u2705 Confirm lineups.</div>';
   return '<div class="help-note">HR odds are loaded but no rows passed the filters \u2014 try relaxing Min leg HR% or the value filters.</div>';
 }
