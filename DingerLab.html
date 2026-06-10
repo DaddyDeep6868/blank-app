@@ -565,6 +565,32 @@ table.players td.num,table.players th.num{text-align:right;font-variant-numeric:
 .parlay-stat .lbl{color:var(--notion-text-soft)}
 .parlay-stat .val{font-weight:700;font-variant-numeric:tabular-nums}
 
+.parlay-card.compact{min-height:235px;overflow:hidden;transition:transform .18s ease, box-shadow .18s ease}
+.parlay-card.compact .rank{left:40px}
+.parlay-card.compact .info-btn{position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:999px;padding:0;border:1px solid var(--notion-border);background:var(--notion-bg);color:var(--notion-text-soft);font-weight:800;line-height:24px;text-align:center;cursor:pointer;z-index:2}
+.parlay-card.compact .info-btn:hover{background:var(--notion-blue-bg);color:var(--notion-blue)}
+.parlay-card.compact .card-face{display:block}
+.parlay-card.compact .card-back{display:none}
+.parlay-card.compact.flipped .card-front{display:none}
+.parlay-card.compact.flipped .card-back{display:block}
+.parlay-title{font-size:15px;font-weight:850;line-height:1.22;margin:8px 30px 8px 0}
+.parlay-leg-list{display:grid;gap:6px;margin:8px 0 10px}
+.parlay-leg-row{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;border-bottom:1px dashed var(--notion-border-soft);padding-bottom:6px}
+.parlay-leg-row:last-child{border-bottom:none}
+.parlay-leg-name{font-weight:750;line-height:1.15}
+.parlay-leg-team{font-size:11.5px;color:var(--notion-text-soft);margin-top:2px}
+.parlay-leg-rate{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.parlay-leg-rate b{display:block;font-size:13px}
+.parlay-leg-rate span{font-size:11px;color:var(--notion-text-soft)}
+.parlay-mini-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
+.parlay-mini-stat{border:1px solid var(--notion-border-soft);background:color-mix(in srgb,var(--notion-bg-soft) 80%, transparent);border-radius:10px;padding:8px;min-height:54px}
+.parlay-mini-stat .k{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--notion-text-faint);white-space:nowrap}
+.parlay-mini-stat .v{font-size:14px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums}
+.parlay-mini-stat input{width:70px;max-width:100%;padding:2px 5px;border-radius:6px;border:1px solid rgba(128,128,128,.45);background:transparent;color:inherit;font:inherit;text-align:right}
+.parlay-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.parlay-actions button{flex:1 1 92px;min-height:32px;padding:6px 10px}
+.parlay-back-title{font-weight:850;margin:4px 34px 8px 0}
+
 .factor-row{display:flex;justify-content:space-between;font-size:12px;padding:2px 0}
 .factor-row .mult{font-variant-numeric:tabular-nums;font-weight:600}
 .mult.up{color:#2b8a3e}.mult.down{color:var(--notion-red)}
@@ -4150,7 +4176,7 @@ function bestPairsAcrossSlate(allGames, topN=20){
     if(ax!==ay) return ax-ay;
     return y.score-x.score;
   });
-  return pairs.slice(0, topN);
+  return uniqueByCombo(pairs, function(p){ return [{p:p.a,g:p.aGameObj,mk:ACTIVE_MARKET},{p:p.b,g:p.bGameObj,mk:ACTIVE_MARKET}]; }).slice(0, topN);
 }
 
 // Build N-leg cross-game parlays from a shortlist using a simple beam search.
@@ -4255,7 +4281,7 @@ function buildCrossGameParlays(allGames, {
     out.push(b);
   }
   out.sort((x,y)=>y.score-x.score);
-  return out.slice(0, outN);
+  return uniqueByCombo(out, function(b){ return b.picks; }).slice(0, outN);
 }
 
 function kCombos(arr,k){
@@ -4462,58 +4488,103 @@ function onWagerInput(id){
   if(prof) prof.textContent=(stk>0?'+$':'$')+(stk*(dec-1)).toFixed(2);
 }
 
+
+function parlayPlayerKey(p,g,mk){
+  return String((g&&g.id)||'g')+'::'+String((p&&p.mlbId)!=null?p.mlbId:(p&&p.name)||'')+'::'+String(mk||ACTIVE_MARKET||'hr');
+}
+function parlayComboKeyFromItems(items){
+  return (items||[]).map(function(it){
+    const p=it.p||it; const g=it.g||it.game||it.gameObj||null;
+    return String((g&&g.id)||'g')+'::'+String((p&&p.mlbId)!=null?p.mlbId:(p&&p.name)||'')+'::'+String(it.mk||ACTIVE_MARKET||'hr');
+  }).sort().join('|');
+}
+function uniqueByCombo(arr, picker){
+  const seen=new Set(), out=[];
+  (arr||[]).forEach(function(x){
+    const items=picker?picker(x):((x&&x.picks)||[]);
+    const key=parlayComboKeyFromItems(items);
+    if(!key || seen.has(key)) return;
+    seen.add(key); out.push(x);
+  });
+  return out;
+}
+function flipParlayCard(id){
+  const el=document.getElementById(id); if(el) el.classList.toggle('flipped');
+}
+function _safeAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function compactWagerHTML(dec, defStake){
+  if(!dec || dec<=1) return {html:'<div class="parlay-mini-stat"><div class="k">Wager</div><div class="v">—</div></div><div class="parlay-mini-stat"><div class="k">Payout</div><div class="v">—</div></div>', stake:null};
+  const id='wg_'+(++_WAGER_SEQ);
+  const stk=(defStake!=null && defStake>0)?defStake:10;
+  return {stake:stk, html:'<div class="parlay-mini-stat"><div class="k">Wager</div><div class="v">$ <input id="'+id+'" type="number" min="0" step="1" value="'+stk.toFixed(2)+'" data-dec="'+dec+'" oninput="onWagerInput(\''+id+'\')"></div></div>'+
+    '<div class="parlay-mini-stat"><div class="k">Payout</div><div class="v" id="'+id+'_pay">$'+(stk*dec).toFixed(2)+'</div><span id="'+id+'_prof" style="display:none">+$'+(stk*(dec-1)).toFixed(2)+'</span></div>'};
+}
+function shortTeamForPick(p,g){
+  if(!g) return '';
+  return (p&&p.side==='home') ? (g.homeAbbr||g.home||'') : (g.awayAbbr||g.away||'');
+}
+function compactLegRows(items){
+  return (items||[]).map(function(it,idx){
+    const p=it.p||it; const g=it.g||it.gameObj||it.game||null; const mk=it.mk||ACTIVE_MARKET||'hr';
+    const prob=(it.prob!=null)?it.prob:(p&&p.p!=null?p.p:null);
+    const team=shortTeamForPick(p,g); const game=g?(g.away+' @ '+g.home):'';
+    return '<div class="parlay-leg-row"><div><div class="parlay-leg-name">'+(p&&p.name?p.name:'Leg '+(idx+1))+' <span class="chip">'+((MARKET_META[mk]&&MARKET_META[mk].short)||mk)+'</span></div><div class="parlay-leg-team">'+team+(game?' · '+game:'')+'</div></div><div class="parlay-leg-rate"><b>'+(prob!=null?fmtPct(prob):'—')+'</b><span>hit rate</span></div></div>';
+  }).join('');
+}
+function compactParlayCard(opts){
+  const id='pc_'+(++_WAGER_SEQ)+'_'+Math.random().toString(16).slice(2);
+  const tier=opts.tier||'—'; const col=tierColor(tier);
+  const wager=compactWagerHTML(opts.dec, opts.stake);
+  const evHtml=opts.ev==null?'—':('<span class="'+(opts.ev>=0?'ev-pos':'ev-neg')+'">'+(opts.ev>=0?'+':'')+(opts.ev*100).toFixed(1)+'%</span>');
+  return '<div id="'+id+'" class="parlay-card compact r'+(opts.rank||1)+'"><span class="rank">#'+(opts.rank||1)+'</span><button class="info-btn" onclick="flipParlayCard(\''+id+'\')" title="More info">i</button>'+
+    '<div class="card-face card-front">'+
+      '<div class="parlay-title">'+opts.title+'</div>'+
+      '<div class="parlay-leg-list">'+opts.legsHtml+'</div>'+
+      '<div class="parlay-mini-grid">'+
+        '<div class="parlay-mini-stat"><div class="k">Hit rate</div><div class="v">'+(opts.hitRate!=null?fmtPct(opts.hitRate):'—')+'</div></div>'+
+        '<div class="parlay-mini-stat"><div class="k">Confidence</div><div class="v"><span class="chip" style="background:'+col+'22;color:'+col+'">'+tier+'</span></div></div>'+
+        '<div class="parlay-mini-stat"><div class="k">Odds</div><div class="v">'+(opts.odds||'—')+'</div></div>'+
+        wager.html+
+      '</div>'+
+      '<div class="parlay-actions">'+(opts.actions||'')+'</div>'+
+    '</div>'+
+    '<div class="card-face card-back">'+
+      '<div class="parlay-back-title">More info</div>'+
+      (opts.backHtml||'')+
+      '<div class="parlay-actions"><button class="ghost" onclick="flipParlayCard(\''+id+'\')">Back</button></div>'+
+    '</div></div>';
+}
+
 function globalParlayCardHTML(pr,rank){
-  const bookLine = pr.sameBookBestDec ? (pr.bestBook==='draftkings'?'DK':'Fanatics') + ' ' + decToAmerican(pr.sameBookBestDec) : '—';
+  const bookLine = pr.sameBookBestDec ? (shortBookLabel(pr.bestBook||'') + ' ' + decToAmerican(pr.sameBookBestDec)) : '—';
   const tA = pr.aGameObj && pr.aGameObj.gameDate ? fmtLocalTime(pr.aGameObj.gameDate) : '';
   const tB = pr.bGameObj && pr.bGameObj.gameDate ? fmtLocalTime(pr.bGameObj.gameDate) : '';
-  const aImg = headshotUrl(pr.a && pr.a.mlbId);
-  const bImg = headshotUrl(pr.b && pr.b.mlbId);
-  const _pmktRaw = (pr.a._mktProb!=null && pr.b._mktProb!=null) ? (pr.a._mktProb * pr.b._mktProb) : null;
-  const _pmkt = (_pmktRaw!=null) ? _pmktRaw : (pr.sameBookBestDec ? (1/pr.sameBookBestDec) : null);
-  const _pedge = (_pmkt!=null) ? (pr.joint - _pmkt) : null;
-  const _pedgeTxt = (_pedge==null) ? '\u2014' : ((_pedge>=0?'+':'')+(_pedge*100).toFixed(1)+' pts');
-  const _dec = pr.sameBookBestDec || null;
-  const _ev = parlayEV(calibratedJoint(pr.joint, weakestTier([confidenceLabel(pr.a),confidenceLabel(pr.b)])),_dec);
-  const _evTxt = _ev==null ? '—' : ((_ev>=0?'+':'')+(_ev*100).toFixed(1)+'%');
-  const _evCls = _ev==null ? '' : (_ev>=0?'ev-pos':'ev-neg');
   const _ctier = weakestTier([confidenceLabel(pr.a),confidenceLabel(pr.b)]);
   const _cj = calibratedJoint(pr.joint, _ctier);
+  const _dec = pr.sameBookBestDec || null;
   const _stk = _dec ? suggestStake(_cj,_dec) : null;
-  const _stkTxt = (_stk && _stk.stake>0) ? ('$'+_stk.stake.toFixed(2)+' · '+(STAKE.kelly*100).toFixed(0)+'% Kelly') : 'No bet (−EV)';
-  const _wk = weakestTier([confidenceLabel(pr.a),confidenceLabel(pr.b)]);
-  const _reasons = Array.from(new Set([].concat(confidenceReasons(pr.a), confidenceReasons(pr.b)))).join(' · ');
-  const _wkCol = tierColor(_wk);
-  return `<div class="parlay-card r${rank}"><span class="rank">#${rank}</span>
-    <h4>
-      <span class="nameRow">
-        ${aImg?`<img class="avatar" src="${aImg}" alt="" onerror="this.style.display='none'">`:''}
-        ${pr.a.name}
-        <span class="notion-faint">+</span>
-        ${bImg?`<img class="avatar" src="${bImg}" alt="" onerror="this.style.display='none'">`:''}
-        ${pr.b.name}
-      </span>
-    </h4>
-    <div class="parlay-stat"><span class="lbl">Game (A)</span><span class="val">${pr.aGame}${tA?` · ${tA}`:''}</span></div>
-    <div class="parlay-stat"><span class="lbl">Game (B)</span><span class="val">${pr.bGame}${tB?` · ${tB}`:''}</span></div>
-    <div class="parlay-stat"><span class="lbl">${pr.a.name}</span><span class="val">${fmtPct(pr.a.p)}</span></div>
-    <div class="parlay-stat"><span class="lbl">${pr.b.name}</span><span class="val">${fmtPct(pr.b.p)}</span></div>
-    <div class="parlay-stat"><span class="lbl">Combined (independent)</span><span class="val">${fmtPct(pr.joint)}</span></div>
-    <div class="parlay-stat"><span class="lbl">Calibrated win %</span><span class="val">${fmtPct(_cj)}${_cj!==pr.joint?' <span class="notion-faint">(tuned)</span>':''}</span></div>
-    <div class="parlay-stat"><span class="lbl">Market fair %</span><span class="val">${_pmkt==null?'\u2014':fmtPct(_pmkt)}</span></div>
-    <div class="parlay-stat"><span class="lbl">Model edge vs market</span><span class="val ${_pedge==null?'':(_pedge>=0?'ev-pos':'ev-neg')}">${_pedgeTxt}</span></div>
-    <div class="parlay-stat"><span class="lbl">Fair parlay odds</span><span class="val">${decToAmerican(pr.fairDec)}</span></div>
-    <div class="parlay-stat"><span class="lbl">Best same-book</span><span class="val">${bookLine}</span></div>
-    <div class="parlay-stat"><span class="lbl">Expected value</span><span class="val ${_evCls}">${_evTxt}</span></div>
-    <div class="parlay-stat"><span class="lbl">Suggested stake</span><span class="val">${_stkTxt}</span></div>
-    ${wagerRowsHTML(_dec, (_stk&&_stk.stake>0)?_stk.stake:null)}
-    <div class="parlay-stat"><span class="lbl">Confidence</span><span class="val"><span class="chip" style="background:${_wkCol}22;color:${_wkCol}" title="${_reasons||'No standout factors'}">${_wk}</span></span></div>
-    <div class="parlay-stat"><span class="lbl">Add to betslip</span><span class="val"><button class="ghost" style="padding:2px 10px" onclick="addSlipGP('${pr.aGameObj.id}','${encodeURIComponent(pr.a.name)}'); addSlipGP('${pr.bGameObj.id}','${encodeURIComponent(pr.b.name)}');">Add both</button></span></div>
-  </div>`;
+  const _pmktRaw = (pr.a._mktProb!=null && pr.b._mktProb!=null) ? (pr.a._mktProb * pr.b._mktProb) : null;
+  const _pmkt = (_pmktRaw!=null) ? _pmktRaw : (_dec ? (1/_dec) : null);
+  const _edge = (_pmkt!=null) ? (pr.joint - _pmkt) : null;
+  const _ev = parlayEV(_cj,_dec);
+  const items=[{p:pr.a,g:pr.aGameObj,mk:ACTIVE_MARKET},{p:pr.b,g:pr.bGameObj,mk:ACTIVE_MARKET}];
+  const legsHtml=compactLegRows(items);
+  const title=pr.a.name+' + '+pr.b.name;
+  const actions='<button class="ghost" onclick="addSlipGP(\''+pr.aGameObj.id+'\',\''+encodeURIComponent(pr.a.name)+'\'); addSlipGP(\''+pr.bGameObj.id+'\',\''+encodeURIComponent(pr.b.name)+'\');">Add both</button>';
+  const back='<div class="parlay-stat"><span class="lbl">Game A</span><span class="val">'+pr.aGame+(tA?' · '+tA:'')+'</span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Game B</span><span class="val">'+pr.bGame+(tB?' · '+tB:'')+'</span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Raw combined</span><span class="val">'+fmtPct(pr.joint)+'</span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Calibrated win %</span><span class="val">'+fmtPct(_cj)+'</span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Market fair %</span><span class="val">'+(_pmkt==null?'—':fmtPct(_pmkt))+'</span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Model edge</span><span class="val '+(_edge==null?'':(_edge>=0?'ev-pos':'ev-neg'))+'">'+(_edge==null?'—':((_edge>=0?'+':'')+(_edge*100).toFixed(1)+' pts'))+'</span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Fair parlay odds</span><span class="val">'+decToAmerican(pr.fairDec)+'</span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Expected value</span><span class="val">'+(_ev==null?'—':((_ev>=0?'+':'')+(_ev*100).toFixed(1)+'%'))+'</span></div>';
+  return compactParlayCard({rank:rank,title:title,legsHtml:legsHtml,hitRate:_cj,tier:_ctier,odds:bookLine,dec:_dec,stake:(_stk&&_stk.stake>0)?_stk.stake:null,ev:_ev,actions:actions,backHtml:back});
 }
 
 function gameCardHTML(g,gi){
   const e=g.env;const wx=g.wx||{};
-  const pairs=bestPairs(g).slice(0,3);
+  const pairs=uniqueByCombo(bestPairs(g), function(p){ return [{p:p.a,g:g,mk:ACTIVE_MARKET},{p:p.b,g:g,mk:ACTIVE_MARKET}]; }).slice(0,3);
   const top=pairs.map((pr,k)=>parlayCardHTML(pr,k+1)).join('');
   // players table sorted by prob
   const sorted=[...visiblePlayersForGame(g)].sort((a,b)=>b.p-a.p);
@@ -4562,73 +4633,28 @@ function windDesc(e,wx){
 }
 
 function parlayCardHTML(pr,rank){
-  const evTxt=pr.ev!=null?`<span class="${pr.ev>0?'ev-pos':'ev-neg'}">${pr.ev>0?'+':''}${(pr.ev*100).toFixed(1)}%</span>`:'—';
-  const bookTxt=pr.bookDec?decToAmerican(pr.bookDec):'—';
   const aBook=(pr.a && pr.a._oddsBooks && pr.a._oddsBooks.autoBest)?pr.a._oddsBooks.autoBest:null;
   const bBook=(pr.b && pr.b._oddsBooks && pr.b._oddsBooks.autoBest)?pr.b._oddsBooks.autoBest:null;
-  const aLine=(pr.a && pr.a.odds!=null)?(pr.a.odds>0?`+${pr.a.odds}`:`${pr.a.odds}`):'—';
-  const bLine=(pr.b && pr.b.odds!=null)?(pr.b.odds>0?`+${pr.b.odds}`:`${pr.b.odds}`):'—';
-  const aBookTxt=aBook?`(${aBook === 'draftkings' ? 'DK' : 'Fanatics'} ${aLine})`:'';
-  const bBookTxt=bBook?`(${bBook === 'draftkings' ? 'DK' : 'Fanatics'} ${bLine})`:'';
-
-  // Same-book parlay comparison (what you'd get if you must place both legs in one app)
-  const aDK=pr.a && pr.a._oddsBooks ? pr.a._oddsBooks.draftkings : null;
-  const bDK=pr.b && pr.b._oddsBooks ? pr.b._oddsBooks.draftkings : null;
-  const aFAN=pr.a && pr.a._oddsBooks ? pr.a._oddsBooks.fanatics : null;
-  const bFAN=pr.b && pr.b._oddsBooks ? pr.b._oddsBooks.fanatics : null;
-
-  const dkDec = (aDK!=null && bDK!=null) ? (amToDecimal(aDK)*amToDecimal(bDK)) : null;
-  const fanDec = (aFAN!=null && bFAN!=null) ? (amToDecimal(aFAN)*amToDecimal(bFAN)) : null;
-  const dkPar = dkDec ? decToAmerican(dkDec) : '—';
-  const fanPar = fanDec ? decToAmerican(fanDec) : '—';
-  let bestSameBook = '—';
-  if(dkDec && fanDec) bestSameBook = dkDec>=fanDec ? `DK ${dkPar}` : `Fanatics ${fanPar}`;
-  else if(dkDec) bestSameBook = `DK ${dkPar}`;
-  else if(fanDec) bestSameBook = `Fanatics ${fanPar}`;
-
-  return `<div class="parlay-card r${rank}"><span class="rank">#${rank}</span>
-    <h4>${pr.a.name} <span class="notion-faint">+</span> ${pr.b.name}</h4>
-    <div class="parlay-stat"><span class="lbl">${pr.a.name}</span><span class="val">${fmtPct(pr.a.p)}</span></div>
-    <div class="parlay-stat"><span class="lbl">${pr.b.name}</span><span class="val">${fmtPct(pr.b.p)}</span></div>
-    <div class="parlay-stat"><span class="lbl">Best books used</span><span class="val">${aBookTxt} + ${bBookTxt}</span></div>
-    <div class="parlay-stat"><span class="lbl">Combined (both HR)</span><span class="val">${fmtPct(pr.joint)}</span></div>
-    <div class="parlay-stat"><span class="lbl">Fair parlay odds</span><span class="val">${pr.fairDec?decToAmerican(pr.fairDec):'—'}</span></div>
-    <div class="parlay-stat"><span class="lbl">Book parlay odds</span><span class="val">${bookTxt}</span></div>
-    <div class="parlay-stat"><span class="lbl">Same-book parlay</span><span class="val">${bestSameBook}</span></div>
-    <div class="parlay-stat"><span class="lbl">Expected value</span><span class="val">${evTxt}</span></div>
-    <div class="parlay-stat"><span class="lbl">Type</span><span class="val">${pr.sameTeam?'Teammates':'Opponents'}</span></div>
-  </div>`;
-}
-
-function playerRowHTML(p,g){
-  const c=p.calc;const f=c.factors;
-  const _lu = (p._lineupStatus==="out") ? ' <span class="chip" style="background:#db443722;color:#db4437" title="Not in the posted starting lineup">\u26a0\ufe0f Out</span>' : (p._lineupStatus==="in" ? ` <span class="chip" style="background:#0f9d5822;color:#0f9d58" title="Confirmed in lineup">\u2705 #${p._lineupSpot||p.spot||""}</span>` : ` <span class="chip" style="background:#f59e0b22;color:#b45309" title="Projected lineup spot until confirmed">⏳ Proj #${p._projectedSpot||p.spot||""}</span>`);
-  const _sm = (p._lineMove!=null && p._lineMove!==0) ? (' <span class="chip" style="background:'+(p._lineMove<0?'#0f9d5822;color:#0f9d58':'#db443722;color:#db4437')+'" title="Line moved '+(p._lineMove<0?'IN since last load (shortening = steam toward this bet)':'OUT since last load (drifting = market cooling)')+'">'+(p._lineMove<0?'\ud83d\udd25':'\u2744\ufe0f')+' '+(p._lineMove>0?'+':'')+p._lineMove+'</span>') : "";
-  const _mx=(f&&f.matchup!=null)?f.matchup:1;
-  const _dna=(Math.abs(_mx-1)>=0.05)?(' <span class="chip" style="background:'+(_mx>1?'#7c3aed22;color:#7c3aed':'#64748b22;color:#64748b')+'" title="'+String((c&&c.matchupWhy)||'Pitch-type matchup').replace(/"/g,'&quot;')+'">\ud83e\uddec \u00d7'+_mx.toFixed(2)+'</span>'):'';
-  const dk = p._oddsBooks && p._oddsBooks.draftkings!=null ? p._oddsBooks.draftkings : null;
-  const fan = p._oddsBooks && p._oddsBooks.fanatics!=null ? p._oddsBooks.fanatics : null;
-  const best = p.odds!=null ? p.odds : null;
-  const impl=best?amToImplied(best):null;
-  const edge=impl!=null?p.p-impl:null;
-  const fairAm=decToAmerican(1/p.p);
-  const fb=k=>`<div class="factor-row"><span>${k.label}</span><span class="mult ${k.v>1.001?'up':k.v<0.999?'down':''}">×${k.v.toFixed(3)}</span></div>`;
-  const FLABEL={park:'Park',pitcher:'Opposing pitcher',platoon:'Handedness/platoon',temp:'Temperature',wind:'Wind',humidity:'Humidity',daynight:'Day/Night',matchup:'Matchup DNA (pitch types)'};
-  const factorsHTML=Object.keys(f||{}).map(k=>fb({label:FLABEL[k]||k,v:f[k]})).join('');
-  return `<tr>
-    <td>${p.name} <span class="handed">(${p.bats})</span>${_lu}${_sm}${_dna}</td>
-    <td>${p.side==='home'?g.homeAbbr||g.home:g.awayAbbr||g.away}</td>
-    <td class="num">${(p._lineupStatus==='in'&&p._lineupSpot)?p._lineupSpot:(p._projectedSpot||p.spot)}</td>
-    <td class="num">${ACTIVE_MARKET==='tb'?c.perPA.toFixed(2):(c.perPA*100).toFixed(2)+'%'}</td>
-    <td class="num"><span class="prob-pill" style="background:${probColor(p.p)}22;color:${probColor(p.p)}">${fmtPct(p.p)}</span><div class="bar-mini"><span style="width:${clamp(p.p/(MARKET_META[ACTIVE_MARKET].cap/100)*100,3,100)}%"></span></div></td>
-    <td class="num">${fairAm}</td>
-    <td class="num">${dk!=null?(dk>0?'+'+dk:dk):'—'}</td>
-    <td class="num">${fan!=null?(fan>0?'+'+fan:fan):'—'}</td>
-    <td class="num">${best!=null?(best>0?'+'+best:best):'—'}</td>
-    <td class="num">${edge!=null?`<span class="${edge>0?'ev-pos':'ev-neg'}">${edge>0?'+':''}${(edge*100).toFixed(1)}%</span>`:'—'}</td>
-    <td><details class="breakdown"><summary>factors</summary>${factorsHTML}</details></td>
-    <td class="num"><button class="ghost" style="padding:2px 10px" onclick="addSlipGP('${g.id}','${encodeURIComponent(p.name)}')">Add</button></td>
-  </tr>`;
+  const aLine=(pr.a && pr.a.odds!=null)?fmtAmerican(pr.a.odds):'—';
+  const bLine=(pr.b && pr.b.odds!=null)?fmtAmerican(pr.b.odds):'—';
+  const bestBook=bestBookDecimalForTwoLeg(pr.a,pr.b);
+  const bestSameBook = bestBook.dec ? shortBookLabel(bestBook.book)+' '+decToAmerican(bestBook.dec) : '—';
+  const tier=weakestTier([confidenceLabel(pr.a),confidenceLabel(pr.b)]);
+  const cj=calibratedJoint(pr.joint,tier);
+  const dec=bestBook.dec || pr.bookDec || null;
+  const ev=dec?parlayEV(cj,dec):pr.ev;
+  const stk=dec?suggestStake(cj,dec):null;
+  const g={id:'same',away:'Same game',home:'',awayAbbr:'',homeAbbr:''};
+  const items=[{p:pr.a,g:g,mk:ACTIVE_MARKET},{p:pr.b,g:g,mk:ACTIVE_MARKET}];
+  const actions='';
+  const back='<div class="parlay-stat"><span class="lbl">Best books used</span><span class="val">'+(aBook?shortBookLabel(aBook)+' '+aLine:'—')+' + '+(bBook?shortBookLabel(bBook)+' '+bLine:'—')+'</span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Raw combined</span><span class="val">'+fmtPct(pr.joint)+'</span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Fair parlay odds</span><span class="val">'+(pr.fairDec?decToAmerican(pr.fairDec):'—')+'</span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Book parlay odds</span><span class="val">'+(pr.bookDec?decToAmerican(pr.bookDec):'—')+'</span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Same-book parlay</span><span class="val">'+bestSameBook+'</span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Type</span><span class="val">'+(pr.sameTeam?'Teammates':'Opponents')+'</span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Expected value</span><span class="val">'+(ev==null?'—':((ev>=0?'+':'')+(ev*100).toFixed(1)+'%'))+'</span></div>';
+  return compactParlayCard({rank:rank,title:pr.a.name+' + '+pr.b.name,legsHtml:compactLegRows(items),hitRate:cj,tier:tier,odds:bestSameBook,dec:dec,stake:(stk&&stk.stake>0)?stk.stake:null,ev:ev,actions:actions,backHtml:back});
 }
 
 /* ============================ Manual game ============================ */
@@ -5837,7 +5863,7 @@ function buildPortfolioPairs(singles,cfg){
     chosen.push(p);
     names.forEach(function(n){ exposure[n]=(exposure[n]||0)+1; });
   });
-  return chosen;
+  return uniqueByCombo(chosen, function(p){ return p.picks; });
 }
 
 function portfolioRoundRobinCore(singles,cfg){
@@ -6460,29 +6486,22 @@ function autoSuggestCard(){
 }
 
 function globalNLegCardHTML(b,rank){
-  const legs=b.picks.map(x=>x.p);
-  const games=b.picks.map(x=>`${x.g.away} @ ${x.g.home}`);
-  const sameBookLine = b.sameBookBestDec ? `${b.sameBookBest==='draftkings'?'DK':'Fanatics'} ${decToAmerican(b.sameBookBestDec)}` : '—';
+  const legs=b.picks.map(function(x){return x.p;});
+  const items=b.picks.map(function(x){ return {p:x.p,g:x.g,mk:(x.mk||ACTIVE_MARKET||'hr'),prob:(x.prob!=null?x.prob:x.p.p)}; });
+  const sameBookLine = b.sameBookBestDec ? (shortBookLabel(b.sameBookBest)+' '+decToAmerican(b.sameBookBestDec)) : '—';
   const mixedLine = b.mixedDec ? decToAmerican(b.mixedDec) : '—';
   const fairLine = decToAmerican(1/b.joint);
   const _ev = nLegEV(b);
-  const _evTxt = _ev==null ? '—' : ((_ev>=0?'+':'')+(_ev*100).toFixed(1)+'%');
-  const _evCls = _ev==null ? '' : (_ev>=0?'ev-pos':'ev-neg');
   const _bd = nLegBestDec(b);
-  const _ctier = weakestTier(b.picks.map(function(x){return confidenceLabel(x.p);}));
-  const _cj = calibratedJoint(b.joint, _ctier);
-  const _stk = _bd ? suggestStake(_cj,_bd) : null;
-  const _stkTxt = (_stk && _stk.stake>0) ? ('$'+_stk.stake.toFixed(2)+' · '+(STAKE.kelly*100).toFixed(0)+'% Kelly') : 'No bet (−EV)';
   const _wk = weakestTier(b.picks.map(function(x){return confidenceLabel(x.p);}));
-  const _reasons = Array.from(new Set([].concat.apply([], b.picks.map(function(x){return confidenceReasons(x.p);})))).join(' · ');
-  const _wkCol = tierColor(_wk);
-  const txt = legs.map(p=>{
-    // Prefer per-book odds if present; otherwise fall back to best.
-    const dk=p._oddsBooks&&p._oddsBooks.draftkings!=null ? (p._oddsBooks.draftkings>0?`+${p._oddsBooks.draftkings}`:`${p._oddsBooks.draftkings}`) : '—';
-    const fan=p._oddsBooks&&p._oddsBooks.fanatics!=null ? (p._oddsBooks.fanatics>0?`+${p._oddsBooks.fanatics}`:`${p._oddsBooks.fanatics}`) : '—';
-    const best=p.odds!=null ? (p.odds>0?`+${p.odds}`:`${p.odds}`) : '—';
-    const bestBook=p._oddsBooks&&p._oddsBooks.autoBest ? (p._oddsBooks.autoBest==='draftkings'?'DK':'Fanatics') : '—';
-    return `${p.name} HR | DK ${dk} | Fanatics ${fan} | Best ${bestBook} ${best}`;
+  const _cj = calibratedJoint(b.joint, _wk);
+  const _stk = _bd ? suggestStake(_cj,_bd) : null;
+  const txt = legs.map(function(p){
+    const dk=p._oddsBooks&&p._oddsBooks.draftkings!=null ? fmtAmerican(p._oddsBooks.draftkings) : '—';
+    const fan=p._oddsBooks&&p._oddsBooks.fanatics!=null ? fmtAmerican(p._oddsBooks.fanatics) : '—';
+    const best=p.odds!=null ? fmtAmerican(p.odds) : '—';
+    const bestBook=p._oddsBooks&&p._oddsBooks.autoBest ? shortBookLabel(p._oddsBooks.autoBest) : '—';
+    return p.name+' '+(MARKET_META[ACTIVE_MARKET]&&MARKET_META[ACTIVE_MARKET].short||'')+' | DK '+dk+' | Fanatics '+fan+' | Best '+bestBook+' '+best;
   }).join('\n');
   const b64 = btoa(unescape(encodeURIComponent(txt)));
   const _legData = b.picks.map(function(x){ return { name:x.p.name, mlbId:(x.p.mlbId||null), gamePk:(x.g.id||null), mk:(x.mk||ACTIVE_MARKET||'hr'), date:(x.g.gameDate? String(x.g.gameDate).slice(0,10):null) }; });
@@ -6491,26 +6510,17 @@ function globalNLegCardHTML(b,rank){
   const _mktRaw = _mktArr.every(function(v){ return v!=null; }) ? _mktArr.reduce(function(a,v){ return a*v; }, 1) : null;
   const _mkt = (_mktRaw!=null) ? _mktRaw : (_bd ? (1/_bd) : null);
   const _edge = (_mkt!=null) ? (b.joint - _mkt) : null;
-  const _edgeTxt = (_edge==null) ? '\u2014' : ((_edge>=0?'+':'')+(_edge*100).toFixed(1)+' pts');
-  const bestSameBook = b.sameBookBestDec ? `${b.sameBookBest==='draftkings'?'DK':'Fanatics'} ${decToAmerican(b.sameBookBestDec)}` : '—';
-  return `<div class="parlay-card r${rank}"><span class="rank">#${rank}</span>
-    <h4><span class="nameRow">${legs.map(p=>{const im=headshotUrl(p.mlbId);return `${im?`<img class=\"avatar\" src=\"${im}\" alt=\"\" onerror=\"this.style.display='none'\">`:''}<span>${p.name}</span>`;}).join('<span class="notion-faint" style="margin:0 2px">+</span>')}</span></h4>
-    ${legs.map((p,idx)=>`<div class="parlay-stat"><span class="lbl">Leg ${idx+1}</span><span class="val">${p.name} · ${fmtPct(p.p)} · ${games[idx]}</span></div>`).join('')}
-    <div class="parlay-stat"><span class="lbl">Combined (independent)</span><span class="val">${fmtPct(b.joint)}</span></div>
-    <div class="parlay-stat"><span class="lbl">Calibrated win %</span><span class="val">${fmtPct(_cj)}${_cj!==b.joint?' <span class="notion-faint">(tuned)</span>':''}</span></div>
-    <div class="parlay-stat"><span class="lbl">Market fair %</span><span class="val">${_mkt==null?'\u2014':fmtPct(_mkt)}</span></div>
-    <div class="parlay-stat"><span class="lbl">Model edge vs market</span><span class="val ${_edge==null?'':(_edge>=0?'ev-pos':'ev-neg')}">${_edgeTxt}</span></div>
-    <div class="parlay-stat"><span class="lbl">Expected value</span><span class="val ${_evCls}">${_evTxt}</span></div>
-    <div class="parlay-stat"><span class="lbl">Suggested stake</span><span class="val">${_stkTxt}</span></div>
-    ${wagerRowsHTML(_bd, (_stk&&_stk.stake>0)?_stk.stake:null)}
-    <div class="parlay-stat"><span class="lbl">Confidence</span><span class="val"><span class="chip" style="background:${_wkCol}22;color:${_wkCol}" title="${_reasons||'No standout factors'}">${_wk}</span></span></div>
-    <div class="parlay-stat"><span class="lbl">Fair odds</span><span class="val">${fairLine}</span></div>
-    <div class="parlay-stat"><span class="lbl">Best same-book</span><span class="val">${sameBookLine}</span></div>
-    <div class="parlay-stat"><span class="lbl">Mixed-books (best legs)</span><span class="val">${mixedLine}</span></div>
-    <div class="parlay-stat"><span class="lbl">Add all legs</span><span class="val"><button class="ghost" style="padding:2px 10px" onclick="addAllLegs('${_ld64}')">\u26a1 Add all</button></span></div>
-    <div class="parlay-stat"><span class="lbl">Copy bet slip</span><span class="val"><button class="ghost" style="padding:2px 10px" onclick="copySlip('${b64}')">Copy</button></span></div>
-    <div class="parlay-stat"><span class="lbl">Save</span><span class="val"><button class="ghost" style="padding:2px 10px" onclick="saveParlay('${b64}', ${legs.length}, ${(b.joint*100).toFixed(4)}, '${bestSameBook.replace(/'/g,"\\'")}', ${_bd||'null'}, '${_wk}', ${_ev==null?'null':_ev.toFixed(4)}, ${b.joint.toFixed(6)}, '${_ld64}')">Save</button></span></div>
-  </div>`;
+  const bestSameBook = b.sameBookBestDec ? (shortBookLabel(b.sameBookBest)+' '+decToAmerican(b.sameBookBestDec)) : '—';
+  const actions='<button class="ghost" onclick="addAllLegs(\''+_ld64+'\')">Add all</button><button class="ghost" onclick="copySlip(\''+b64+'\')">Copy</button><button class="ghost" onclick="saveParlay(\''+b64+'\', '+legs.length+', '+(b.joint*100).toFixed(4)+', \''+bestSameBook.replace(/'/g,"\\'")+'\', '+(_bd||'null')+', \''+_wk+'\', '+(_ev==null?'null':_ev.toFixed(4))+', '+b.joint.toFixed(6)+', \''+_ld64+'\')">Save</button>';
+  const back='<div class="parlay-stat"><span class="lbl">Raw combined</span><span class="val">'+fmtPct(b.joint)+'</span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Calibrated win %</span><span class="val">'+fmtPct(_cj)+'</span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Market fair %</span><span class="val">'+(_mkt==null?'—':fmtPct(_mkt))+'</span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Model edge</span><span class="val '+(_edge==null?'':(_edge>=0?'ev-pos':'ev-neg'))+'">'+(_edge==null?'—':((_edge>=0?'+':'')+(_edge*100).toFixed(1)+' pts'))+'</span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Expected value</span><span class="val '+(_ev==null?'':(_ev>=0?'ev-pos':'ev-neg'))+'">'+(_ev==null?'—':((_ev>=0?'+':'')+(_ev*100).toFixed(1)+'%'))+'</span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Fair odds</span><span class="val">'+fairLine+'</span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Best same-book</span><span class="val">'+sameBookLine+'</span></div>'+
+    '<div class="parlay-stat"><span class="lbl">Mixed-books</span><span class="val">'+mixedLine+'</span></div>';
+  return compactParlayCard({rank:rank,title:legs.map(function(p){return p.name;}).join(' + '),legsHtml:compactLegRows(items),hitRate:_cj,tier:_wk,odds:(sameBookLine!=='—'?sameBookLine:mixedLine),dec:_bd,stake:(_stk&&_stk.stake>0)?_stk.stake:null,ev:_ev,actions:actions,backHtml:back});
 }
 function unlockApp(){
   try{ sessionStorage.setItem(APP_UNLOCK_KEY,'1'); }catch(e){}
