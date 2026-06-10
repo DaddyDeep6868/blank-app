@@ -933,10 +933,13 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
   <!-- ============================ Live HR Feed ============================ -->
   <div data-panel="live" style="display:none">
     <div class="section-title">⚡ Live HR Feed</div>
-    <p class="help-note">Polls today’s active MLB games and appends new home-run events. Load the slate first (so the model board exists), then start polling.</p>
+    <p class="help-note">Polls live MLB games and appends new home-run events. You can also fetch HRs for any past date (yesterday, etc.) and compare them to that day’s saved slate board.</p>
 
     <div class="game-card open" style="padding:14px 16px">
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <span class="help-note" style="margin:0">HR date</span>
+        <input id="liveHrDate" type="date" style="padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0b1220;color:#fff" />
+        <button class="ghost" id="btnLiveHrFetch">Fetch HRs (date)</button>
         <button class="ghost" id="btnLiveHrStart">Start live polling</button>
         <button class="ghost" id="btnLiveHrStop">Stop</button>
         <span class="chip" id="liveHrStatus">Idle</span>
@@ -1143,7 +1146,7 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
 <button class="mobile-slip-fab hidden" id="mobileSlipFab">🧾 Open slip</button>
 
 <script>
-const APP_VERSION = 'v1.44';
+const APP_VERSION = 'v1.45';
 const APP_UPDATED = 'Updated Jun 10, 2026 — slate date refresh fix';
 const APP_PASSWORD = 'adi11';
 {
@@ -1664,6 +1667,15 @@ function _todayStr(){
   catch(e){ return (new Date()).toISOString().slice(0,10); }
 }
 
+function _liveHrDateStr(){
+  try{
+    const el=document.getElementById('liveHrDate');
+    const v=el && el.value;
+    if(v) return v;
+  }catch(e){}
+  return _todayStr();
+}
+
 async function liveScheduleLoader(dateStr){
   // Pull today's games and keep only: Live / In Progress / recently finished.
   const sch=await jget('https://statsapi.mlb.com/api/v1/schedule?sportId=1&date='+encodeURIComponent(dateStr)+'&hydrate=team,linescore');
@@ -1727,7 +1739,7 @@ function normalizeHrEvent(gamePk, play){
 
 function _boardSnapshot(){
   // Build a lightweight lookup from the current “board” (portfolio candidates).
-  // Keys by normalized player name.
+  // Keys by mlbId (best) and normalized player name (fallback).
   let arr=[];
   try{ arr=collectPortfolioCandidates()||[]; }catch(e){ arr=[]; }
   arr=arr.slice().sort(function(a,b){
@@ -1735,11 +1747,12 @@ function _boardSnapshot(){
     return (Number(b.ev||0)-Number(a.ev||0)) || (Number(b.edge||0)-Number(a.edge||0)) || (Number(b.prob||0)-Number(a.prob||0));
   });
   const byName={};
+  const byId={};
   arr.forEach(function(x,idx){
-    const nm=String(x && x.p && x.p.name || '').trim().toLowerCase();
-    if(!nm) return;
-    if(byName[nm]) return;
-    byName[nm]={
+    const p=(x && x.p) || {};
+    const nm=String(p.name||'').trim().toLowerCase();
+    const mlbId=(p.mlbId!=null?String(p.mlbId):null);
+    const row={
       rank:idx+1,
       mk:x.mk||'hr',
       prob:Number(x.prob||0),
@@ -1748,9 +1761,55 @@ function _boardSnapshot(){
       american:x.american!=null?Number(x.american):null,
       bestBook:x.bestBook||null,
       gamePk:(x.g && (x.g.id||x.g.gamePk))!=null?String(x.g.id||x.g.gamePk):null,
+      mlbId:mlbId,
+      name:(p.name||null),
     };
+    if(mlbId && !byId[mlbId]) byId[mlbId]=row;
+    if(nm && !byName[nm]) byName[nm]=row;
   });
-  return {arr, byName};
+  return {arr, byName, byId};
+}
+
+const BOARD_SNAP_KEY='dingerlab_board_snapshots_v1';
+function _loadBoardSnapshots(){
+  try{ return JSON.parse(localStorage.getItem(BOARD_SNAP_KEY)||'{}')||{}; }catch(e){ return {}; }
+}
+function _saveBoardSnapshots(obj){
+  try{ localStorage.setItem(BOARD_SNAP_KEY, JSON.stringify(obj||{})); }catch(e){}
+}
+function saveBoardSnapshotForDate(dateStr){
+  // Persist the *current* board snapshot under a specific slate date.
+  // This lets historical HR queries compare against the slate board from that same date.
+  const snap=_boardSnapshot();
+  const store=_loadBoardSnapshots();
+  store[String(dateStr||'')]={capturedAt:Date.now(), date:String(dateStr||''), byId:snap.byId||{}, byName:snap.byName||{}};
+  _saveBoardSnapshots(store);
+}
+function loadBoardSnapshotForDate(dateStr){
+  const store=_loadBoardSnapshots();
+  const s=store[String(dateStr||'')];
+  return s||null;
+}
+
+function _loadTrackedSlips(){
+  try{ return JSON.parse(localStorage.getItem(TRACK_KEY)||'[]')||[]; }catch(e){ return []; }
+}
+function _inTrackedSlips(hitterName, hitterId, dateStr){
+  const hn=String(hitterName||'').trim().toLowerCase();
+  const hid=(hitterId!=null?String(hitterId):null);
+  const ds=String(dateStr||'');
+  const pend=_loadTrackedSlips();
+  for(const p of (pend||[])){
+    const legs=(p && (p.legData||p.legs||p.picks))||[];
+    for(const l of legs){
+      if(!l) continue;
+      if(ds && l.date && String(l.date)!==ds) continue;
+      if(hid && l.mlbId!=null && String(l.mlbId)===hid) return true;
+      const ln=String(l.name||'').trim().toLowerCase();
+      if(hn && ln && ln===hn) return true;
+    }
+  }
+  return false;
 }
 
 function _inSlip(hitterName, gamePk){
@@ -1763,16 +1822,23 @@ function _inSlip(hitterName, gamePk){
   });
 }
 
-function compareHrToModel(hr){
-  const snap=_boardSnapshot();
-  const key=String(hr.hitter||'').trim().toLowerCase();
-  const hit=snap.byName[key]||null;
+function compareHrToModel(hr, dateStr){
+  // Compare against the slate board for the SAME date (if captured), else fall back to current board.
+  const saved=loadBoardSnapshotForDate(dateStr);
+  const live=_boardSnapshot();
+  const snap=(saved && (saved.byId||saved.byName)) ? saved : live;
+  const byId=snap.byId||{};
+  const byName=snap.byName||{};
+  const hit=(hr.hitterId!=null && byId[String(hr.hitterId)])
+    ? byId[String(hr.hitterId)]
+    : (byName[String(hr.hitter||'').trim().toLowerCase()]||null);
   const onBoard=!!hit;
   const rank=hit?hit.rank:null;
   const top10=!!(rank && rank<=10);
   const top25=!!(rank && rank<=25);
   const plusEv=!!(hit && Number(hit.ev||0)>0);
   const inSlip=_inSlip(hr.hitter, hr.gamePk);
+  const inTracked=_inTrackedSlips(hr.hitter, hr.hitterId, dateStr);
 
   let label='Missed by model';
   if(onBoard && inSlip) label='In slip';
@@ -1781,7 +1847,7 @@ function compareHrToModel(hr){
   else label='Longshot HR';
 
   return {
-    onBoard, inSlip, rank, top10, top25, plusEv,
+    onBoard, inSlip, inTracked, rank, top10, top25, plusEv,
     confidenceTier: (rank && rank<=10)?'Top 10':(rank && rank<=25)?'Top 25':(rank?('Board #'+rank):'Off board'),
     label,
   };
@@ -1794,6 +1860,7 @@ function liveHrBadgesHtml(m){
   if(m.top10) chips.push('<span class="chip" style="background:#22c55e22;color:#22c55e">Top 10</span>');
   else if(m.top25) chips.push('<span class="chip" style="background:#38bdf822;color:#38bdf8">Top 25</span>');
   if(m.inSlip) chips.push('<span class="chip" style="background:#f59e0b22;color:#f59e0b">In slip</span>');
+  if(m.inTracked) chips.push('<span class="chip" style="background:#a855f722;color:#a855f7">Tracked</span>');
   if(m.plusEv) chips.push('<span class="chip" style="background:#10b98122;color:#10b981">+EV</span>');
   if(!m.onBoard) chips.push('<span class="chip" style="background:#ef444422;color:#ef4444">Missed</span>');
   return chips.join(' ');
@@ -1871,7 +1938,7 @@ async function pollGameForHrs(gamePk){
 }
 
 async function liveHrPollOnce(){
-  const dateStr=_todayStr();
+  const dateStr=_liveHrDateStr();
   const games=await liveScheduleLoader(dateStr);
   if(!games.length){
     _setLiveHrStatus('No active games', dateStr);
@@ -1890,13 +1957,44 @@ async function liveHrPollOnce(){
       const ev=normalizeHrEvent(pk, play);
       if(LIVE_HR_CACHE.has(ev.id)) return;
       LIVE_HR_CACHE.add(ev.id);
-      ev.model=compareHrToModel(ev);
+      ev.model=compareHrToModel(ev, dateStr);
       LIVE_HR_EVENTS.unshift(ev);
       newCount++;
     });
   }
   LIVE_HR_LAST_POLL_TS=Date.now();
   _setLiveHrStatus(LIVE_HR_TIMER?'Live':'Idle', (games.length+' games · +'+newCount+' new HR(s)'));
+  renderLiveHr();
+}
+
+async function fetchHrsForDate(dateStr){
+  // Historical pull: fetch all HR plays for the date, regardless of game state.
+  // Uses the same dedupe cache, so you can safely fetch yesterday and then go live.
+  const sch=await jget('https://statsapi.mlb.com/api/v1/schedule?sportId=1&date='+encodeURIComponent(dateStr)+'&hydrate=team,linescore');
+  const games=[];
+  (sch.dates||[]).forEach(function(dd){ (dd.games||[]).forEach(function(g){ if(g && g.gamePk!=null) games.push(String(g.gamePk)); }); });
+  if(!games.length){
+    _setLiveHrStatus('No games', dateStr);
+    renderLiveHr();
+    return;
+  }
+  _setLiveHrStatus('Fetching…', dateStr+' · '+games.length+' games');
+  let newCount=0;
+  for(let i=0;i<games.length;i++){
+    const pk=games[i];
+    let plays=[];
+    try{ plays=await pollGameForHrs(pk); }catch(e){ continue; }
+    plays.forEach(function(play){
+      const ev=normalizeHrEvent(pk, play);
+      if(LIVE_HR_CACHE.has(ev.id)) return;
+      LIVE_HR_CACHE.add(ev.id);
+      ev.model=compareHrToModel(ev, dateStr);
+      LIVE_HR_EVENTS.unshift(ev);
+      newCount++;
+    });
+  }
+  LIVE_HR_LAST_POLL_TS=Date.now();
+  _setLiveHrStatus('Fetched', dateStr+' · +'+newCount+' HR(s)');
   renderLiveHr();
 }
 
@@ -3470,6 +3568,9 @@ async function loadSlate(dateStr){
       logln(`  ${awayT.name} @ ${homeT.name}: ${awayHitters.length+homeHitters.length} hitters, ${wx.summary}`);
     }
     setStatus(`Loaded ${GAMES.length} games for ${dateStr}. Probabilities computed.`);
+    // Save a snapshot of the ranked board for this slate date.
+    // This enables historical HR pulls (e.g., 6/9) to compare against the 6/9 board later.
+    try{ saveBoardSnapshotForDate(dateStr); }catch(e){}
     renderGames();
     if(activeTab==='dashboard') renderDashboard();
     if(activeTab==='builder') renderBuilderPage();
@@ -4391,15 +4492,32 @@ function init(){
   restorePrefs(); wirePrefs();
 
   // Live HR Feed wiring
+  // Default the Live HR date control to the current slate date.
+  try{ if($('#liveHrDate') && $('#dateInput') && $('#dateInput').value) $('#liveHrDate').value=$('#dateInput').value; }catch(e){}
+
   if($('#btnLiveHrStart')) $('#btnLiveHrStart').onclick=function(){
     if(GAMES.length<1){ toast('Load slate first','Click “Load slate + all-market odds” before starting the live feed.','ℹ️'); return; }
     startLiveHrPolling();
     try{ renderLiveHr(); }catch(e){}
   };
+  if($('#btnLiveHrFetch')) $('#btnLiveHrFetch').onclick=async function(){
+    if(GAMES.length<1){ toast('Load slate first','Click “Load slate + all-market odds” before fetching HR history (so comparisons work).','ℹ️'); return; }
+    const ds=_liveHrDateStr();
+    await fetchHrsForDate(ds);
+  };
   if($('#btnLiveHrStop')) $('#btnLiveHrStop').onclick=function(){
     stopLiveHrPolling();
     try{ renderLiveHr(); }catch(e){}
   };
+
+  // Keep the Live HR date selector in sync with the slate date picker.
+  try{
+    if($('#dateInput') && $('#liveHrDate')){
+      $('#dateInput').addEventListener('change', function(){
+        try{ $('#liveHrDate').value=$('#dateInput').value; }catch(e){}
+      });
+    }
+  }catch(e){}
 
   switchTab(activeTab);
 
