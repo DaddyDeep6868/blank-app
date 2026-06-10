@@ -4657,6 +4657,44 @@ function parlayCardHTML(pr,rank){
   return compactParlayCard({rank:rank,title:pr.a.name+' + '+pr.b.name,legsHtml:compactLegRows(items),hitRate:cj,tier:tier,odds:bestSameBook,dec:dec,stake:(stk&&stk.stake>0)?stk.stake:null,ev:ev,actions:actions,backHtml:back});
 }
 
+
+function playerRowHTML(p,g){
+  const c=p.calc||{}; const f=c.factors||{};
+  const _lu = (p._lineupStatus==="out") ? ' <span class="chip" style="background:#db443722;color:#db4437" title="Not in the posted starting lineup">⚠️ Out</span>' : (p._lineupStatus==="in" ? ' <span class="chip" style="background:#0f9d5822;color:#0f9d58" title="Confirmed in lineup">✅ #'+(p._lineupSpot||p.spot||'')+'</span>' : ' <span class="chip" style="background:#f59e0b22;color:#b45309" title="Projected lineup spot until confirmed">⏳ Proj #'+(p._projectedSpot||p.spot||'')+'</span>');
+  const _sm = (p._lineMove!=null && p._lineMove!==0) ? (' <span class="chip" style="background:'+(p._lineMove<0?'#0f9d5822;color:#0f9d58':'#db443722;color:#db4437')+'" title="Line moved '+(p._lineMove<0?'IN since last load (shortening = steam toward this bet)':'OUT since last load (drifting = market cooling)')+'">'+(p._lineMove<0?'🔥':'❄️')+' '+(p._lineMove>0?'+':'')+p._lineMove+'</span>') : "";
+  const _mx=(f&&f.matchup!=null)?f.matchup:1;
+  const _dna=(Math.abs(_mx-1)>=0.05)?(' <span class="chip" style="background:'+(_mx>1?'#7c3aed22;color:#7c3aed':'#64748b22;color:#64748b')+'" title="'+String((c&&c.matchupWhy)||'Pitch-type matchup').replace(/"/g,'&quot;')+'">🧬 ×'+_mx.toFixed(2)+'</span>'):'';
+  const dk = p._oddsBooks && p._oddsBooks.draftkings!=null ? p._oddsBooks.draftkings : null;
+  const fan = p._oddsBooks && p._oddsBooks.fanatics!=null ? p._oddsBooks.fanatics : null;
+  const mgm = p._oddsBooks && p._oddsBooks.betmgm!=null ? p._oddsBooks.betmgm : null;
+  const cae = p._oddsBooks && p._oddsBooks.caesars!=null ? p._oddsBooks.caesars : null;
+  const best = p.odds!=null ? p.odds : null;
+  const impl=best?amToImplied(best):null;
+  const edge=impl!=null?p.p-impl:null;
+  const fairAm=(p.p>0)?decToAmerican(1/p.p):'—';
+  const FLABEL={park:'Park',pitcher:'Opposing pitcher',platoon:'Handedness/platoon',temp:'Temperature',wind:'Wind',humidity:'Humidity',daynight:'Day/Night',matchup:'Matchup DNA (pitch types)'};
+  const factorsHTML=Object.keys(f||{}).map(function(k){
+    const v=Number(f[k]||1);
+    return '<div class="factor-row"><span>'+esc(FLABEL[k]||k)+'</span><span class="mult '+(v>1.001?'up':v<0.999?'down':'')+'">×'+v.toFixed(3)+'</span></div>';
+  }).join('');
+  return '<tr>'
+    +'<td>'+esc(p.name)+' <span class="handed">('+esc(p.bats||'')+')</span>'+_lu+_sm+_dna+'</td>'
+    +'<td>'+esc(p.side==='home'?(g.homeAbbr||g.home):(g.awayAbbr||g.away))+'</td>'
+    +'<td class="num">'+((p._lineupStatus==='in'&&p._lineupSpot)?p._lineupSpot:(p._projectedSpot||p.spot||'—'))+'</td>'
+    +'<td class="num">'+(ACTIVE_MARKET==='tb'?Number(c.perPA||0).toFixed(2):((Number(c.perPA||0)*100).toFixed(2)+'%'))+'</td>'
+    +'<td class="num"><span class="prob-pill" style="background:'+probColor(p.p)+'22;color:'+probColor(p.p)+'">'+fmtPct(p.p)+'</span><div class="bar-mini"><span style="width:'+clamp(p.p/(MARKET_META[ACTIVE_MARKET].cap/100)*100,3,100)+'%"></span></div></td>'
+    +'<td class="num">'+fairAm+'</td>'
+    +'<td class="num">'+(dk!=null?fmtAmerican(dk):'—')+'</td>'
+    +'<td class="num">'+(fan!=null?fmtAmerican(fan):'—')+'</td>'
+    +'<td class="num">'+(mgm!=null?fmtAmerican(mgm):'—')+'</td>'
+    +'<td class="num">'+(cae!=null?fmtAmerican(cae):'—')+'</td>'
+    +'<td class="num">'+(best!=null?fmtAmerican(best):'—')+'</td>'
+    +'<td class="num">'+(edge!=null?('<span class="'+(edge>0?'ev-pos':'ev-neg')+'">'+(edge>0?'+':'')+(edge*100).toFixed(1)+'%</span>'):'—')+'</td>'
+    +'<td><details class="breakdown"><summary>factors</summary>'+factorsHTML+'</details></td>'
+    +'<td class="num"><button class="ghost" style="padding:2px 10px" onclick="addSlipGP(\''+g.id+'\',\''+encodeURIComponent(p.name)+'\')">Add</button></td>'
+    +'</tr>';
+}
+
 /* ============================ Manual game ============================ */
 function buildManualGame(){
   const m=MANUAL.meta;
