@@ -944,6 +944,7 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
         <button class="ghost" id="btnLiveHrStop">Stop</button>
         <button class="ghost" id="btnLiveHrExport">⬇ Export data</button>
         <span class="chip" id="liveHrStatus">Idle</span>
+        <span class="chip" id="liveHrBoardChip" title="Whether a ranked model board exists for the selected HR date">Board: —</span>
         <span class="help-note" id="liveHrMeta" style="margin:0">—</span>
       </div>
       <div class="help-note" style="margin-top:10px">Dedupe key: <code>gamePk + playId</code>. Polling runs in-browser (no server required).</div>
@@ -1662,6 +1663,8 @@ let LIVE_HR_EVENTS=[];          // newest-first [{id,gamePk,playId,...,model:{..
 const LIVE_HR_CACHE=new Set();  // id cache for dedupe
 let LIVE_HR_TIMER=null;
 let LIVE_HR_LAST_POLL_TS=0;
+let LIVE_HR_FEED_DATE=null;        // date the feed currently reflects
+let LIVE_HR_BOARD_AVAILABLE=null;  // whether a ranked board exists for that date
 
 function _todayStr(){
   try{ return (document.getElementById('dateInput') && document.getElementById('dateInput').value) || (new Date()).toISOString().slice(0,10); }
@@ -1872,10 +1875,13 @@ function renderLiveHr(){
   const sum=document.getElementById('liveHrSummary');
   if(!list || !sum) return;
 
+  const _boardWarn=(LIVE_HR_BOARD_AVAILABLE===false)
+    ? '<div class="game-card open" style="padding:12px 14px;margin-bottom:10px;border-color:rgba(239,68,68,.4)"><b style="color:#ef4444">⚠️ No model board for '+esc(LIVE_HR_FEED_DATE||_liveHrDateStr())+'</b><div class="help-note" style="margin-top:4px">There is no ranked board for this date, so every HR below is labeled “off board / missed.” This is a comparison gap, not a model verdict. Load that day’s slate + odds (pre-game) to capture the board, then re-fetch.</div></div>'
+    : '';
   if(!LIVE_HR_EVENTS.length){
-    list.innerHTML='<div class="help-note">No HR events captured yet. Load slate → start polling.</div>';
+    list.innerHTML=_boardWarn+'<div class="help-note">No HR events captured yet. Load slate → start polling.</div>';
   } else {
-    list.innerHTML=LIVE_HR_EVENTS.slice(0,40).map(function(e){
+    list.innerHTML=_boardWarn+LIVE_HR_EVENTS.slice(0,40).map(function(e){
       const m=e.model||null;
       const dist=(e.metrics&&e.metrics.distance!=null)?(Math.round(e.metrics.distance)+' ft'):null;
       const ev=(e.metrics&&e.metrics.exitVelo!=null)?(e.metrics.exitVelo.toFixed(1)+' mph'):null;
@@ -1940,6 +1946,8 @@ async function pollGameForHrs(gamePk){
 
 async function liveHrPollOnce(){
   const dateStr=_liveHrDateStr();
+  _resetLiveHrFeedIfDateChanged(dateStr);
+  try{ LIVE_HR_BOARD_AVAILABLE=_boardForDateInfo(dateStr).available; }catch(e){}
   const games=await liveScheduleLoader(dateStr);
   if(!games.length){
     _setLiveHrStatus('No active games', dateStr);
@@ -1968,9 +1976,47 @@ async function liveHrPollOnce(){
   renderLiveHr();
 }
 
+function _boardForDateInfo(dateStr){
+  let saved=null; try{ saved=loadBoardSnapshotForDate(dateStr); }catch(e){}
+  const savedCount=(saved&&saved.byId)?Object.keys(saved.byId).length:0;
+  let liveCount=0;
+  try{ const lb=_boardSnapshot(); liveCount=(lb&&lb.byId)?Object.keys(lb.byId).length:((lb&&lb.arr)?lb.arr.length:0); }catch(e){}
+  const usingSaved=savedCount>0;
+  const count=usingSaved?savedCount:liveCount;
+  return { count:count, savedCount:savedCount, liveCount:liveCount, source:(usingSaved?'saved':(liveCount>0?'live':'none')), available:(count>0) };
+}
+function _resetLiveHrFeedIfDateChanged(dateStr){
+  if(LIVE_HR_FEED_DATE && LIVE_HR_FEED_DATE!==dateStr){
+    LIVE_HR_EVENTS=[]; try{ LIVE_HR_CACHE.clear(); }catch(e){}
+  }
+  LIVE_HR_FEED_DATE=dateStr;
+}
+function updateLiveHrBoardChip(){
+  try{
+    const el=document.getElementById('liveHrBoardChip'); if(!el) return;
+    const dateStr=_liveHrDateStr();
+    const bi=_boardForDateInfo(dateStr);
+    if(bi.available){
+      el.textContent='Board: filled for '+dateStr+' ('+bi.count+(bi.source==='live'?' live':'')+')';
+      el.style.background='#10b98122'; el.style.color='#10b981';
+      el.title='A ranked model board exists for '+dateStr+' (source: '+bi.source+'), so Live HR comparisons will work.';
+    } else {
+      el.textContent='Board: none for '+dateStr;
+      el.style.background='#ef444422'; el.style.color='#ef4444';
+      el.title='No ranked board for '+dateStr+'. Load the slate + odds pre-game to capture it; otherwise every HR shows as off board.';
+    }
+  }catch(e){}
+}
+
 async function fetchHrsForDate(dateStr){
   // Historical pull: fetch all HR plays for the date, regardless of game state.
-  // Uses the same dedupe cache, so you can safely fetch yesterday and then go live.
+  // Fetching a different date clears the prior date's events so the feed only shows the requested day.
+  _resetLiveHrFeedIfDateChanged(dateStr);
+  const _bi=_boardForDateInfo(dateStr);
+  LIVE_HR_BOARD_AVAILABLE=_bi.available;
+  if(!_bi.available){
+    try{ toast('No model board for '+dateStr, 'No ranked board found for this date, so every HR will show as off board / missed. Load that date’s slate + odds (ideally pre-game) to capture the board, then fetch again.', '⚠️'); }catch(e){}
+  }
   const sch=await jget('https://statsapi.mlb.com/api/v1/schedule?sportId=1&date='+encodeURIComponent(dateStr)+'&hydrate=team,linescore');
   const games=[];
   (sch.dates||[]).forEach(function(dd){ (dd.games||[]).forEach(function(g){ if(g && g.gamePk!=null) games.push(String(g.gamePk)); }); });
@@ -2045,6 +2091,9 @@ function exportLiveHrData(){
       app:'DingerLab', kind:'live_hr_export', version:1,
       exportedAt:new Date().toISOString(),
       slateDate:dateStr,
+      boardAvailable:(board && board.length>0),
+      boardSize:(board?board.length:0),
+      note:((board && board.length>0)?null:'No saved model board for this date — every HR is labeled off board by default. This is a comparison gap, not a model miss. Capture the board pre-game (Load slate + odds) for this date.'),
       summary:{
         totalHRs:flat.length,
         boardHits:flat.filter(function(r){return r.onBoard;}).length,
@@ -3640,10 +3689,18 @@ async function loadSlate(dateStr){
         env, wx, homePitcher, awayPitcher, players:[...awayHitters,...homeHitters]});
       logln(`  ${awayT.name} @ ${homeT.name}: ${awayHitters.length+homeHitters.length} hitters, ${wx.summary}`);
     }
-    setStatus(`Loaded ${GAMES.length} games for ${dateStr}. Probabilities computed.`);
     // Save a snapshot of the ranked board for this slate date.
     // This enables historical HR pulls (e.g., 6/9) to compare against the 6/9 board later.
-    try{ saveBoardSnapshotForDate(dateStr); }catch(e){}
+    let _savedBoardN=0;
+    try{ saveBoardSnapshotForDate(dateStr); const _s=loadBoardSnapshotForDate(dateStr); _savedBoardN=(_s&&_s.byId)?Object.keys(_s.byId).length:0; }catch(e){}
+    if(_savedBoardN>0){
+      setStatus(`Loaded ${GAMES.length} games for ${dateStr}. Probabilities computed. ✅ Board filled for ${dateStr} — ${_savedBoardN} ranked player-markets saved (Live HR comparisons enabled).`);
+      try{ toast('Board saved', 'Model board filled for '+dateStr+' — '+_savedBoardN+' ranked player-markets captured. Live HR comparisons for this date are now enabled.', '✅'); }catch(e){}
+    } else {
+      setStatus(`Loaded ${GAMES.length} games for ${dateStr}. Probabilities computed. ⚠️ No ranked board could be built (need live sportsbook odds) — HR comparisons for ${dateStr} will show “off board.”`);
+      try{ toast('Board empty for '+dateStr, 'Slate loaded, but no ranked board could be built — this usually means live odds were unavailable (e.g., games already started/finished). HR comparisons for this date will show off board.', '⚠️'); }catch(e){}
+    }
+    try{ updateLiveHrBoardChip(); }catch(e){}
     renderGames();
     if(activeTab==='dashboard') renderDashboard();
     if(activeTab==='builder') renderBuilderPage();
@@ -4583,12 +4640,15 @@ function init(){
     try{ renderLiveHr(); }catch(e){}
   };
   if($('#btnLiveHrExport')) $('#btnLiveHrExport').onclick=function(){ exportLiveHrData(); };
+  if($('#liveHrDate')) $('#liveHrDate').addEventListener('change', function(){ try{ updateLiveHrBoardChip(); }catch(e){} });
+  try{ updateLiveHrBoardChip(); }catch(e){}
 
   // Keep the Live HR date selector in sync with the slate date picker.
   try{
     if($('#dateInput') && $('#liveHrDate')){
       $('#dateInput').addEventListener('change', function(){
         try{ $('#liveHrDate').value=$('#dateInput').value; }catch(e){}
+        try{ updateLiveHrBoardChip(); }catch(e){}
       });
     }
   }catch(e){}
