@@ -115,3 +115,40 @@ Don't hardcode your key if the repo is public. Instead:
   Potential profit** rows under Suggested stake. The wager input is editable and recalculates
   live using the same best decimal odds the card's EV uses (same-book best, falling back to
   mixed-books). Defaults to the Kelly suggested stake when it's a bet, otherwise $10.
+
+## Server-side sync mode
+
+Use `dingerlab_server.py` when you want the same tracking data across devices.
+
+### Run locally
+
+```bash
+pip install -r requirements.txt
+python dingerlab_server.py
+```
+
+Then open the shown server URL in your browser. Do **not** open `DingerLab.html` directly if you want sync.
+
+### What syncs
+
+- Saved slips / tracked plays
+- Bet outcomes after grading
+- Frozen board snapshots
+- Model scorecard exports
+
+The server writes data to:
+
+```text
+server_data/dingerlab_server_state.json
+```
+
+If you deploy this online, use a host with persistent disk/storage so this JSON file is not wiped between restarts.
+
+### Server-side grading
+
+The server checks pending tracked slips after games go final. For HR legs, it verifies homer results from MLB `feed/live`; for hits, 2+ hits, total bases, and RBI, it uses final MLB box scores. The browser also has a **☁️ Server sync** button and the **🤖 Grade pending** button calls the server when server mode is active.
+
+### Deploy note
+
+For multi-device use, deploy `dingerlab_server.py` on a small always-on host such as Render, Railway, Replit, Fly.io, or a VPS. Set `PORT` if your host requires it.
+

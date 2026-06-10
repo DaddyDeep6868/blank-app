@@ -1088,6 +1088,8 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
         </div>
         <div class="field"><label>Search</label><input id="trackSearch" placeholder="player name…"></div>
         <div class="field"><label>&nbsp;</label><button class="ghost" id="btnGradePending">🤖 Grade pending</button></div>
+        <div class="field"><label>&nbsp;</label><button class="ghost" id="btnServerSync">☁️ Server sync</button></div>
+        <div class="field"><label>&nbsp;</label><span class="chip" id="serverSyncStatus">Local only</span></div>
         <div class="field"><label>&nbsp;</label><button class="ghost" id="btnSimulate">🎲 Simulate card</button></div>
         <div class="field"><label>&nbsp;</label><button class="ghost" id="btnExportData">⬇️ Export</button></div>
         <div class="field"><label>&nbsp;</label><button class="ghost" id="btnImportData">⬆️ Import</button></div>
@@ -1789,6 +1791,7 @@ function _loadBoardSnapshots(){
 }
 function _saveBoardSnapshots(obj){
   try{ localStorage.setItem(BOARD_SNAP_KEY, JSON.stringify(obj||{})); }catch(e){}
+  try{ serverPushState({boardSnapshots:(obj||{})}); }catch(e){}
 }
 function saveBoardSnapshotForDate(dateStr){
   // Persist the *current* board snapshot under a specific slate date.
@@ -1876,7 +1879,7 @@ function initAutoBoardCaptureUI(){
 }
 
 function loadModelExports(){ try{ return JSON.parse(localStorage.getItem(MODEL_EXPORTS_KEY)||'[]')||[]; }catch(e){ return []; } }
-function saveModelExports(arr){ try{ localStorage.setItem(MODEL_EXPORTS_KEY, JSON.stringify(arr||[])); }catch(e){} }
+function saveModelExports(arr){ try{ localStorage.setItem(MODEL_EXPORTS_KEY, JSON.stringify(arr||[])); }catch(e){} try{ serverPushState({modelExports:(arr||[])}); }catch(e){} }
 function _exportKey(ex){ return String(ex&&ex.slateDate||'')+'::'+String(ex&&ex.exportedAt||'')+'::'+String(ex&&ex.summary&&ex.summary.totalHRs); }
 function addModelExport(ex){
   if(!ex || ex.kind!=='live_hr_export') return false;
@@ -2504,11 +2507,86 @@ function lineupShockHtml(report){
     +'</div></div>';
 }
 
+
+function serverModeEnabled(){ return !!window.DL_SERVER_MODE; }
+function setServerSyncStatus(txt, good){
+  try{
+    const el=$('#serverSyncStatus'); if(!el) return;
+    el.textContent=txt;
+    el.style.background=good?'#10b98122':'#64748b22';
+    el.style.color=good?'#10b981':'#94a3b8';
+  }catch(e){}
+}
+function mergeSavedLists(a,b){
+  const by={};
+  (Array.isArray(a)?a:[]).concat(Array.isArray(b)?b:[]).forEach(function(x){
+    if(!x) return;
+    const k=String(x.id||x.savedAt||JSON.stringify(x));
+    const prev=by[k];
+    if(!prev){ by[k]=x; return; }
+    const pt=Math.max(Number(prev.serverUpdatedAt||0),Number(prev.gradedAt||0),Number(prev.savedAt||0));
+    const xt=Math.max(Number(x.serverUpdatedAt||0),Number(x.gradedAt||0),Number(x.savedAt||0));
+    if(xt>=pt) by[k]=x;
+  });
+  return Object.values(by).sort(function(x,y){return Number(y.savedAt||0)-Number(x.savedAt||0);});
+}
+function serverPushState(partial){
+  if(!serverModeEnabled()) return Promise.resolve(null);
+  return fetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(partial||{})})
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(function(j){ setServerSyncStatus('Synced', true); return j; })
+    .catch(function(e){ setServerSyncStatus('Sync failed', false); try{ console.warn('server sync push', e); }catch(_e){} return null; });
+}
+async function serverPullState(showToast){
+  if(!serverModeEnabled()){ setServerSyncStatus('Local only', false); if(showToast) toast('Local only','Open the Flask server version to sync across devices.','ℹ️'); return null; }
+  try{
+    setServerSyncStatus('Syncing…', true);
+    const r=await fetch('/api/state',{cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const st=await r.json();
+    const merged=mergeSavedLists(loadSaved(), st.savedParlays||[]);
+    try{ localStorage.setItem(TRACK_KEY, JSON.stringify(merged)); }catch(e){}
+    try{ if(st.boardSnapshots) localStorage.setItem(BOARD_SNAP_KEY, JSON.stringify(Object.assign(_loadBoardSnapshots(), st.boardSnapshots||{}))); }catch(e){}
+    try{ if(st.modelExports) localStorage.setItem(MODEL_EXPORTS_KEY, JSON.stringify(mergeModelExports(loadModelExports(), st.modelExports||[]))); }catch(e){}
+    setServerSyncStatus('Synced', true);
+    if(showToast) toast('Server sync','Pulled '+merged.length+' tracked slip(s) from the server.','☁️');
+    try{ renderTracking(); renderModelScorecard(); updateLiveHrBoardChip(); }catch(e){}
+    return st;
+  }catch(e){ setServerSyncStatus('Sync failed', false); if(showToast) toast('Sync failed', String((e&&e.message)||e), '⚠️'); return null; }
+}
+function mergeModelExports(a,b){
+  const by={};
+  (Array.isArray(a)?a:[]).concat(Array.isArray(b)?b:[]).forEach(function(ex){
+    if(!ex) return;
+    const k=String(ex.slateDate||'')+'::'+String(ex.exportedAt||'')+'::'+String(ex.summary&&ex.summary.totalHRs||'');
+    by[k]=ex;
+  });
+  return Object.values(by).sort(function(x,y){return String(y.slateDate||'').localeCompare(String(x.slateDate||''));}).slice(0,200);
+}
+async function serverGradePending(){
+  if(!serverModeEnabled()){ await gradePending(); return; }
+  try{
+    setServerSyncStatus('Grading…', true);
+    await serverPushState({savedParlays:loadSaved(), boardSnapshots:_loadBoardSnapshots(), modelExports:loadModelExports()});
+    const r=await fetch('/api/grade',{method:'POST'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    if(j.state && j.state.savedParlays){ localStorage.setItem(TRACK_KEY, JSON.stringify(j.state.savedParlays)); }
+    if(j.state && j.state.modelExports){ localStorage.setItem(MODEL_EXPORTS_KEY, JSON.stringify(j.state.modelExports)); }
+    renderTracking();
+    setServerSyncStatus('Synced', true);
+    const msg='Settled '+(j.gradedSlips||0)+' slip(s), graded '+(j.gradedLegs||0)+' leg(s) from final box scores + live HR feed.'+(j.waiting?(' '+j.waiting+' still waiting.'):'');
+    setStatus(msg);
+    toast('Server auto-grade', msg, '☁️');
+  }catch(e){ setServerSyncStatus('Grade failed', false); toast('Server grade failed', String((e&&e.message)||e), '⚠️'); }
+}
+
 function loadSaved(){
   try{ return JSON.parse(localStorage.getItem(TRACK_KEY)||'[]'); }catch(e){ return []; }
 }
 function saveSaved(arr){
   localStorage.setItem(TRACK_KEY, JSON.stringify(arr));
+  try{ serverPushState({savedParlays:arr}); }catch(e){}
 }
 function addSaved(entry){
   const arr=loadSaved();
@@ -4844,6 +4922,8 @@ function init(){
   }catch(e){}
 
   switchTab(activeTab);
+  try{ serverPullState(false); }catch(e){}
+  try{ if(serverModeEnabled() && !window.DL_SERVER_GRADE_TIMER){ window.DL_SERVER_GRADE_TIMER=setInterval(function(){ serverGradePending(); }, 10*60*1000); } }catch(e){}
 
   // Toast
   $('#toastClose').onclick=()=>$('#toast').classList.remove('show');
@@ -4860,9 +4940,10 @@ function init(){
     toast('Copied','Full betslip copied.','📋');
   };
   $('#btnClearSaved').onclick=()=>{
-    if(confirm('Clear all saved parlays?')){ localStorage.removeItem(TRACK_KEY); renderTracking(); }
+    if(confirm('Clear all saved parlays?')){ localStorage.removeItem(TRACK_KEY); try{ serverPushState({savedParlays:[], replaceSavedParlays:true}); }catch(e){} renderTracking(); }
   };
-  if($('#btnGradePending')) $('#btnGradePending').onclick=()=>{ gradePending(); };
+  if($('#btnGradePending')) $('#btnGradePending').onclick=()=>{ serverGradePending(); };
+  if($('#btnServerSync')) $('#btnServerSync').onclick=()=>{ serverPullState(true); };
   if($('#btnSimulate')) $('#btnSimulate').onclick=()=>{ simulateCard(); };
   if($('#btnExportData')) $('#btnExportData').onclick=()=>{ exportSaved(); };
   if($('#btnImportData')) $('#btnImportData').onclick=()=>{ showImport(); };
