@@ -942,6 +942,7 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
         <button class="ghost" id="btnLiveHrFetch">Fetch HRs (date)</button>
         <button class="ghost" id="btnLiveHrStart">Start live polling</button>
         <button class="ghost" id="btnLiveHrStop">Stop</button>
+        <button class="ghost" id="btnLiveHrExport">⬇ Export data</button>
         <span class="chip" id="liveHrStatus">Idle</span>
         <span class="help-note" id="liveHrMeta" style="margin:0">—</span>
       </div>
@@ -1996,6 +1997,78 @@ async function fetchHrsForDate(dateStr){
   LIVE_HR_LAST_POLL_TS=Date.now();
   _setLiveHrStatus('Fetched', dateStr+' · +'+newCount+' HR(s)');
   renderLiveHr();
+}
+
+function exportLiveHrData(){
+  try{
+    const dateStr=_liveHrDateStr();
+    const events=(LIVE_HR_EVENTS||[]).slice();
+    if(!events.length){ try{ toast('Export','No HR events captured yet. Fetch a date or start polling first.','ℹ️'); }catch(e){} return; }
+    const flat=events.map(function(e){
+      const m=e.model||{};
+      const met=e.metrics||{};
+      return {
+        hitter:e.hitter, hitterId:e.hitterId,
+        pitcher:e.pitcher, pitcherId:e.pitcherId,
+        inning:e.inning, gamePk:e.gamePk,
+        description:e.description||'',
+        rbi:e.rbi,
+        scoreAway:(e.score&&e.score.away!=null?e.score.away:null),
+        scoreHome:(e.score&&e.score.home!=null?e.score.home:null),
+        timeISO:(e.tsRaw||(e.ts?new Date(e.ts).toISOString():null)),
+        distanceFt:(met.distance!=null?Math.round(met.distance):null),
+        exitVeloMph:(met.exitVelo!=null?Number(met.exitVelo.toFixed(1)):null),
+        launchAngleDeg:(met.launchAngle!=null?Math.round(met.launchAngle):null),
+        onBoard:!!m.onBoard,
+        boardRank:(m.rank!=null?m.rank:null),
+        confidenceTier:m.confidenceTier||null,
+        plusEv:!!m.plusEv, top10:!!m.top10, top25:!!m.top25,
+        inSlip:!!m.inSlip, inTracked:!!m.inTracked,
+        modelLabel:m.label||null
+      };
+    });
+    const missed=flat.filter(function(r){ return !r.onBoard; });
+    let board=null;
+    try{
+      const snap=loadBoardSnapshotForDate(dateStr);
+      if(snap && snap.byId){
+        const seen={}; const arr=[];
+        Object.keys(snap.byId).forEach(function(k){
+          const r=snap.byId[k]; const key=(r.rank||'?')+'|'+(r.name||'');
+          if(!seen[key]){ seen[key]=1; arr.push({rank:r.rank,name:r.name,mlbId:r.mlbId,market:r.mk,prob:r.prob,edge:r.edge,ev:r.ev,american:r.american,bestBook:r.bestBook,gamePk:r.gamePk}); }
+        });
+        arr.sort(function(a,b){ return (a.rank||9999)-(b.rank||9999); });
+        board=arr;
+      }
+    }catch(e){}
+    const out={
+      app:'DingerLab', kind:'live_hr_export', version:1,
+      exportedAt:new Date().toISOString(),
+      slateDate:dateStr,
+      summary:{
+        totalHRs:flat.length,
+        boardHits:flat.filter(function(r){return r.onBoard;}).length,
+        top10Hits:flat.filter(function(r){return r.top10;}).length,
+        slipHits:flat.filter(function(r){return r.inSlip;}).length,
+        missedByModel:missed.length
+      },
+      homeRuns:flat,
+      missedByModel:missed,
+      modelBoardSnapshot:board
+    };
+    const json=JSON.stringify(out,null,2);
+    const blob=new Blob([json],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download='dingerlab_hr_export_'+dateStr+'.json';
+    a.rel='noopener'; a.style.display='none';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ try{ document.body.removeChild(a); URL.revokeObjectURL(url); }catch(e){} }, 1500);
+    _setLiveHrStatus('Exported', dateStr+' · '+flat.length+' HRs ('+missed.length+' missed)');
+    try{ toast('Export ready','Saved dingerlab_hr_export_'+dateStr+'.json ('+flat.length+' HRs, '+missed.length+' missed). Attach it in chat.','✅'); }catch(e){}
+  }catch(err){
+    try{ toast('Export failed', String((err&&err.message)||err), '⚠️'); }catch(e){}
+  }
 }
 
 function startLiveHrPolling(){
@@ -4509,6 +4582,7 @@ function init(){
     stopLiveHrPolling();
     try{ renderLiveHr(); }catch(e){}
   };
+  if($('#btnLiveHrExport')) $('#btnLiveHrExport').onclick=function(){ exportLiveHrData(); };
 
   // Keep the Live HR date selector in sync with the slate date picker.
   try{
