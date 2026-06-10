@@ -943,6 +943,7 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
         <button class="ghost" id="btnLiveHrStart">Start live polling</button>
         <button class="ghost" id="btnLiveHrStop">Stop</button>
         <button class="ghost" id="btnLiveHrExport">⬇ Export data</button>
+        <button class="ghost" id="btnLiveHrSelfTest" title="Run a board entry through the comparison engine to prove matching works">🧪 Self-test</button>
         <span class="chip" id="liveHrStatus">Idle</span>
         <span class="chip" id="liveHrBoardChip" title="Whether a ranked model board exists for the selected HR date">Board: —</span>
         <span class="help-note" id="liveHrMeta" style="margin:0">—</span>
@@ -2130,6 +2131,32 @@ function exportLiveHrData(){
   }catch(err){
     try{ toast('Export failed', String((err&&err.message)||err), '⚠️'); }catch(e){}
   }
+}
+
+function selfTestBoardMatch(){
+  try{
+    const dateStr=_liveHrDateStr();
+    const info=_boardForDateInfo(dateStr);
+    if(!info.available){ try{ toast('Self-test', 'No board for '+dateStr+' yet — click Fetch slate to fill the board, then run the self-test.', '⚠️'); }catch(e){} return; }
+    let snap=null; try{ snap=loadBoardSnapshotForDate(dateStr); }catch(e){}
+    let board=(snap && snap.byId && Object.keys(snap.byId).length)?snap:null;
+    if(!board){ try{ board=_boardSnapshot(); }catch(e){} }
+    const byId=(board&&board.byId)?board.byId:{};
+    let top=null;
+    Object.keys(byId).forEach(function(k){ const r=byId[k]; if(!top || (r.rank||9999)<(top.rank||9999)) top=r; });
+    if(!top){ try{ toast('Self-test', 'Board is empty — nothing to test.', '⚠️'); }catch(e){} return; }
+    const posEvent={ hitter:(top.name||('Board #'+top.rank)), hitterId:(top.mlbId!=null?Number(top.mlbId):null), gamePk:(top.gamePk||'TEST') };
+    const pos=compareHrToModel(posEvent, dateStr);
+    const negEvent={ hitter:'__SelfTest_NotARealHitter__', hitterId:-1, gamePk:'TEST' };
+    const neg=compareHrToModel(negEvent, dateStr);
+    const okPos=!!(pos && pos.onBoard===true);
+    const okNeg=!!(neg && neg.onBoard===false);
+    const pass=okPos && okNeg;
+    const msg='Board player '+(top.name||('#'+top.rank))+' (rank '+top.rank+') → '+(pos.onBoard?'ON BOARD':'OFF BOARD')+(pos.confidenceTier?(' / '+pos.confidenceTier):'')+(pos.plusEv?' / +EV':'')+'  •  fake hitter → '+(neg.onBoard?'ON BOARD (bug)':'OFF BOARD')+'.  Comparison engine '+(pass?'is WORKING.':'returned an unexpected result.');
+    setStatus('Self-test '+dateStr+': '+(pass?'PASS ✅':'CHECK ⚠️')+' — '+msg);
+    try{ toast('Self-test: '+(pass?'PASS ✅':'CHECK ⚠️'), msg, pass?'✅':'⚠️'); }catch(e){}
+    try{ console.log('[DingerLab self-test]', { dateStr:dateStr, boardSize:Object.keys(byId).length, top:top, positive:pos, negative:neg, pass:pass }); }catch(e){}
+  }catch(err){ try{ toast('Self-test failed', String((err&&err.message)||err), '⚠️'); }catch(e){} }
 }
 
 function startLiveHrPolling(){
@@ -4646,6 +4673,7 @@ function init(){
     try{ renderLiveHr(); }catch(e){}
   };
   if($('#btnLiveHrExport')) $('#btnLiveHrExport').onclick=function(){ exportLiveHrData(); };
+  if($('#btnLiveHrSelfTest')) $('#btnLiveHrSelfTest').onclick=function(){ selfTestBoardMatch(); };
   if($('#liveHrDate')) $('#liveHrDate').addEventListener('change', function(){ try{ updateLiveHrBoardChip(); }catch(e){} });
   try{ updateLiveHrBoardChip(); }catch(e){}
 
