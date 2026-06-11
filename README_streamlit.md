@@ -161,4 +161,12 @@ For multi-device use, deploy `dingerlab_server.py` on a small always-on host suc
 - Added short Do Not Bet / Wait warnings for clutter-free guardrails.
 - Added a simple max player exposure control and exposure snapshot.
 - Updated the in-app version badge to v1.47.
+## New in v1.48 — Hidden Streamlit sidebar
+- Hid the Streamlit API-key/sidebar panel so the app opens directly into DingerLab.
+- Odds and Matchup DNA still load automatically in the wrapper.
+- Updated the in-app version badge to v1.48.
+## New in v1.49 — Local slate date fix
+- Fixed the Slate date default so late-night users do not get tomorrow's date from UTC time.
+- Updated the board-empty warning to remind users to check the Slate date.
+- Updated the in-app version badge to v1.49.
 

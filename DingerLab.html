@@ -1201,8 +1201,8 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
 <button class="mobile-slip-fab hidden" id="mobileSlipFab">🧾 Open slip</button>
 
 <script>
-const APP_VERSION = 'v1.47';
-const APP_UPDATED = 'Updated Jun 10, 2026 — ready-to-bet board + guardrails';
+const APP_VERSION = 'v1.49';
+const APP_UPDATED = 'Updated Jun 10, 2026 — local slate date fix';
 {
   const av=document.getElementById('appVersion');
   if(av) av.textContent=APP_VERSION+' · '+APP_UPDATED;
@@ -1739,9 +1739,17 @@ let LIVE_HR_LAST_POLL_TS=0;
 let LIVE_HR_FEED_DATE=null;        // date the feed currently reflects
 let LIVE_HR_BOARD_AVAILABLE=null;  // whether a ranked board exists for that date
 
+function localDateStr(d){
+  d = d || new Date();
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,'0');
+  const day=String(d.getDate()).padStart(2,'0');
+  return y+'-'+m+'-'+day;
+}
+
 function _todayStr(){
-  try{ return (document.getElementById('dateInput') && document.getElementById('dateInput').value) || (new Date()).toISOString().slice(0,10); }
-  catch(e){ return (new Date()).toISOString().slice(0,10); }
+  try{ return (document.getElementById('dateInput') && document.getElementById('dateInput').value) || localDateStr(new Date()); }
+  catch(e){ return localDateStr(new Date()); }
 }
 
 function _liveHrDateStr(){
@@ -1877,8 +1885,8 @@ function _autoBoardCfg(){
 }
 function _saveAutoBoardCfg(cfg){ try{ localStorage.setItem(AUTO_BOARD_KEY, JSON.stringify(cfg||{})); }catch(e){} }
 function _autoBoardDateStr(){
-  try{ return ($('#dateInput') && $('#dateInput').value) || (new Date()).toISOString().slice(0,10); }
-  catch(e){ return (new Date()).toISOString().slice(0,10); }
+  try{ return ($('#dateInput') && $('#dateInput').value) || localDateStr(new Date()); }
+  catch(e){ return localDateStr(new Date()); }
 }
 function _renderAutoBoardStatus(){
   try{
@@ -2229,7 +2237,7 @@ function captureBoardSnapshotAndNotify(dateStr, notify){
   try{ updateLiveHrBoardChip(); }catch(e){}
   if(notify){
     if(n>0){ try{ toast('Board saved', 'Model board filled for '+dateStr+' — '+n+' ranked player-markets captured. Live HR comparisons for this date are now enabled.', '✅'); }catch(e){} }
-    else { try{ toast('Board empty for '+dateStr, 'Odds loaded but no ranked player-markets qualified for the board (check the lineup/confidence filters, or HR props may not be posted yet).', '⚠️'); }catch(e){} }
+    else { try{ toast('Board empty for '+dateStr, 'Odds loaded but no ranked player-markets qualified. If it is late at night, check that Slate date is your local date — not tomorrow. Also check lineup/confidence filters or whether props are posted.', '⚠️'); }catch(e){} }
   }
   return n;
 }
@@ -5041,7 +5049,7 @@ function init(){
   if(APP_DID_INIT) return;
   APP_DID_INIT=true;
   applyMobileLayout();
-  const today=new Date();$('#dateInput').value=today.toISOString().slice(0,10);
+  const today=new Date();$('#dateInput').value=localDateStr(today);
   populateParkSelect();renderSettings();renderManualRoster();
   $$('.tabbar button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   try{ renderFeed(); }catch(e){}

@@ -185,42 +185,29 @@ def show_login():
     st.stop()
 
 
-# Password screen disabled in v1.46.
+# Password screen disabled. Streamlit sidebar is hidden in v1.48.
 st.session_state["dl_unlocked"] = True
 
-with st.sidebar:
-    st.title("⚾ DingerLab")
-    st.caption("Cross-game HR parlay lab")
-    key = st.text_input("OddsBlaze API key", value=DEFAULT_KEY, type="password")
-    league = st.selectbox("League", ["mlb"], index=0)
-    force_fetch = st.button("Refresh live odds", use_container_width=True)
-
+# Load odds + matchup automatically with the default key, but do not show
+# the Streamlit API-key/sidebar panel. The user should interact only with
+# the DingerLab app UI.
+key = DEFAULT_KEY
+league = "mlb"
+force_fetch = False
 raw = {}
+ODDS_STATUS = []
 for b in BOOKS:
     try:
         raw[b] = fetch_book(key, b, league)
     except Exception as e:  # noqa: BLE001
-        st.sidebar.warning(f"{b}: {e}")
-
-n = len([1 for v in raw.values() if v])
-if force_fetch:
-    st.sidebar.caption(
-        f"Live odds refreshed: {n}/{len(BOOKS)} books. Click **Load slate + all-market odds** in the app."
-    )
-else:
-    st.sidebar.caption(
-        f"Live odds ready: {n}/{len(BOOKS)} books. Click **Load slate + all-market odds** in the app."
-    )
+        ODDS_STATUS.append(f"{b}: {e}")
 
 MATCHUP = None
+MATCHUP_STATUS = None
 try:
     MATCHUP = fetch_matchup_data(date.today().year)
-    st.sidebar.caption(
-        f"\U0001F9EC Matchup DNA: {len(MATCHUP['pitchers'])} pitcher arsenals \u00b7 "
-        f"{len(MATCHUP['batters'])} batter profiles ({MATCHUP['year']})."
-    )
 except Exception as e:  # noqa: BLE001
-    st.sidebar.warning(f"Matchup DNA unavailable: {e}")
+    MATCHUP_STATUS = f"Matchup DNA unavailable: {e}"
 
 st.markdown(
     """
@@ -228,6 +215,10 @@ st.markdown(
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
+    [data-testid="stSidebar"], [data-testid="stSidebarNav"], [data-testid="collapsedControl"] {display:none!important;}
+    section[data-testid="stSidebar"] {display:none!important; width:0!important; min-width:0!important;}
+    .block-container {max-width:100%!important; padding:0!important;}
+    iframe {width:100%!important;}
 
     .stApp {
         background:
@@ -238,10 +229,6 @@ st.markdown(
 
     .block-container { padding-top: 1.25rem; }
 
-    section[data-testid="stSidebar"] {
-        background: rgba(5, 8, 14, .72);
-        border-right: 1px solid rgba(255,255,255,.08);
-    }
     </style>
     """,
     unsafe_allow_html=True,
