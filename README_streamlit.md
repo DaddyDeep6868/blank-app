@@ -169,4 +169,8 @@ For multi-device use, deploy `dingerlab_server.py` on a small always-on host suc
 - Fixed the Slate date default so late-night users do not get tomorrow's date from UTC time.
 - Updated the board-empty warning to remind users to check the Slate date.
 - Updated the in-app version badge to v1.49.
+## New in v1.50 — Server odds proxy fix
+- Added a Flask `/api/oddsblaze` proxy for Render/server mode so browser CORS no longer causes `Failed to fetch` for books.
+- Fetch slate now uses the same-origin server proxy on `mlb-slate.onrender.com`.
+- Updated the in-app version badge to v1.50.
 

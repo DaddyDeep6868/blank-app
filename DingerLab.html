@@ -1201,8 +1201,8 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
 <button class="mobile-slip-fab hidden" id="mobileSlipFab">🧾 Open slip</button>
 
 <script>
-const APP_VERSION = 'v1.49';
-const APP_UPDATED = 'Updated Jun 10, 2026 — local slate date fix';
+const APP_VERSION = 'v1.50';
+const APP_UPDATED = 'Updated Jun 10, 2026 — server odds proxy fix';
 {
   const av=document.getElementById('appVersion');
   if(av) av.textContent=APP_VERSION+' · '+APP_UPDATED;
@@ -3400,7 +3400,16 @@ function betterAmerican(a,b){
 async function fetchOddsBlaze({sportsbook, league}){
   // Preloaded odds (e.g. injected by the Streamlit wrapper) take priority — no proxy needed.
   if(typeof window!=='undefined' && window.DL_RAW_ODDS && window.DL_RAW_ODDS[sportsbook]) return window.DL_RAW_ODDS[sportsbook];
-  // Use local proxy to bypass CORS:
+  // Flask/Render server mode: call our same-origin backend proxy so browser CORS never blocks OddsBlaze.
+  if(typeof window!=='undefined' && window.DL_SERVER_MODE){
+    const serverUrl = new URL('/api/oddsblaze', window.location.origin);
+    serverUrl.searchParams.set('sportsbook', sportsbook);
+    serverUrl.searchParams.set('league', league);
+    const rr = await fetch(serverUrl.toString(), { headers: { accept: 'application/json' } });
+    if(!rr.ok) throw new Error(`Server odds proxy HTTP ${rr.status} (${sportsbook}, ${league})`);
+    return rr.json();
+  }
+  // Local static HTML fallback: use the local proxy to bypass CORS.
   //   python3 oddsblaze_proxy.py
   //   then this app calls http://127.0.0.1:8787/oddsblaze
   const url = new URL('http://127.0.0.1:8787/oddsblaze');

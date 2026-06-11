@@ -16,6 +16,9 @@ LOCK = threading.Lock()
 
 app = Flask(__name__, static_folder=str(APP_DIR), static_url_path="")
 
+ODDSBLAZE_DEFAULT_KEY = "14485da5-3b9e-4061-aea1-9d1ed356b253"
+ODDSBLAZE_BOOKS = {"draftkings", "fanatics", "betmgm", "caesars"}
+
 DEFAULT_STATE = {
     "savedParlays": [],
     "boardSnapshots": {},
@@ -117,6 +120,23 @@ def api_state_post():
         state["modelExports"] = merge_exports(state.get("modelExports"), incoming.get("modelExports"))
     save_state(state)
     return jsonify({"ok": True, "state": state})
+
+
+@app.get("/api/oddsblaze")
+def api_oddsblaze():
+    sportsbook = (request.args.get("sportsbook") or "").strip().lower()
+    league = (request.args.get("league") or "mlb").strip().lower()
+    if sportsbook not in ODDSBLAZE_BOOKS:
+        return jsonify({"error": "unsupported sportsbook"}), 400
+    key = (os.environ.get("ODDSBLAZE_KEY") or ODDSBLAZE_DEFAULT_KEY).strip()
+    try:
+        data = jget(
+            "https://odds.oddsblaze.com/",
+            params={"key": key, "sportsbook": sportsbook, "league": league},
+        )
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"error": str(e), "sportsbook": sportsbook, "league": league}), 502
 
 
 def jget(url, **kwargs):
