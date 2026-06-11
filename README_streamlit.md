@@ -151,4 +151,14 @@ The server checks pending tracked slips after games go final. For HR legs, it ve
 ### Deploy note
 
 For multi-device use, deploy `dingerlab_server.py` on a small always-on host such as Render, Railway, Replit, Fly.io, or a VPS. Set `PORT` if your host requires it.
+## New in v1.46 — No password screen + versioned zip
+- Removed the password screen for direct app access.
+- Updated the in-app version badge to v1.46.
+- Zip artifacts should be named with the matching app version going forward.
+- Confirmed pre-game filter remains included.
+## New in v1.47 — Ready to Bet board + guardrails
+- Added a user-friendly Dashboard board for actionable plays only: confirmed starter, pre-game, priced, positive edge, and positive EV.
+- Added short Do Not Bet / Wait warnings for clutter-free guardrails.
+- Added a simple max player exposure control and exposure snapshot.
+- Updated the in-app version badge to v1.47.
 

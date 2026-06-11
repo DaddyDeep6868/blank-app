@@ -10,7 +10,6 @@ import streamlit.components.v1 as components
 
 st.set_page_config(page_title="DingerLab", page_icon="⚾", layout="wide")
 
-APP_PASSWORD = "adi11"
 BOOKS = ["draftkings", "fanatics", "betmgm", "caesars"]
 
 
@@ -186,15 +185,12 @@ def show_login():
     st.stop()
 
 
-if not st.session_state.get("dl_unlocked"):
-    show_login()
+# Password screen disabled in v1.46.
+st.session_state["dl_unlocked"] = True
 
 with st.sidebar:
     st.title("⚾ DingerLab")
     st.caption("Cross-game HR parlay lab")
-    if st.button("Lock app", use_container_width=True):
-        st.session_state["dl_unlocked"] = False
-        st.rerun()
     key = st.text_input("OddsBlaze API key", value=DEFAULT_KEY, type="password")
     league = st.selectbox("League", ["mlb"], index=0)
     force_fetch = st.button("Refresh live odds", use_container_width=True)
