@@ -840,6 +840,7 @@ html{scroll-behavior:smooth;scrollbar-gutter:stable}body{overflow-y:auto;overscr
     <button class="active" data-tab="dashboard">Dashboard</button>
     <button data-tab="games">Games</button>
     <button data-tab="builder">Builder</button>
+    <button data-tab="data">Data</button>
     <button data-tab="track">Tracking</button>
     <button data-tab="tools">Tools</button>
     <button data-tab="live">Live</button>
@@ -848,6 +849,7 @@ html{scroll-behavior:smooth;scrollbar-gutter:stable}body{overflow-y:auto;overscr
     <button data-mobile-jump="dashboard">Home</button>
     <button data-mobile-jump="games">Games</button>
     <button data-mobile-jump="builder">Builder</button>
+    <button data-mobile-jump="data">Data</button>
     <button data-mobile-jump="slip">Betslip</button>
   </div>
 
@@ -1251,8 +1253,8 @@ html{scroll-behavior:smooth;scrollbar-gutter:stable}body{overflow-y:auto;overscr
 <button class="mobile-slip-fab hidden" id="mobileSlipFab">🧾 Open slip</button>
 
 <script>
-const APP_VERSION = 'v4.0';
-const APP_UPDATED = 'Updated Jun 12, 2026 — Data Intelligence Module';
+const APP_VERSION = 'v4.1';
+const APP_UPDATED = 'Updated Jun 12, 2026 — fixed visible Data tab';
 {
   const av=document.getElementById('appVersion');
   if(av) av.textContent=APP_VERSION+' · '+APP_UPDATED;

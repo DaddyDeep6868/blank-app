@@ -218,4 +218,7 @@ For multi-device use, deploy `dingerlab_server.py` on a small always-on host suc
 - Includes model probability, fair odds, best odds, edge/EV, Edge Score, Due Score, Barrel/HardHit/SweetSpot/Pull-Air proxies, ISO/wOBA handedness proxies, pitcher weakness, bullpen HR risk, bullpen exposure, park/weather boost, lineup status, and umpire placeholder.
 - Added modern era weighting: 2023–2026 = 45%, 2018–2022 = 25%, 2015–2017 = 15%, 2008–2014 = 10%, 1996–2007 = 5%.
 - Added model simulation readout plus CSV/JSON export for future training and calibration.
+## New in v4.1 — Visible Data tab fix
+- Fixed the v4.0 packaging issue where the Data engine code was present but the actual Data tab/panel was not inserted into the visible navigation.
+- Data tab is now visible in the desktop left rail and the mobile quickbar.
 
