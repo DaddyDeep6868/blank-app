@@ -195,4 +195,8 @@ For multi-device use, deploy `dingerlab_server.py` on a small always-on host suc
 - Added earned badges such as Trophy, Star, Due Meter, Park Edge, P-Weak, Power, EV+, Lineup Lift, Steam, and Out.
 - Added a Due Meter for HR targets using estimated HR drought vs expected HR gap, model probability, power, park/weather, and pitcher matchup. This is a signal, not a guarantee.
 - Upgraded player detail drawer into an Intelligence Report with score breakdown, model consensus, reasons, and risks.
+## New in v3.1 — Compact scrollable player reports
+- Made the Player Intelligence Report smaller and easier to read on laptops.
+- The report modal now has its own vertical scroll area, so mouse-wheel scrolling works while the pointer is on the report window.
+- Tightened spacing, sticky header, compact score orb, compact due meter, smaller market rows, and four-column score breakdown on desktop.
 
