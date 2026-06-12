@@ -182,4 +182,8 @@ For multi-device use, deploy `dingerlab_server.py` on a small always-on host suc
 - Rebuilt Dashboard into a v2 Command Center with top star plays, best combos, daily park report, and ready-board guardrails.
 - Reworked game cards to show clean top star plays first, with advanced tables collapsed.
 - Added click-through player detail drawer with all market ratings.
+## New in v2.1 — Upgraded Daily Park Report
+- Rebuilt Daily Park Report with ranked expandable cards, HR-vs-average boost, directional wind/carry adjustment, temperature, humidity/elevation, and roof/indoor handling.
+- Park boost now separates park base, wind adjustment, temperature adjustment, and elevation/humidity instead of using a simple generic formula.
+- Updated the in-app version badge to v2.1.
 
