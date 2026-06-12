@@ -190,4 +190,9 @@ For multi-device use, deploy `dingerlab_server.py` on a small always-on host suc
 - Rebuilt the Games tab into a modern Today’s Games board inspired by high-end MLB predictor dashboards.
 - Added hero slate summary, projected HR total, filter-chip bar, ranked matchup cards, Watch These rows, and two-column team player cards.
 - Player cards now show Dinger Score, model %, best odds, EV, edge, badges, and quick detail access while keeping advanced tables collapsed.
+## New in v3.0 — Edge Engine + Due Meter
+- Added a structured Edge Profile for every player-market with component scores: Power, Recent Form, Pitcher Matchup, Park/Weather, Lineup, Odds Value, Confidence, and Risk.
+- Added earned badges such as Trophy, Star, Due Meter, Park Edge, P-Weak, Power, EV+, Lineup Lift, Steam, and Out.
+- Added a Due Meter for HR targets using estimated HR drought vs expected HR gap, model probability, power, park/weather, and pitcher matchup. This is a signal, not a guarantee.
+- Upgraded player detail drawer into an Intelligence Report with score breakdown, model consensus, reasons, and risks.
 
