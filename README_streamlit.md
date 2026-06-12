@@ -208,4 +208,9 @@ For multi-device use, deploy `dingerlab_server.py` on a small always-on host suc
 - Filters now actually narrow the player cards using the Edge Engine: HR Alert, Trophy, Star, Park Edge, P-Weak, EV, Due/Hot HR, Lineup/Sweet Spot, Matchup, etc.
 - Added a Cross Play Builder directly on the Games page. Enter a custom number of legs, choose style and market scope, then build best-chance cross-game slips from the current slate data.
 - Cross Play outputs include win chance, odds, EV, average edge, add-to-slip, track, and copy actions.
+## New in v3.4 — Left section rail, system scrolling, Cross Play metrics
+- Moved the main sections into a sticky left-side rail on desktop, with compact icon labels.
+- Added system-wide custom momentum-style scrolling visuals and stable scrollbars across the app.
+- Cross Play cards no longer show blank Odds/EV/Avg Edge. If book odds are missing, they show model Fair Odds, $10 return estimate, Value Grade, Avg Edge Score, Odds Value, Model Edge, and route status.
+- When real book odds are available, Cross Play still shows priced EV.
 
