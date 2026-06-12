@@ -203,4 +203,9 @@ For multi-device use, deploy `dingerlab_server.py` on a small always-on host suc
 - Forced the Player Intelligence Report to use a fixed-height internal scroll area.
 - Added wheel/touch handlers that manually scroll the report window, which fixes cases where Streamlit/iframe/browser scrolling captures the mouse wheel.
 - Added small scroll status text at the bottom of the report.
+## New in v3.3 — Clickable filters + Cross Play Builder
+- Made the Today’s Games filter chips clickable and active-state aware.
+- Filters now actually narrow the player cards using the Edge Engine: HR Alert, Trophy, Star, Park Edge, P-Weak, EV, Due/Hot HR, Lineup/Sweet Spot, Matchup, etc.
+- Added a Cross Play Builder directly on the Games page. Enter a custom number of legs, choose style and market scope, then build best-chance cross-game slips from the current slate data.
+- Cross Play outputs include win chance, odds, EV, average edge, add-to-slip, track, and copy actions.
 

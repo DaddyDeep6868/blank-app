@@ -790,6 +790,10 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
 /* v3.2 force modal-local scrolling */
 .v2-drawer{position:fixed!important;inset:0!important;display:block!important;padding:10px!important;overflow:hidden!important;touch-action:none!important}.v2-drawer-card{position:relative!important;margin:0 auto!important;height:calc(100dvh - 20px)!important;max-height:calc(100dvh - 20px)!important;min-height:320px!important;overflow-y:scroll!important;overflow-x:hidden!important;overscroll-behavior:contain!important;-webkit-overflow-scrolling:touch!important;touch-action:pan-y!important;box-sizing:border-box!important;padding-bottom:28px!important}.v2-drawer-card::after{content:'Scroll inside this report';position:sticky;bottom:0;display:block;text-align:center;font-size:10px;color:var(--notion-text-faint);background:linear-gradient(180deg,transparent,var(--notion-surface) 35%);padding:14px 0 2px;margin-top:8px;pointer-events:none}.v2-drawer-card.is-scrollable::after{content:'Scroll for more ↓'}.v2-drawer-card.at-bottom::after{content:'End of report'}.v2-drawer-card .v2-drawer-head{top:-14px!important}@supports not (height:100dvh){.v2-drawer-card{height:calc(100vh - 20px)!important;max-height:calc(100vh - 20px)!important}}
 
+
+/* v3.3 clickable filter system + Cross Play builder */
+.v22-chip{cursor:pointer;user-select:none;transition:.15s ease}.v22-chip:hover{transform:translateY(-1px);border-color:#38bdf8;color:#7dd3fc}.v22-chip.active{border-color:#84cc16!important;background:#84cc1624!important;color:#bef264!important;box-shadow:0 0 0 1px #84cc1633}.v33-filter-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}.v33-filter-actions button{padding:5px 9px!important;font-size:11px!important}.v33-cross-card{border:1px solid #38bdf866;border-radius:16px;background:linear-gradient(180deg,#0ea5e916,var(--notion-surface));padding:13px 14px;margin-top:10px}.v33-cross-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px}.v33-cross-title{font-size:15px;font-weight:950}.v33-cross-sub{font-size:11.5px;color:var(--notion-text-soft);margin-top:2px}.v33-cross-controls{display:grid;grid-template-columns:90px 140px 140px 1fr;gap:8px;align-items:end}.v33-cross-controls .field{margin:0}.v33-cross-results{margin-top:10px;display:grid;gap:9px}.v33-slip-card{border:1px solid var(--notion-border-soft);border-radius:14px;background:var(--notion-bg-soft);padding:11px}.v33-slip-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.v33-slip-title{font-weight:950;font-size:14px}.v33-slip-score{text-align:right;font-weight:950;color:#7dd3fc}.v33-leg-list{display:grid;gap:5px;margin-top:9px}.v33-leg{display:flex;justify-content:space-between;gap:8px;border:1px solid var(--notion-border-soft);border-radius:9px;padding:6px 8px;background:var(--notion-surface);font-size:11.5px}.v33-leg b{font-size:12.5px}.v33-slip-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:9px}.v33-slip-stat{border:1px solid var(--notion-border-soft);border-radius:8px;padding:6px;background:var(--notion-surface);font-size:10px;color:var(--notion-text-faint)}.v33-slip-stat b{display:block;color:var(--notion-text);font-size:12px;margin-top:1px}.v33-slip-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}.v33-slip-actions button{flex:1;min-height:30px;padding:6px 8px!important}@media(max-width:850px){.v33-cross-controls{grid-template-columns:1fr 1fr}.v33-slip-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.v33-cross-controls{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
@@ -1221,8 +1225,8 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
 <button class="mobile-slip-fab hidden" id="mobileSlipFab">🧾 Open slip</button>
 
 <script>
-const APP_VERSION = 'v3.2';
-const APP_UPDATED = 'Updated Jun 12, 2026 — fixed player report scrolling';
+const APP_VERSION = 'v3.3';
+const APP_UPDATED = 'Updated Jun 12, 2026 — clickable filters + cross play builder';
 {
   const av=document.getElementById('appVersion');
   if(av) av.textContent=APP_VERSION+' · '+APP_UPDATED;
@@ -4573,6 +4577,122 @@ function v30ModelConsensusHtml(profile){
   return '<div class="v30-model-grid">'+vals.map(function(x){ return '<div class="v30-model-row"><b>'+x[0]+'</b><div class="v30-model-line"><span style="width:'+clamp(x[1]/Math.max(0.01,base*1.25)*100,3,100)+'%"></span></div><b>'+fmtPct(x[1])+'</b></div>'; }).join('')+'</div><div class="v21-impact '+(agree?'':'warn')+'"><b>'+(agree?'✅ Models broadly agree':'⚠️ Model disagreement')+'</b><br>'+(agree?'Signals are clustered close together.':'Treat as volatile until price/lineup confirms.')+'</div>';
 }
 
+
+let V22_ACTIVE_FILTERS=[];
+function v33FilterDefs(){
+  return [
+    {id:'hrAlert',label:'🚨 HR Alert',cls:'hot'}, {id:'cond',label:'COND ↑',cls:'good'}, {id:'trophy',label:'🏆 Trophy',cls:'hot'}, {id:'star',label:'⭐ Star',cls:'info'},
+    {id:'pweak',label:'⚔ P-Weak',cls:''}, {id:'park',label:'💨 Park Edge',cls:'info'}, {id:'hotHr',label:'🔥 Hot HR',cls:'hot'}, {id:'platoon',label:'Platoon',cls:''},
+    {id:'ev',label:'EV ↑',cls:'good'}, {id:'bullpen',label:'🔮 Bullpen',cls:'purp'}, {id:'hrr',label:'HRR',cls:''}, {id:'launch',label:'🚀 Launch',cls:'hot'},
+    {id:'laser',label:'⚡ Laser',cls:'info'}, {id:'rakes',label:'☄ Rakes',cls:'hot'}, {id:'edge',label:'🎯 Edge',cls:'good'}, {id:'hardHit',label:'Hard Hit %',cls:'hot'},
+    {id:'barrel',label:'Barrel %',cls:'hot'}, {id:'effort',label:'💪 Effort',cls:''}, {id:'sweetSpot',label:'✅ Sweet Spot %',cls:'good'}, {id:'matchup',label:'🧬 Matchup',cls:'purp'}
+  ];
+}
+function v33ToggleFilter(id){
+  const i=V22_ACTIVE_FILTERS.indexOf(id); if(i>=0) V22_ACTIVE_FILTERS.splice(i,1); else V22_ACTIVE_FILTERS.push(id);
+  renderGames();
+}
+function v33ClearFilters(){ V22_ACTIVE_FILTERS=[]; renderGames(); }
+function v33ProfileHasFilter(profile,id){
+  const p=profile.p||{}, c=profile.components||{}, f=(p.calc&&p.calc.factors)||{};
+  if(id==='hrAlert') return profile.mk==='hr' && (profile.edgeScore>=78 || profile.due.score>=70) && (profile.ev||0)>-0.02;
+  if(id==='cond') return c.parkWeather>=62;
+  if(id==='trophy') return profile.edgeScore>=88;
+  if(id==='star') return profile.edgeScore>=78;
+  if(id==='pweak') return c.pitcher>=65;
+  if(id==='park') return c.parkWeather>=65;
+  if(id==='hotHr') return profile.mk==='hr' && (profile.due.score>=70 || c.recent>=68);
+  if(id==='platoon') return Number(f.platoon||1)>1.03;
+  if(id==='ev') return (profile.ev||0)>0;
+  if(id==='bullpen') return p._env && Number(p._env.bullpenHR9||0)>LEAGUE_HR9*1.08;
+  if(id==='hrr') return profile.mk==='hr' && (profile.prob||0)>=0.16;
+  if(id==='launch') return c.power>=70;
+  if(id==='laser') return (profile.edge||0)>=0.03;
+  if(id==='rakes') return c.recent>=70;
+  if(id==='edge') return c.oddsValue>=65 || (profile.edge||0)>=0.025;
+  if(id==='hardHit') return c.power>=75;
+  if(id==='barrel') return c.power>=82;
+  if(id==='effort') return c.confidence>=70;
+  if(id==='sweetSpot') return c.lineup>=74;
+  if(id==='matchup') return c.pitcher>=62 && c.power>=62;
+  return true;
+}
+function v33PassActiveFilters(c){
+  if(!V22_ACTIVE_FILTERS.length) return true;
+  const profile=v30EdgeProfile(c);
+  return V22_ACTIVE_FILTERS.some(function(id){ return v33ProfileHasFilter(profile,id); });
+}
+function v33CrossPlayPanelHtml(){
+  return '<div class="v33-cross-card"><div class="v33-cross-head"><div><div class="v33-cross-title">🧩 Cross Play Builder</div><div class="v33-cross-sub">Uses the current games data to build a custom-leg slip with the best chance profile across different games.</div></div><span class="v2-pill">v3.3</span></div><div class="v33-cross-controls"><div class="field"><label>Legs</label><input id="v33Legs" type="number" min="1" max="10" step="1" value="3"></div><div class="field"><label>Style</label><select id="v33Style"><option value="safe" selected>Great chance</option><option value="balanced">Balanced</option><option value="value">Best value</option><option value="payout">Higher payout</option></select></div><div class="field"><label>Markets</label><select id="v33Markets"><option value="active" selected>Current market</option><option value="all">All markets</option><option value="hr">HR only</option><option value="nonhr">Safer non-HR</option></select></div><div class="field"><label>&nbsp;</label><button onclick="v33BuildCrossPlay()">Build cross play</button></div></div><div id="v33CrossResults" class="v33-cross-results"></div></div>';
+}
+function v33AllCrossCandidates(marketMode){
+  const mks=marketMode==='all'?Object.keys(MARKET_META):(marketMode==='hr'?['hr']:(marketMode==='nonhr'?['hits','hits2','tb','rbi']:[ACTIVE_MARKET]));
+  const out=[];
+  (GAMES||[]).forEach(function(g){ (g.players||[]).forEach(function(p){
+    if(!playerBuildAllowed(p,g)) return;
+    mks.forEach(function(mk){ const c=v22MarketCandidate(g,p,mk); if(!c) return; if(!v33PassActiveFilters(c)) return; const prof=v30EdgeProfile(c); if(prof.edgeScore<50) return; out.push(prof); });
+  }); });
+  out.sort(function(a,b){ return (b.edgeScore-a.edgeScore)||((b.prob||0)-(a.prob||0)); });
+  return out;
+}
+function v33BuildCrossSlips(opts){
+  opts=opts||{}; const K=clamp(Number(opts.legs||3),1,10); const style=opts.style||'safe'; const pool=v33AllCrossCandidates(opts.marketMode||'active');
+  if(pool.length<K) return [];
+  const shortlist=pool.slice(0, Math.min(80, pool.length));
+  function legScore(x){
+    if(style==='safe') return (x.prob||0)*100 + x.edgeScore*0.55 + (x.components.confidence||0)*0.18 - (x.components.volatility||0)*0.25;
+    if(style==='value') return Math.max(0,x.ev||0)*130 + Math.max(0,x.edge||0)*420 + x.edgeScore*0.42 + (x.prob||0)*25;
+    if(style==='payout') return (x.dec||1)*2.5 + x.edgeScore*0.35 + Math.max(0,x.ev||0)*60;
+    return (x.prob||0)*70 + x.edgeScore*0.55 + Math.max(0,x.ev||0)*80;
+  }
+  let beam=[{picks:[], games:{}, players:{}, joint:1, score:0}];
+  for(let step=0; step<K; step++){
+    const next=[];
+    beam.forEach(function(b){
+      shortlist.forEach(function(x){
+        const gid=String(x.g&&x.g.id), pid=String((x.p&&x.p.mlbId)!=null?x.p.mlbId:x.p.name);
+        if(b.games[gid]) return;
+        if(b.players[pid]) return;
+        const picks=b.picks.concat([x]);
+        const games=Object.assign({}, b.games); games[gid]=1;
+        const players=Object.assign({}, b.players); players[pid]=1;
+        const joint=legsJoint(picks);
+        const odds=sgpOdds(picks); const dec=odds.bestDec||odds.mixedDec;
+        const ev=dec?parlayEV(joint,dec):null;
+        let score;
+        if(style==='safe') score=joint*10000 + picks.reduce(function(a,y){return a+legScore(y);},0) - K*2;
+        else if(style==='value') score=(ev||0)*120 + joint*250 + picks.reduce(function(a,y){return a+legScore(y);},0);
+        else if(style==='payout') score=(dec||1)*0.8 + joint*120 + picks.reduce(function(a,y){return a+legScore(y);},0);
+        else score=joint*450 + (ev||0)*65 + picks.reduce(function(a,y){return a+legScore(y);},0);
+        next.push({picks:picks,games:games,players:players,joint:joint,odds:odds,dec:dec,ev:ev,score:score});
+      });
+    });
+    next.sort(function(a,b){return b.score-a.score;}); beam=next.slice(0,220);
+    if(!beam.length) break;
+  }
+  const seen=new Set(), out=[];
+  beam.forEach(function(b){
+    if(b.picks.length!==K) return;
+    const key=parlayComboKeyFromItems(b.picks); if(seen.has(key)) return; seen.add(key); out.push(b);
+  });
+  return out.sort(function(a,b){return b.score-a.score;}).slice(0,6);
+}
+function v33SlipCard(b,i){
+  const b64=v2Payload(b.picks); const dec=b.dec||null;
+  return '<div class="v33-slip-card"><div class="v33-slip-top"><div><div class="v33-slip-title">#'+i+' · '+b.picks.length+'-Leg Cross Play</div><div class="v33-cross-sub">Different games · '+(b.odds&&b.odds.bestBook?shortBookLabel(b.odds.bestBook):'best prices')+'</div></div><div class="v33-slip-score">'+Math.round(clamp(b.score/10,0,99))+'<br><span style="font-size:10px;color:var(--notion-text-faint)">score</span></div></div><div class="v33-leg-list">'+b.picks.map(function(x){return '<div class="v33-leg"><div><b>'+esc(x.p.name)+'</b><div>'+esc(shortGameLabel(x.g))+' · '+esc(v2ShortMarket(x.mk))+'</div></div><div style="text-align:right"><b>'+fmtPct(x.prob)+'</b><div>'+(x.american!=null?fmtAmerican(x.american):'—')+'</div></div></div>';}).join('')+'</div><div class="v33-slip-stats"><div class="v33-slip-stat">Win chance<b>'+fmtPct(b.joint)+'</b></div><div class="v33-slip-stat">Odds<b>'+(dec?decToAmerican(dec):'—')+'</b></div><div class="v33-slip-stat">EV<b class="'+((b.ev||0)>=0?'ev-pos':'ev-neg')+'">'+(b.ev==null?'—':((b.ev>=0?'+':'')+(b.ev*100).toFixed(1)+'%'))+'</b></div><div class="v33-slip-stat">Avg edge<b>'+((b.picks.reduce(function(a,x){return a+(x.edge||0);},0)/Math.max(1,b.picks.length))*100).toFixed(1)+' pts</b></div></div><div class="v33-slip-actions"><button onclick="addPortfolioLegs(\''+b64+'\')">Add slip</button><button class="ghost" onclick="trackAutoSlip(\''+b64+'\',\'Cross Play '+b.picks.length+' leg\')">Track</button><button class="ghost" onclick="copySlip(\''+b64+'\')">Copy</button></div></div>';
+}
+function v33BuildCrossPlay(){
+  const box=document.getElementById('v33CrossResults'); if(!box) return;
+  const legs=Number((document.getElementById('v33Legs')||{}).value||3); const style=(document.getElementById('v33Style')||{}).value||'safe'; const marketMode=(document.getElementById('v33Markets')||{}).value||'active';
+  if(!GAMES.length){ box.innerHTML='<div class="help-note">Fetch slate first.</div>'; return; }
+  box.innerHTML='<div class="help-note">Building best '+legs+'-leg cross plays…</div>';
+  setTimeout(function(){
+    const slips=v33BuildCrossSlips({legs:legs,style:style,marketMode:marketMode});
+    if(!slips.length){ box.innerHTML='<div class="help-note">No cross plays found. Try fewer legs, All markets, or clear filters.</div>'; return; }
+    box.innerHTML=slips.map(function(b,i){return v33SlipCard(b,i+1);}).join('');
+  },20);
+}
+
 function v22SlateDateLabel(){
   const d=$('#dateInput')&&$('#dateInput').value; if(!d) return '';
   try{ const x=new Date(d+'T12:00:00'); return x.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'}); }catch(e){ return d; }
@@ -4592,16 +4712,16 @@ function v22MarketCandidate(g,p,mk){
   return v2Enrich({g:g,p:p,mk:mk,prob:prob,american:mo&&mo.best!=null?mo.best:p.odds,dec:dec,edge:(mo&&mo.mktProb!=null)?(prob-mo.mktProb):0,ev:dec?parlayEV(calibratedJoint(prob,tier),dec):0,books:mo&&mo.books,bestBook:mo&&mo.books&&mo.books.autoBest,tier:tier,stake:dec?suggestStake(calibratedJoint(prob,tier),dec):null});
 }
 function v22GameCandidates(g){
-  const out=[]; visiblePlayersForGame(g).forEach(function(p){ const c=v22MarketCandidate(g,p,ACTIVE_MARKET); if(c) out.push(c); });
+  const out=[]; visiblePlayersForGame(g).forEach(function(p){ const c=v22MarketCandidate(g,p,ACTIVE_MARKET); if(c && v33PassActiveFilters(c)) out.push(c); });
   out.sort(function(a,b){ const ap=v30EdgeProfile(a), bp=v30EdgeProfile(b); return (bp.edgeScore-ap.edgeScore)||((b.ev||0)-(a.ev||0))||((b.prob||0)-(a.prob||0)); }); return out;
 }
 function v22FiltersHtml(){
-  const chips=[['🚨 HR Alert','hot'],['COND ↑','good'],['🏆 Trophy','hot'],['⭐ Star','info'],['Whiff ↓',''],['💨 Park Edge','info'],['🔥 Hot HR','hot'],['Platoon',''],['EV ↑','good'],['🔮 Bullpen','purp'],['⚔ P-Weak',''],['HRR',''],['🚀 Launch','hot'],['⚡ Laser','info'],['☄ Rakes','hot'],['🎯 Edge','good'],['Hard Hit %','hot'],['Barrel %','hot'],['💪 Effort',''],['✅ Sweet Spot %','good'],['🧬 Matchup','purp']];
-  return '<div class="v22-filter-card"><div class="v22-filter-title">Filter by</div><div class="v22-chipline">'+chips.map(function(c){return '<span class="v22-chip '+(c[1]||'')+'">'+c[0]+'</span>';}).join('')+'</div></div>';
+  const defs=v33FilterDefs();
+  return '<div class="v22-filter-card"><div class="v22-filter-title">Filter by</div><div class="v22-chipline">'+defs.map(function(c){return '<span role="button" tabindex="0" onclick="v33ToggleFilter(\''+c.id+'\')" class="v22-chip '+(c.cls||'')+' '+(V22_ACTIVE_FILTERS.indexOf(c.id)>=0?'active':'')+'">'+c.label+'</span>';}).join('')+'</div><div class="v33-filter-actions"><button class="ghost" onclick="v33ClearFilters()">Clear filters</button><span class="v2-pill">'+(V22_ACTIVE_FILTERS.length?V22_ACTIVE_FILTERS.length+' active':'No filters')+'</span></div></div>';
 }
 function v22GamesHeroHtml(visible){
   const ph=v22ProjHrs();
-  return '<div class="v22-games-page"><div class="v22-games-hero"><div><div class="v22-games-title">⭐ Today\'s Games ⭐</div><div class="v22-games-date">'+esc(v22SlateDateLabel())+'</div><div class="v2-sub">Data refreshes automatically when you fetch slate + odds. Sorted by Dinger rating.</div><div class="v22-proj-pill">⚡ '+ph.total.toFixed(1)+' projected HRs today</div></div><div class="v22-hero-actions"><button class="ghost" onclick="renderLiveHr()">📋 Recap</button><button class="ghost" onclick="switchTab(\'dashboard\')">Command Center</button><button class="ghost" onclick="refreshOdds()">↻ Refresh</button></div></div>'+v22FiltersHtml()+'<div class="v22-summary-line"><span>⚾ '+GAMES.length+' games</span><span>👤 '+ph.n+' hitters modeled</span><span>sorted by ⭐ Dinger Score</span><span>market: '+esc(MARKET_META[ACTIVE_MARKET].label)+'</span></div>';
+  return '<div class="v22-games-page"><div class="v22-games-hero"><div><div class="v22-games-title">⭐ Today\'s Games ⭐</div><div class="v22-games-date">'+esc(v22SlateDateLabel())+'</div><div class="v2-sub">Data refreshes automatically when you fetch slate + odds. Sorted by Dinger rating.</div><div class="v22-proj-pill">⚡ '+ph.total.toFixed(1)+' projected HRs today</div></div><div class="v22-hero-actions"><button class="ghost" onclick="renderLiveHr()">📋 Recap</button><button class="ghost" onclick="switchTab(\'dashboard\')">Command Center</button><button class="ghost" onclick="refreshOdds()">↻ Refresh</button></div></div>'+v22FiltersHtml()+v33CrossPlayPanelHtml()+'<div class="v22-summary-line"><span>⚾ '+GAMES.length+' games</span><span>👤 '+ph.n+' hitters modeled</span><span>sorted by ⭐ Dinger Score</span><span>market: '+esc(MARKET_META[ACTIVE_MARKET].label)+'</span></div>';
 }
 function v22WatchCard(c,i){
   if(!c) return ''; const cls=i===0?'gold':(i===1?'blue':'');
@@ -4641,7 +4761,7 @@ function renderGames(){
     banner='<div class="help-note" style="margin:0 0 10px;border-left:4px solid #f59e0b;padding-left:10px"><b>Projected-only mode:</b> showing games waiting on official lineups.</div>';
   }
   if(!visible.length){ c.innerHTML=v22GamesHeroHtml([])+banner+'<div class="empty">No games match the current lineup filter.</div></div>'; return; }
-  const ordered=visible.slice().sort(function(a,b){ const ac=v22GameCandidates(a)[0], bc=v22GameCandidates(b)[0]; return ((bc&&bc.dingerScore)||0)-((ac&&ac.dingerScore)||0); });
+  const ordered=visible.slice().sort(function(a,b){ const ac=v22GameCandidates(a)[0], bc=v22GameCandidates(b)[0]; return ((bc&&v30EdgeProfile(bc).edgeScore)||0)-((ac&&v30EdgeProfile(ac).edgeScore)||0); });
   c.innerHTML=v22GamesHeroHtml(ordered)+banner+ordered.map((g,gi)=>gameCardHTML(g,gi)).join('')+'</div>';
 }
 
