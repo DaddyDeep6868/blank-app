@@ -786,6 +786,10 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
 /* v3.1 compact, scrollable Intelligence Report modal */
 .v2-drawer{align-items:flex-start!important;justify-content:center!important;padding:clamp(8px,2vh,16px)!important;overflow:hidden!important;overscroll-behavior:contain!important}.v2-drawer-card{width:min(560px,calc(100vw - 18px))!important;max-width:560px!important;height:auto!important;max-height:calc(100vh - 28px)!important;overflow-y:auto!important;overflow-x:hidden!important;overscroll-behavior:contain!important;-webkit-overflow-scrolling:touch!important;padding:14px!important;border-radius:16px!important;scrollbar-width:thin}.v2-drawer-card::-webkit-scrollbar{width:8px}.v2-drawer-card::-webkit-scrollbar-thumb{background:rgba(148,163,184,.45);border-radius:999px}.v2-drawer-card .v2-title{font-size:16px!important}.v2-drawer-card .v2-sub{font-size:11.5px!important}.v2-drawer-head{position:sticky;top:-14px;z-index:3;background:var(--notion-surface);padding:2px 0 10px;margin-bottom:4px;border-bottom:1px solid var(--notion-border-soft)}.v2-drawer-head button{padding:7px 12px!important}.v2-drawer-card .v30-report-score{margin:8px 0!important;gap:8px!important}.v2-drawer-card .v30-score-orb{width:64px!important;height:64px!important;border-radius:16px!important}.v2-drawer-card .v30-score-orb b{font-size:22px!important}.v2-drawer-card .v30-due-box{padding:7px 8px!important;margin:7px 0!important}.v2-drawer-card .v30-due-head{font-size:10px!important}.v2-drawer-card .v30-due-score{font-size:16px!important}.v2-drawer-card .v30-due-note{font-size:10px!important}.v2-drawer-card .v30-segbar{height:7px!important;margin:5px 0 3px!important}.v2-drawer-card .v2-market-table{margin-top:8px!important;font-size:12px!important}.v2-drawer-card .v2-market-table td,.v2-drawer-card .v2-market-table th{padding:6px 5px!important}.v2-drawer-card .v2-section-head{margin:10px 0 6px!important}.v2-drawer-card .v2-section-head .name{font-size:11px!important}.v2-drawer-card .v30-components{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:6px!important;margin-top:8px!important}.v2-drawer-card .v30-comp{padding:6px!important;border-radius:9px!important}.v2-drawer-card .v30-comp-top{font-size:10px!important}.v2-drawer-card .v30-comp-bar{height:5px!important;margin-top:4px!important}.v2-drawer-card .v30-model-grid{gap:4px!important;margin-top:7px!important}.v2-drawer-card .v30-model-row{font-size:10.5px!important;grid-template-columns:58px 1fr 42px!important}.v2-drawer-card .v21-impact{font-size:11px!important;padding:7px 8px!important;margin-top:7px!important}.v2-drawer-card .v30-report-list{gap:3px!important;margin-top:5px!important}.v2-drawer-card .v30-report-list div{font-size:11px!important}.v2-drawer-card .v30-badge-row{gap:4px!important;margin-top:6px!important}.v2-drawer-card .v30-badge{font-size:9.5px!important;padding:2px 5px!important}.v2-drawer-card .v2-stars{font-size:12px!important}@media(max-width:700px){.v2-drawer{padding:6px!important}.v2-drawer-card{width:calc(100vw - 12px)!important;max-height:calc(100vh - 12px)!important;padding:12px!important}.v2-drawer-card .v30-components{grid-template-columns:repeat(2,minmax(0,1fr))!important}.v2-drawer-head{top:-12px}}
 
+
+/* v3.2 force modal-local scrolling */
+.v2-drawer{position:fixed!important;inset:0!important;display:block!important;padding:10px!important;overflow:hidden!important;touch-action:none!important}.v2-drawer-card{position:relative!important;margin:0 auto!important;height:calc(100dvh - 20px)!important;max-height:calc(100dvh - 20px)!important;min-height:320px!important;overflow-y:scroll!important;overflow-x:hidden!important;overscroll-behavior:contain!important;-webkit-overflow-scrolling:touch!important;touch-action:pan-y!important;box-sizing:border-box!important;padding-bottom:28px!important}.v2-drawer-card::after{content:'Scroll inside this report';position:sticky;bottom:0;display:block;text-align:center;font-size:10px;color:var(--notion-text-faint);background:linear-gradient(180deg,transparent,var(--notion-surface) 35%);padding:14px 0 2px;margin-top:8px;pointer-events:none}.v2-drawer-card.is-scrollable::after{content:'Scroll for more ↓'}.v2-drawer-card.at-bottom::after{content:'End of report'}.v2-drawer-card .v2-drawer-head{top:-14px!important}@supports not (height:100dvh){.v2-drawer-card{height:calc(100vh - 20px)!important;max-height:calc(100vh - 20px)!important}}
+
 </style>
 </head>
 <body>
@@ -1217,8 +1221,8 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
 <button class="mobile-slip-fab hidden" id="mobileSlipFab">🧾 Open slip</button>
 
 <script>
-const APP_VERSION = 'v3.1';
-const APP_UPDATED = 'Updated Jun 12, 2026 — compact scrollable player report';
+const APP_VERSION = 'v3.2';
+const APP_UPDATED = 'Updated Jun 12, 2026 — fixed player report scrolling';
 {
   const av=document.getElementById('appVersion');
   if(av) av.textContent=APP_VERSION+' · '+APP_UPDATED;
@@ -5095,6 +5099,41 @@ function v2PlayCard(c, rank, opts){
     '<ul class="v2-why">'+(c.why||[]).map(function(w){return '<li>• '+esc(w)+'</li>';}).join('')+'</ul>'+
     '<div class="v2-actions" onclick="event.stopPropagation()"><button class="ghost" onclick="addSlipGP(\''+c.g.id+'\',\''+encodeURIComponent(c.p.name)+'\')">Add</button><button class="ghost" onclick="trackAutoSlip(\''+b64+'\',\'V2 play\')">Track</button><button class="ghost" onclick="copySlip(\''+b64+'\')">Copy</button></div></div>';
 }
+
+function v32BindModalScroll(){
+  try{
+    const cards=document.querySelectorAll('.v2-drawer-card');
+    cards.forEach(function(card){
+      if(card.dataset.v32ScrollBound==='1') return;
+      card.dataset.v32ScrollBound='1';
+      function mark(){
+        const can=card.scrollHeight>card.clientHeight+4;
+        card.classList.toggle('is-scrollable', can);
+        card.classList.toggle('at-bottom', can && card.scrollTop+card.clientHeight>=card.scrollHeight-4);
+      }
+      card.addEventListener('wheel', function(e){
+        // Force the report itself to scroll, even when the app is inside Streamlit/iframe.
+        if(card.scrollHeight>card.clientHeight){
+          e.preventDefault();
+          e.stopPropagation();
+          card.scrollTop += e.deltaY || 0;
+          mark();
+        }
+      }, {passive:false});
+      let lastY=null;
+      card.addEventListener('touchstart', function(e){ if(e.touches&&e.touches.length) lastY=e.touches[0].clientY; }, {passive:true});
+      card.addEventListener('touchmove', function(e){
+        if(lastY!=null && e.touches&&e.touches.length && card.scrollHeight>card.clientHeight){
+          e.preventDefault(); e.stopPropagation();
+          const y=e.touches[0].clientY; card.scrollTop += (lastY-y); lastY=y; mark();
+        }
+      }, {passive:false});
+      card.addEventListener('scroll', mark, {passive:true});
+      setTimeout(mark, 0); setTimeout(mark, 250);
+    });
+  }catch(e){ console.warn('modal scroll bind', e); }
+}
+
 function v2OpenPlayer(gameId, encName){
   try{
     const name=decodeURIComponent(encName||''); const g=(GAMES||[]).find(function(x){return String(x.id)===String(gameId);}); if(!g) return;
@@ -5102,8 +5141,8 @@ function v2OpenPlayer(gameId, encName){
     const profiles=Object.keys(MARKET_META).map(function(mk){ const mc=p._mkt&&p._mkt[mk]; const mo=p._mktOdds&&p._mktOdds[mk]; if(!mc) return null; const dec=mo&&mo.best!=null?amToDecimal(mo.best):null; const tier=confidenceLabel(Object.assign({},p,{p:mc.p,calc:mc})); return v30EdgeProfile({g:g,p:p,mk:mk,prob:mc.p,american:mo&&mo.best,dec:dec,edge:(mo&&mo.mktProb!=null)?(mc.p-mo.mktProb):0,ev:dec?parlayEV(calibratedJoint(mc.p,tier),dec):0,books:mo&&mo.books,bestBook:mo&&mo.books&&mo.books.autoBest,tier:tier,stake:dec?suggestStake(calibratedJoint(mc.p,tier),dec):null}); }).filter(Boolean);
     const main=profiles.find(function(x){return x.mk===ACTIVE_MARKET;}) || profiles[0]; if(!main) return;
     const rows=profiles.map(function(c){ return '<tr><td>'+esc(v2MarketLabel(c.mk))+'</td><td>'+v2StarsHtml(c.edgeScore)+'</td><td class="num">'+fmtPct(c.prob)+'</td><td class="num">'+(c.american!=null?fmtAmerican(c.american):'—')+'</td><td class="num">'+c.edgeScore+'</td><td class="num">'+(c.mk==='hr'?c.due.score:'—')+'</td></tr>'; }).join('');
-    const html='<div class="v2-drawer" onclick="if(event.target.classList.contains(\'v2-drawer\'))this.remove()"><div class="v2-drawer-card" onwheel="event.stopPropagation()" ontouchmove="event.stopPropagation()"><div class="v2-drawer-head"><div><div class="v2-title">'+esc(p.name)+' Intelligence Report</div><div class="v2-sub">'+esc(shortGameLabel(g))+' · '+esc(p.side==='home'?(g.homeAbbr||g.home):(g.awayAbbr||g.away))+' · '+(g.env&&g.env.lineupsConfirmed?(p._lineupStatus==='in'?'Confirmed #'+p._lineupSpot:'Not starting'):'Projected #'+(p._projectedSpot||p.spot||''))+'</div></div><button class="ghost" onclick="this.closest(\'.v2-drawer\').remove()">Close</button></div><div class="v30-report-score"><div class="v30-score-orb"><b>'+main.edgeScore+'</b><span>Edge</span></div><div style="flex:1;min-width:220px"><div class="v2-title">'+esc(main.action)+' · '+esc(v2MarketLabel(main.mk))+'</div>'+v30BadgeRow(main)+v30DueHtml(main,false)+'</div></div><table class="v2-market-table"><thead><tr><th>Market</th><th>Stars</th><th class="num">Model</th><th class="num">Odds</th><th class="num">Edge</th><th class="num">Due</th></tr></thead><tbody>'+rows+'</tbody></table><div class="v2-section-head"><div class="name">Score Breakdown</div></div>'+v30ComponentsHtml(main)+'<div class="v2-section-head"><div class="name">Model Consensus</div></div>'+v30ModelConsensusHtml(main)+'<div class="v2-section-head"><div class="name">Why this play</div></div><div class="v30-report-list">'+main.strengths.map(function(n){return '<div>✅ '+esc(n)+'</div>';}).join('')+'</div><div class="v2-section-head"><div class="name">Risks</div></div><div class="v30-report-list">'+(main.risks.length?main.risks.map(function(n){return '<div>⚠️ '+esc(n)+'</div>';}).join(''):'<div>✅ No major red flags from current inputs.</div>')+'</div></div></div>';
-    document.body.insertAdjacentHTML('beforeend', html);
+    const html='<div class="v2-drawer" onclick="if(event.target.classList.contains(\'v2-drawer\'))this.remove()"><div class="v2-drawer-card"><div class="v2-drawer-head"><div><div class="v2-title">'+esc(p.name)+' Intelligence Report</div><div class="v2-sub">'+esc(shortGameLabel(g))+' · '+esc(p.side==='home'?(g.homeAbbr||g.home):(g.awayAbbr||g.away))+' · '+(g.env&&g.env.lineupsConfirmed?(p._lineupStatus==='in'?'Confirmed #'+p._lineupSpot:'Not starting'):'Projected #'+(p._projectedSpot||p.spot||''))+'</div></div><button class="ghost" onclick="this.closest(\'.v2-drawer\').remove()">Close</button></div><div class="v30-report-score"><div class="v30-score-orb"><b>'+main.edgeScore+'</b><span>Edge</span></div><div style="flex:1;min-width:220px"><div class="v2-title">'+esc(main.action)+' · '+esc(v2MarketLabel(main.mk))+'</div>'+v30BadgeRow(main)+v30DueHtml(main,false)+'</div></div><table class="v2-market-table"><thead><tr><th>Market</th><th>Stars</th><th class="num">Model</th><th class="num">Odds</th><th class="num">Edge</th><th class="num">Due</th></tr></thead><tbody>'+rows+'</tbody></table><div class="v2-section-head"><div class="name">Score Breakdown</div></div>'+v30ComponentsHtml(main)+'<div class="v2-section-head"><div class="name">Model Consensus</div></div>'+v30ModelConsensusHtml(main)+'<div class="v2-section-head"><div class="name">Why this play</div></div><div class="v30-report-list">'+main.strengths.map(function(n){return '<div>✅ '+esc(n)+'</div>';}).join('')+'</div><div class="v2-section-head"><div class="name">Risks</div></div><div class="v30-report-list">'+(main.risks.length?main.risks.map(function(n){return '<div>⚠️ '+esc(n)+'</div>';}).join(''):'<div>✅ No major red flags from current inputs.</div>')+'</div></div></div>';
+    document.body.insertAdjacentHTML('beforeend', html); v32BindModalScroll();
   }catch(e){ console.error(e); }
 }
 

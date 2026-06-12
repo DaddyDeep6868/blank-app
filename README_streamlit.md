@@ -199,4 +199,8 @@ For multi-device use, deploy `dingerlab_server.py` on a small always-on host suc
 - Made the Player Intelligence Report smaller and easier to read on laptops.
 - The report modal now has its own vertical scroll area, so mouse-wheel scrolling works while the pointer is on the report window.
 - Tightened spacing, sticky header, compact score orb, compact due meter, smaller market rows, and four-column score breakdown on desktop.
+## New in v3.2 — Fixed player report scrolling
+- Forced the Player Intelligence Report to use a fixed-height internal scroll area.
+- Added wheel/touch handlers that manually scroll the report window, which fixes cases where Streamlit/iframe/browser scrolling captures the mouse wheel.
+- Added small scroll status text at the bottom of the report.
 
