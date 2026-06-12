@@ -173,4 +173,13 @@ For multi-device use, deploy `dingerlab_server.py` on a small always-on host suc
 - Added a Flask `/api/oddsblaze` proxy for Render/server mode so browser CORS no longer causes `Failed to fetch` for books.
 - Fetch slate now uses the same-origin server proxy on `mlb-slate.onrender.com`.
 - Updated the in-app version badge to v1.50.
+## New in v1.51 — Player-filter empty-state fix
+- Changed the confirmed pre-game filter empty-state from an alarming board-empty warning to a clear info message.
+- When the filter is ON before lineups post, the app now explains that no confirmed starters are available yet.
+- Updated the in-app version badge to v1.51.
+## New in v2.0 — Command Center rebuild
+- Added Dinger Score and 1–5 star ratings for every priced player-market.
+- Rebuilt Dashboard into a v2 Command Center with top star plays, best combos, daily park report, and ready-board guardrails.
+- Reworked game cards to show clean top star plays first, with advanced tables collapsed.
+- Added click-through player detail drawer with all market ratings.
 

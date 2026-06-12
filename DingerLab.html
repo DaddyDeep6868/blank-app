@@ -489,6 +489,9 @@ section:first-child {
 .app-header .brand .logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#d5803b,#e56458);display:flex;align-items:center;justify-content:center;font-size:18px}
 .app-header .spacer{flex:1}
 .version-tag{font-size:12px;color:var(--notion-text-soft);background:var(--notion-bg-soft);border:1px solid var(--notion-border-soft);border-radius:999px;padding:4px 9px;white-space:nowrap}
+.v2-hero{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(280px,.75fr);gap:14px;margin-top:12px}.v2-card{background:var(--notion-surface);border:1px solid var(--notion-border);border-radius:16px;padding:14px 16px;box-shadow:var(--notion-shadow)}.v2-title{font-size:18px;font-weight:900;letter-spacing:-.02em}.v2-sub{font-size:12.5px;color:var(--notion-text-soft);line-height:1.4;margin-top:4px}.v2-kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-top:12px}.v2-kpi{border:1px solid var(--notion-border-soft);border-radius:13px;padding:10px;background:var(--notion-bg-soft)}.v2-kpi .k{text-transform:uppercase;letter-spacing:.06em;font-size:10px;color:var(--notion-text-faint)}.v2-kpi .v{font-size:23px;font-weight:900;margin-top:4px}.v2-kpi .s{font-size:11px;color:var(--notion-text-soft);margin-top:2px}.v2-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:16px 0 9px}.v2-section-head .name{font-size:14px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:var(--notion-text-soft)}.v2-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:10px}.v2-play{position:relative;border:1px solid var(--notion-border-soft);background:var(--notion-bg-soft);border-radius:15px;padding:12px}.v2-play.clickable{cursor:pointer}.v2-play.clickable:hover{border-color:var(--notion-blue);transform:translateY(-1px)}.v2-play-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.v2-player{font-size:16px;font-weight:900;line-height:1.15}.v2-meta{font-size:11.5px;color:var(--notion-text-soft);margin-top:3px}.v2-stars{white-space:nowrap;color:#f59e0b;font-weight:900;letter-spacing:.5px}.v2-score{font-size:22px;font-weight:950;text-align:right}.v2-score small{display:block;font-size:10px;color:var(--notion-text-faint);font-weight:700;text-transform:uppercase;letter-spacing:.06em}.v2-pill{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--notion-border-soft);border-radius:999px;padding:3px 8px;font-size:11px;background:var(--notion-surface)}.v2-stat-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:10px}.v2-stat{border:1px solid var(--notion-border-soft);border-radius:10px;padding:7px;background:var(--notion-surface)}.v2-stat .k{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--notion-text-faint)}.v2-stat .v{font-size:13px;font-weight:850;margin-top:2px}.v2-why{margin:10px 0 0;padding:0;list-style:none;display:grid;gap:4px}.v2-why li{font-size:11.5px;color:var(--notion-text-soft)}.v2-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.v2-actions button{flex:1 1 70px;min-height:31px;padding:6px 9px}.v2-park-row{display:flex;align-items:center;gap:10px;border:1px solid var(--notion-border-soft);border-radius:12px;padding:9px 10px;background:var(--notion-bg-soft);margin-top:7px}.v2-park-rank{font-weight:900;color:var(--notion-orange);width:28px}.v2-park-main{flex:1;min-width:0}.v2-park-name{font-size:13px;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.v2-park-note{font-size:11px;color:var(--notion-text-soft);margin-top:2px}.v2-park-boost{font-weight:950;color:#10b981}.v2-game-top{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:9px;margin:12px 0}.v2-drawer{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:18px}.v2-drawer-card{max-width:620px;width:min(620px,100%);max-height:88vh;overflow:auto;background:var(--notion-surface);border:1px solid var(--notion-border);border-radius:20px;padding:18px;box-shadow:0 24px 80px rgba(0,0,0,.45)}.v2-drawer-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.v2-market-table{width:100%;border-collapse:collapse;margin-top:12px}.v2-market-table td,.v2-market-table th{border-bottom:1px solid var(--notion-border-soft);padding:8px 6px;text-align:left}.v2-market-table th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--notion-text-faint)}
+@media(max-width:820px){.v2-hero{grid-template-columns:1fr}.v2-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.v2-stat-row{grid-template-columns:repeat(2,minmax(0,1fr))}.v2-card{padding:13px 12px}.v2-grid{grid-template-columns:1fr}}
+
 .ready-board{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,.9fr);gap:12px;align-items:start}
 .ready-panel{background:var(--notion-surface);border:1px solid var(--notion-border);border-radius:16px;padding:14px 16px;box-shadow:var(--notion-shadow)}
 .ready-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}
@@ -1201,8 +1204,8 @@ body.mobile-layout .mobile-slip-fab.hidden{display:none}
 <button class="mobile-slip-fab hidden" id="mobileSlipFab">🧾 Open slip</button>
 
 <script>
-const APP_VERSION = 'v1.50';
-const APP_UPDATED = 'Updated Jun 10, 2026 — server odds proxy fix';
+const APP_VERSION = 'v2.0';
+const APP_UPDATED = 'Updated Jun 11, 2026 — DingerLab v2 command center';
 {
   const av=document.getElementById('appVersion');
   if(av) av.textContent=APP_VERSION+' · '+APP_UPDATED;
@@ -2237,7 +2240,13 @@ function captureBoardSnapshotAndNotify(dateStr, notify){
   try{ updateLiveHrBoardChip(); }catch(e){}
   if(notify){
     if(n>0){ try{ toast('Board saved', 'Model board filled for '+dateStr+' — '+n+' ranked player-markets captured. Live HR comparisons for this date are now enabled.', '✅'); }catch(e){} }
-    else { try{ toast('Board empty for '+dateStr, 'Odds loaded but no ranked player-markets qualified. If it is late at night, check that Slate date is your local date — not tomorrow. Also check lineup/confidence filters or whether props are posted.', '⚠️'); }catch(e){} }
+    else { try{
+      if(typeof onlyInGameOn==='function' && onlyInGameOn()){
+        toast('No confirmed pre-game board yet', 'Odds loaded, but the Player filter is ON and no confirmed starting-lineup players qualified yet. This is normal before official lineups post. Turn the filter OFF to see projected players, or refresh closer to first pitch.', 'ℹ️');
+      }else{
+        toast('Board empty for '+dateStr, 'Odds loaded but no ranked player-markets qualified. Check Slate date, lineup/confidence filters, or whether props are posted.', '⚠️');
+      }
+    }catch(e){} }
   }
   return n;
 }
@@ -4675,43 +4684,40 @@ function globalParlayCardHTML(pr,rank){
 
 function gameCardHTML(g,gi){
   const e=g.env;const wx=g.wx||{};
-  const pairs=uniqueByCombo(bestPairs(g), function(p){ return [{p:p.a,g:g,mk:ACTIVE_MARKET},{p:p.b,g:g,mk:ACTIVE_MARKET}]; }).slice(0,3);
+  const roofTxt=e.roof==='dome'?'Dome':(e.roof==='retractable'?(e.roofClosed?'Roof closed':'Retractable (open)'):'Open air');
+  const candidates=[];
+  visiblePlayersForGame(g).forEach(function(p){
+    Object.keys(MARKET_META).forEach(function(mk){ const mc=p._mkt&&p._mkt[mk]; const mo=p._mktOdds&&p._mktOdds[mk]; if(!mc||!mo||mo.best==null) return; const tier=confidenceLabel(Object.assign({},p,{p:mc.p,calc:mc})); const dec=amToDecimal(mo.best); candidates.push(v2Enrich({g:g,p:p,mk:mk,prob:mc.p,american:mo.best,dec:dec,edge:(mo.mktProb!=null?mc.p-mo.mktProb:0),ev:dec?parlayEV(calibratedJoint(mc.p,tier),dec):0,books:mo.books,bestBook:mo.books&&mo.books.autoBest,tier:tier,stake:dec?suggestStake(calibratedJoint(mc.p,tier),dec):null})); });
+  });
+  candidates.sort(function(a,b){return (b.dingerScore-a.dingerScore)||((b.ev||0)-(a.ev||0));});
+  const topPlays=candidates.slice(0,4).map(function(c,i){return v2PlayCard(c,i+1);}).join('');
+  const pairs=uniqueByCombo(bestPairs(g), function(p){ return [{p:p.a,g:g,mk:ACTIVE_MARKET},{p:p.b,g:g,mk:ACTIVE_MARKET}]; }).slice(0,2);
   const top=pairs.map((pr,k)=>parlayCardHTML(pr,k+1)).join('');
-  // players table sorted by prob
   const sorted=[...visiblePlayersForGame(g)].sort((a,b)=>b.p-a.p);
   const rows=sorted.map(p=>playerRowHTML(p,g)).join('');
-  const roofTxt=e.roof==='dome'?'Dome':(e.roof==='retractable'?(e.roofClosed?'Roof closed':'Retractable (open)'):'Open air');
   return `<div class="game-card ${gi===0?'open':''}">
     <div class="game-head">
       <span class="caret">▶</span>
       <div><div class="game-matchup">${g.away} @ ${g.home}</div>
       <div class="game-meta">
-        <span class="chip">🏟️ ${e.park}</span>
-        <span class="chip">PF ${e.parkHR}</span>${g._liveWx?` <span class="chip" style="background:${g._windOut?"#0f9d5822":"#8881"};color:${g._windOut?"#0f9d58":"inherit"}" title="Live weather">\ud83c\udf2c\ufe0f ${g._liveWx.temp?g._liveWx.temp+"\u00b0F":""} ${g._liveWx.wind||""}${g._windOut?" \u2022 wind out":""}</span>`:""}
-        <span class="chip">🌡️ ${wx.temp!=null?wx.temp+'°F':'n/a'}</span>
-        <span class="chip">💨 ${wx.wind!=null?wx.wind+'mph':'n/a'}</span>
-        <span class="chip">${e.dayNight==='day'?'☀️ Day':'🌙 Night'}</span>
-        <span class="chip">${roofTxt}</span>
+        <span class="chip">🏟️ ${e.park}</span><span class="chip">PF ${e.parkHR}</span>
+        <span class="chip">🌡️ ${wx.temp!=null?wx.temp+'°F':'n/a'}</span><span class="chip">💨 ${wx.wind!=null?wx.wind+'mph':'n/a'}</span><span class="chip">${e.dayNight==='day'?'☀️ Day':'🌙 Night'}</span><span class="chip">${roofTxt}</span><span class="chip" style="background:${e.lineupsConfirmed?'#10b98122':'#f59e0b22'};color:${e.lineupsConfirmed?'#10b981':'#b45309'}">${e.lineupsConfirmed?'Lineup posted':'Projected'}</span>
       </div></div>
     </div>
     <div class="game-body">
+      <div class="v2-section-head"><div class="name">⭐ Top Star Plays in this game</div><span class="v2-pill">${candidates.length} priced markets</span></div>
+      <div class="v2-game-top">${topPlays||'<div class="help-note">No priced player markets for this game yet.</div>'}</div>
+      <details><summary style="cursor:pointer;font-weight:850;margin:10px 0">Advanced game details + table</summary>
       <div class="env-grid">
         <div class="env-cell"><div class="k">Park HR factor</div><div class="v">${e.parkHR}</div><div class="s">${e.parkHR>=105?'Hitter-friendly':e.parkHR<=96?'Pitcher-friendly':'Neutral'}</div></div>
         <div class="env-cell"><div class="k">Temperature</div><div class="v">${wx.temp!=null?wx.temp+'°F':'—'}</div><div class="s">${wx.temp>=80?'Ball carries':wx.temp<=55?'Dead air':'Average'}</div></div>
         <div class="env-cell"><div class="k">Wind</div><div class="v">${wx.wind!=null?wx.wind+' mph':'—'}</div><div class="s">${windDesc(e,wx)}</div></div>
-        <div class="env-cell"><div class="k">Humidity</div><div class="v">${wx.humidity!=null?wx.humidity+'%':'—'}</div><div class="s">&nbsp;</div></div>
         <div class="env-cell"><div class="k">Away SP faced by home</div><div class="v" style="font-size:13px">${g.awayPitcher?g.awayPitcher.name:'TBD'}</div><div class="s">${g.awayPitcher?g.awayPitcher.hr9.toFixed(2)+' HR/9':''}</div></div>
-        <div class="env-cell"><div class="k">Home SP faced by away</div><div class="v" style="font-size:13px">${g.homePitcher?g.homePitcher.name:'TBD'}</div><div class="s">${g.homePitcher?g.homePitcher.hr9.toFixed(2)+' HR/9':''}</div></div>
       </div>
-
-      <div class="section-title">🏆 Top parlay pairs — most likely to both homer</div>
-      <div class="parlay-grid">${top||'<div class="help-note">Add at least two hitters to see pairs.</div>'}</div>
-      <div class="legend">Combined % = joint probability both homer (Gaussian-copula, ρ=${g.players.some(p=>true)?CFG.corrTeammates:''} teammates / ${CFG.corrOpponents} opponents). Fair odds = 1 / combined %. EV shown only when both hitters have prop odds entered.</div>
-
+      <div class="section-title">Top parlay pairs</div><div class="parlay-grid">${top||'<div class="help-note">Add at least two hitters to see pairs.</div>'}</div>
       <div class="section-title">Individual hitter probabilities</div>
-      <table class="players"><thead><tr>
-        <th>Hitter</th><th>Team</th><th class="num">Spot</th><th class="num">${MARKET_META[ACTIVE_MARKET].rateLabel}</th><th class="num">${MARKET_META[ACTIVE_MARKET].probLabel}</th><th class="num">Fair</th><th class="num">DK</th><th class="num">Fanatics</th><th class="num">Best</th><th class="num">Edge</th><th></th><th></th>
-      </tr></thead><tbody>${rows}</tbody></table>
+      <table class="players"><thead><tr><th>Hitter</th><th>Team</th><th class="num">Spot</th><th class="num">${MARKET_META[ACTIVE_MARKET].rateLabel}</th><th class="num">${MARKET_META[ACTIVE_MARKET].probLabel}</th><th class="num">Fair</th><th class="num">DK</th><th class="num">Fanatics</th><th class="num">BetMGM</th><th class="num">Caesars</th><th class="num">Best</th><th class="num">Edge</th><th>Why</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      </details>
     </div>
   </div>`;
 }
@@ -4966,6 +4972,69 @@ function buildReadyBoardHtml(all){
     '<div class="ready-panel"><div class="ready-head"><div><div class="ready-title">🚫 Do Not Bet / Wait</div><div class="ready-sub">Warnings are collapsed into short reasons to avoid clutter.</div></div></div><div class="guardrail-list">'+guard+'</div><details style="margin-top:12px"><summary style="cursor:pointer;font-weight:800">Exposure snapshot</summary>'+exposureSummaryHtml(ready.concat(blocked))+'</details></div></div>';
 }
 
+
+function v2ClampScore(x){ return Math.round(clamp(Number(x||0), 0, 99)); }
+function v2DingerScore(c){
+  if(!c) return 0;
+  const evN=clamp(((c.ev||0)+0.03)/0.28,0,1);
+  const edgeN=clamp(((c.edge||0)+0.01)/0.10,0,1);
+  const probN=clamp((c.prob||0)/((c.mk==='hr')?0.20:0.70),0,1);
+  const confN=c.tier==='Great'?1:(c.tier==='Good'?0.72:0.38);
+  const lineupN=(c.g&&c.g.env&&c.g.env.lineupsConfirmed&&c.p&&c.p._lineupStatus==='in')?1:0.55;
+  const spot=(c.p&&c.p._lineupSpot!=null)?Number(c.p._lineupSpot):((c.p&&c.p.spot!=null)?Number(c.p.spot):null);
+  const spotN=spot?clamp((10-spot)/8,0,1):0.45;
+  const parkN=clamp(((c.g&&c.g.env?Number(c.g.env.parkHR||100):100)-94)/18,0,1);
+  const booksN=clamp(Object.keys((c.books||{})).filter(function(k){return ['draftkings','fanatics','betmgm','caesars'].indexOf(k)>=0 && c.books[k]!=null;}).length/4,0,1);
+  return v2ClampScore(24 + evN*22 + edgeN*18 + probN*14 + confN*8 + lineupN*7 + spotN*4 + parkN*4 + booksN*3);
+}
+function v2Stars(score){ score=Number(score||0); return score>=88?5:score>=78?4:score>=66?3:score>=54?2:1; }
+function v2StarsHtml(score){ const n=v2Stars(score); let out=''; for(let i=0;i<5;i++) out += i<n?'★':'☆'; return '<span class="v2-stars" title="Dinger Score '+score+'">'+out+'</span>'; }
+function v2Label(score){ return score>=88?'Elite':score>=78?'Strong':score>=66?'Playable':score>=54?'Lean':'Avoid'; }
+function v2MarketLabel(mk){ const m=MARKET_META[mk]||{}; return (m.leg||m.label||mk||'Market'); }
+function v2ShortMarket(mk){ const m=MARKET_META[mk]||{}; return (m.short||mk||'').toUpperCase(); }
+function v2Team(c){ if(!c||!c.g||!c.p) return ''; return c.p.side==='home'?(c.g.homeAbbr||c.g.home):(c.g.awayAbbr||c.g.away); }
+function v2Payload(legs){ return btoa(unescape(encodeURIComponent(JSON.stringify((legs||[]).map(function(x){ return {gamePk:(x.g&&x.g.id)||null, name:x.p.name, mk:x.mk}; }))))); }
+function v2Why(c){
+  const out=[]; if(!c) return out;
+  if(c.g&&c.g.env&&c.g.env.lineupsConfirmed&&c.p&&c.p._lineupStatus==='in') out.push('confirmed starter'); else out.push('projected lineup');
+  if((c.edge||0)>=0.05) out.push('large market edge'); else if((c.edge||0)>0) out.push('positive edge');
+  if((c.ev||0)>=0.12) out.push('premium EV'); else if((c.ev||0)>0) out.push('positive EV');
+  if(c.tier==='Great') out.push('great confidence'); else if(c.tier==='Good') out.push('good confidence');
+  const spot=(c.p&&c.p._lineupSpot!=null)?Number(c.p._lineupSpot):((c.p&&c.p.spot!=null)?Number(c.p.spot):null); if(spot&&spot<=4) out.push('top-order bat');
+  if(c.g&&c.g.env&&Number(c.g.env.parkHR||100)>=105) out.push('park boost');
+  if(c.bestBook) out.push('best at '+shortBookLabel(c.bestBook));
+  return out.slice(0,4);
+}
+function v2Enrich(c){ const score=v2DingerScore(c); return Object.assign({}, c, {dingerScore:score, stars:v2Stars(score), dingerLabel:v2Label(score), why:v2Why(c)}); }
+function v2PlayCard(c, rank, opts){
+  opts=opts||{}; c=v2Enrich(c); const b64=v2Payload([c]); const team=v2Team(c); const game=c.g?shortGameLabel(c.g):'';
+  const stake=(c.stake&&c.stake.stake>0)?c.stake.stake:null;
+  return '<div class="v2-play clickable" onclick="v2OpenPlayer(\''+String(c.g&&c.g.id).replace(/'/g,'')+'\',\''+encodeURIComponent(c.p.name)+'\')">'+
+    '<div class="v2-play-top"><div><div class="v2-player">'+(rank?('<span style="color:var(--notion-orange)">#'+rank+'</span> '):'')+esc(c.p.name)+' <span class="v2-pill">'+esc(v2ShortMarket(c.mk))+'</span></div><div class="v2-meta">'+esc(team)+' · '+esc(game)+' · '+esc(c.dingerLabel)+'</div></div><div><div class="v2-score">'+c.dingerScore+'<small>Score</small></div>'+v2StarsHtml(c.dingerScore)+'</div></div>'+
+    '<div class="v2-stat-row"><div class="v2-stat"><div class="k">Hit rate</div><div class="v">'+fmtPct(c.prob)+'</div></div><div class="v2-stat"><div class="k">Odds</div><div class="v">'+(c.bestBook?shortBookLabel(c.bestBook)+' ':'')+fmtAmerican(c.american)+'</div></div><div class="v2-stat"><div class="k">EV</div><div class="v '+((c.ev||0)>=0?'ev-pos':'ev-neg')+'">'+((c.ev||0)>=0?'+':'')+((c.ev||0)*100).toFixed(1)+'%</div></div><div class="v2-stat"><div class="k">Wager</div><div class="v">'+(stake?'$'+stake.toFixed(2):'—')+'</div></div></div>'+
+    '<ul class="v2-why">'+(c.why||[]).map(function(w){return '<li>• '+esc(w)+'</li>';}).join('')+'</ul>'+
+    '<div class="v2-actions" onclick="event.stopPropagation()"><button class="ghost" onclick="addSlipGP(\''+c.g.id+'\',\''+encodeURIComponent(c.p.name)+'\')">Add</button><button class="ghost" onclick="trackAutoSlip(\''+b64+'\',\'V2 play\')">Track</button><button class="ghost" onclick="copySlip(\''+b64+'\')">Copy</button></div></div>';
+}
+function v2OpenPlayer(gameId, encName){
+  try{
+    const name=decodeURIComponent(encName||''); const g=(GAMES||[]).find(function(x){return String(x.id)===String(gameId);}); if(!g) return;
+    const p=(g.players||[]).find(function(x){return x.name===name;}); if(!p) return;
+    const rows=Object.keys(MARKET_META).map(function(mk){ const mc=p._mkt&&p._mkt[mk]; const mo=p._mktOdds&&p._mktOdds[mk]; if(!mc) return ''; const dec=mo&&mo.best!=null?amToDecimal(mo.best):null; const tier=confidenceLabel(Object.assign({},p,{p:mc.p,calc:mc})); const c=v2Enrich({g:g,p:p,mk:mk,prob:mc.p,american:mo&&mo.best,dec:dec,edge:(mo&&mo.mktProb!=null)?(mc.p-mo.mktProb):0,ev:dec?parlayEV(calibratedJoint(mc.p,tier),dec):0,books:mo&&mo.books,bestBook:mo&&mo.books&&mo.books.autoBest,tier:tier,stake:dec?suggestStake(calibratedJoint(mc.p,tier),dec):null}); return '<tr><td>'+esc(v2MarketLabel(mk))+'</td><td>'+v2StarsHtml(c.dingerScore)+'</td><td class="num">'+fmtPct(c.prob)+'</td><td class="num">'+(c.american!=null?fmtAmerican(c.american):'—')+'</td><td class="num">'+c.dingerScore+'</td></tr>'; }).join('');
+    const notes=v2Why(v2Enrich({g:g,p:p,mk:ACTIVE_MARKET,prob:p.p||0,american:p.odds,edge:0,ev:0,books:p._oddsBooks,bestBook:p._oddsBooks&&p._oddsBooks.autoBest,tier:confidenceLabel(p),stake:null}));
+    const html='<div class="v2-drawer" onclick="if(event.target.classList.contains(\'v2-drawer\'))this.remove()"><div class="v2-drawer-card"><div class="v2-drawer-head"><div><div class="v2-title">'+esc(p.name)+'</div><div class="v2-sub">'+esc(shortGameLabel(g))+' · '+esc(p.side==='home'?(g.homeAbbr||g.home):(g.awayAbbr||g.away))+' · '+(g.env&&g.env.lineupsConfirmed?(p._lineupStatus==='in'?'Confirmed #'+p._lineupSpot:'Not starting'):'Projected #'+(p._projectedSpot||p.spot||''))+'</div></div><button class="ghost" onclick="this.closest(\'.v2-drawer\').remove()">Close</button></div><table class="v2-market-table"><thead><tr><th>Market</th><th>Stars</th><th class="num">Model</th><th class="num">Odds</th><th class="num">Score</th></tr></thead><tbody>'+rows+'</tbody></table><div class="v2-section-head"><div class="name">Why it stands out</div></div><ul class="v2-why">'+notes.map(function(n){return '<li>• '+esc(n)+'</li>';}).join('')+'</ul></div></div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+  }catch(e){ console.error(e); }
+}
+function v2ParkReportHtml(){
+  const rows=(GAMES||[]).map(function(g){ const e=g.env||{}, wx=g.wx||{}; const pf=Number(e.parkHR||100); const temp=Number(wx.temp||72); const wind=Number(wx.wind||0); const boost=Math.round((pf-100) + Math.max(0,temp-72)*0.65 + Math.max(0,wind-6)*0.35 + (e.roof==='dome'?0:0)); return {g:g,boost:boost,pf:pf,temp:temp,wind:wind}; }).sort(function(a,b){return b.boost-a.boost;}).slice(0,6);
+  if(!rows.length) return '<div class="help-note">Load a slate to see park boosts.</div>';
+  return rows.map(function(r,i){ return '<div class="v2-park-row"><div class="v2-park-rank">#'+(i+1)+'</div><div class="v2-park-main"><div class="v2-park-name">'+esc(shortGameLabel(r.g))+'</div><div class="v2-park-note">'+esc((r.g.env&&r.g.env.park)||'Park')+' · PF '+r.pf+' · '+r.temp+'°F · wind '+r.wind+'mph</div></div><div class="v2-park-boost">'+(r.boost>=0?'+':'')+r.boost+'%</div></div>'; }).join('');
+}
+function v2ComboCard(pair, rank){
+  const picks=pair.picks||[]; const b64=v2Payload(picks); const dec=pair.sameBookBestDec||pair.mixedDec; const ev=pair._ev||0; const score=v2ClampScore(45 + clamp(ev/0.35,0,1)*30 + clamp((pair.adjJoint||0)/0.08,0,1)*15 + (pair.sameBookBestDec?8:0));
+  return '<div class="v2-play"><div class="v2-play-top"><div><div class="v2-player"><span style="color:var(--notion-orange)">#'+rank+'</span> '+picks.map(function(x){return esc(x.p.name);}).join(' + ')+'</div><div class="v2-meta">Best combo · '+(pair.sameBookBest?shortBookLabel(pair.sameBookBest)+' ':'')+(dec?decToAmerican(dec):'—')+'</div></div><div><div class="v2-score">'+score+'<small>Combo</small></div>'+v2StarsHtml(score)+'</div></div><div class="v2-stat-row"><div class="v2-stat"><div class="k">Hit rate</div><div class="v">'+fmtPct(pair.adjJoint||pair.joint||0)+'</div></div><div class="v2-stat"><div class="k">EV</div><div class="v '+(ev>=0?'ev-pos':'ev-neg')+'">'+(ev>=0?'+':'')+(ev*100).toFixed(1)+'%</div></div><div class="v2-stat"><div class="k">Route</div><div class="v">'+(pair.sameBookBest?'Same book':'Mix')+'</div></div><div class="v2-stat"><div class="k">Wager</div><div class="v">'+(pair.stake&&pair.stake.stake>0?'$'+pair.stake.stake.toFixed(2):'—')+'</div></div></div><div class="v2-actions"><button class="ghost" onclick="addPortfolioLegs(\''+b64+'\')">Add all</button><button class="ghost" onclick="trackAutoSlip(\''+b64+'\',\'V2 combo\')">Track</button><button class="ghost" onclick="copySlip(\''+b64+'\')">Copy</button></div></div>';
+}
+
 function renderDashboard(){
   var summary=document.getElementById('dashboardSummary');
   if(!summary) return;
@@ -4977,27 +5046,26 @@ function renderDashboard(){
   renderAllInOne();
   try{ renderModelScorecard('dashboardModelScorecard'); }catch(e){}
   if(GAMES.length<1){
-    summary.innerHTML='<div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">'
-      +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Start here</div><div class="help-note">Fetch a slate, then use Dashboard to scan the best plays quickly.</div></div>'
-      +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Then go to Builder</div><div class="help-note">Once you spot your targets, open Builder to turn them into a slip or portfolio.</div></div>'
-      +'<div class="game-card open" style="padding:14px 16px"><div class="section-title">Track later</div><div class="help-note">Use Tracking to grade saved slips and review performance.</div></div>'
-      +'</div>';
+    summary.innerHTML='<div class="v2-hero"><div class="v2-card"><div class="v2-title">DingerLab v2 Command Center</div><div class="v2-sub">Fetch a slate to get star-rated plays, best combos, park boost rankings, and clean guardrails.</div><div class="v2-kpi-grid"><div class="v2-kpi"><div class="k">Step 1</div><div class="v">Fetch</div><div class="s">slate + odds</div></div><div class="v2-kpi"><div class="k">Step 2</div><div class="v">Scan</div><div class="s">star plays</div></div><div class="v2-kpi"><div class="k">Step 3</div><div class="v">Build</div><div class="s">combo or slip</div></div><div class="v2-kpi"><div class="k">Step 4</div><div class="v">Track</div><div class="s">results</div></div></div></div><div class="v2-card"><div class="v2-title">What changed</div><div class="v2-sub">v2 focuses on decisions first: Dinger Score, stars, why-it-stands-out notes, player details, and park boosts.</div></div></div>';
     return;
   }
-  var all=collectPortfolioCandidates();
+  var all=collectPortfolioCandidates().map(v2Enrich);
   if(!all.length){
-    summary.innerHTML='<div class="help-note">Load all-market odds first so Dashboard can build the quick summary.</div>';
+    summary.innerHTML='<div class="v2-card"><div class="v2-title">No priced plays yet</div><div class="v2-sub">If odds loaded but nothing appears, turn off Confirmed pre-game only before lineups post, or refresh closer to first pitch.</div></div>';
     return;
   }
-  var sorted=all.slice().sort(function(a,b){ return (b.ev-a.ev) || (b.edge-a.edge) || (b.prob-a.prob); });
-  var readyCount=all.filter(isReadyCandidate).length;
-  var positive=all.filter(function(x){ return (x.ev||0)>0; }).length;
-  var confirmedPre=all.filter(function(x){ return x.g&&x.g.env&&x.g.env.lineupsConfirmed&&gameNotStarted(x.g); }).length;
-  summary.innerHTML='<div class="manual-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:12px">'
-    +'<div class="game-card open" style="padding:12px 14px"><div class="section-title">Ready now</div><div style="font-size:24px;font-weight:850">'+readyCount+'</div><div class="help-note">confirmed pre-game + edge</div></div>'
-    +'<div class="game-card open" style="padding:12px 14px"><div class="section-title">Positive EV</div><div style="font-size:24px;font-weight:850">'+positive+'</div><div class="help-note">priced candidates</div></div>'
-    +'<div class="game-card open" style="padding:12px 14px"><div class="section-title">Pregame confirmed</div><div style="font-size:24px;font-weight:850">'+confirmedPre+'</div><div class="help-note">lineups posted, not started</div></div>'
-    +'</div>'+buildReadyBoardHtml(sorted);
+  all.sort(function(a,b){ return (b.dingerScore-a.dingerScore) || ((b.ev||0)-(a.ev||0)); });
+  var ready=all.filter(isReadyCandidate);
+  var elite=all.filter(function(x){return x.dingerScore>=88;}).length;
+  var positive=all.filter(function(x){return (x.ev||0)>0;}).length;
+  var posted=(GAMES||[]).filter(function(g){return g&&g.env&&g.env.lineupsConfirmed;}).length;
+  var top=all.slice(0,6);
+  var singles=choosePortfolioSingles(all, Object.assign(portfolioConfig(),{singles:8,maxGame:1}));
+  var combos=buildPortfolioPairs(singles, Object.assign(portfolioConfig(),{pairs:3,maxGame:1})).slice(0,3);
+  summary.innerHTML='<div class="v2-hero"><div class="v2-card"><div class="v2-title">Today’s Command Center</div><div class="v2-sub">Star-rated plays ranked by Dinger Score: model probability + EV + edge + lineup + park + odds route.</div><div class="v2-kpi-grid"><div class="v2-kpi"><div class="k">Ready</div><div class="v">'+ready.length+'</div><div class="s">confirmed +EV</div></div><div class="v2-kpi"><div class="k">Elite</div><div class="v">'+elite+'</div><div class="s">5-star plays</div></div><div class="v2-kpi"><div class="k">+EV</div><div class="v">'+positive+'</div><div class="s">priced markets</div></div><div class="v2-kpi"><div class="k">Lineups</div><div class="v">'+posted+'/'+GAMES.length+'</div><div class="s">posted games</div></div></div></div><div class="v2-card"><div class="v2-title">Daily Park Report</div><div class="v2-sub">Where the ball should carry best today.</div>'+v2ParkReportHtml()+'</div></div>'+
+    '<div class="v2-section-head"><div class="name">⭐ Top Star Plays</div><button class="ghost" onclick="switchTab(\'games\')">View games</button></div><div class="v2-grid">'+top.map(function(c,i){return v2PlayCard(c,i+1);}).join('')+'</div>'+
+    '<div class="v2-section-head"><div class="name">🧩 Best Combos</div><button class="ghost" onclick="switchTab(\'builder\')">Open builder</button></div><div class="v2-grid">'+(combos.length?combos.map(function(p,i){return v2ComboCard(p,i+1);}).join(''):'<div class="help-note">No clean combos yet. Try lowering filters or wait for more prices/lineups.</div>')+'</div>'+
+    buildReadyBoardHtml(all);
   setTimeout(function(){ var el=$('#readyMaxExposure'); if(el){ el.onchange=function(){ savePrefs(); renderDashboard(); }; } },0);
 }
 function renderBuilderPage(){
