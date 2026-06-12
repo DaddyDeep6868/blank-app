@@ -213,4 +213,9 @@ For multi-device use, deploy `dingerlab_server.py` on a small always-on host suc
 - Added system-wide custom momentum-style scrolling visuals and stable scrollbars across the app.
 - Cross Play cards no longer show blank Odds/EV/Avg Edge. If book odds are missing, they show model Fair Odds, $10 return estimate, Value Grade, Avg Edge Score, Odds Value, Model Edge, and route status.
 - When real book odds are available, Cross Play still shows priced EV.
+## New in v4.0 — Data Intelligence Module
+- Added a Data tab that builds a player-market feature store for prop and parlay modeling.
+- Includes model probability, fair odds, best odds, edge/EV, Edge Score, Due Score, Barrel/HardHit/SweetSpot/Pull-Air proxies, ISO/wOBA handedness proxies, pitcher weakness, bullpen HR risk, bullpen exposure, park/weather boost, lineup status, and umpire placeholder.
+- Added modern era weighting: 2023–2026 = 45%, 2018–2022 = 25%, 2015–2017 = 15%, 2008–2014 = 10%, 1996–2007 = 5%.
+- Added model simulation readout plus CSV/JSON export for future training and calibration.
 
