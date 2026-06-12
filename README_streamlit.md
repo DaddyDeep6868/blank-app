@@ -186,4 +186,8 @@ For multi-device use, deploy `dingerlab_server.py` on a small always-on host suc
 - Rebuilt Daily Park Report with ranked expandable cards, HR-vs-average boost, directional wind/carry adjustment, temperature, humidity/elevation, and roof/indoor handling.
 - Park boost now separates park base, wind adjustment, temperature adjustment, and elevation/humidity instead of using a simple generic formula.
 - Updated the in-app version badge to v2.1.
+## New in v2.2 — Today’s Games v2 Board
+- Rebuilt the Games tab into a modern Today’s Games board inspired by high-end MLB predictor dashboards.
+- Added hero slate summary, projected HR total, filter-chip bar, ranked matchup cards, Watch These rows, and two-column team player cards.
+- Player cards now show Dinger Score, model %, best odds, EV, edge, badges, and quick detail access while keeping advanced tables collapsed.
 
