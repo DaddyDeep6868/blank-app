@@ -241,3 +241,8 @@ For multi-device use, deploy `dingerlab_server.py` on a small always-on host suc
 ## New in v4.5 — Betslip docked left
 - Moved the betslip and its launcher from the bottom-right to the left side. Both stay fixed-position (pinned while you scroll) and are anchored at left:104px so they clear the fixed left navigation rail instead of sitting underneath it.
 - Phone widths (≤720px) and mobile layout are unchanged: the slip is still a full-width bottom sheet and the launcher stays a compact bottom-right pill.
+
+## New in v4.6 — Betslip fixed-position fix (Streamlit embed)
+- Fixed the betslip and launcher not staying on screen in the deployed Streamlit app. The wrapper mounted the app in a fixed 1600px-tall iframe, so on a normal-height window the outer page scrolled the iframe and position:fixed pinned to the bottom of the iframe (far below the fold) instead of the viewport. Opening the slip from the top therefore rendered it off-screen.
+- `streamlit_app.py` now auto-fits the component iframe to the parent window height (same-origin srcdoc reads window.parent.innerHeight and resizes its own frame, re-applied on resize/load), with the iframe height lowered to 860 as a fallback and top padding removed to avoid a double scrollbar. The app's inner body now owns the scroll and the fixed betslip/launcher pin to the screen.
+- No change to the slip's left-docked position or any model behavior; this is an embedding fix only. Opening DingerLab.html directly (non-embedded) was already unaffected.

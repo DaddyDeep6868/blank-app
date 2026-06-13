@@ -227,7 +227,7 @@ st.markdown(
             linear-gradient(180deg, #070b12 0%, #0b1220 55%, #070b12 100%);
     }
 
-    .block-container { padding-top: 1.25rem; }
+    .block-container { padding-top: 0 !important; }
 
     </style>
     """,
@@ -244,9 +244,22 @@ inject = (
     "window.DL_MATCHUP = " + matchup_payload + ";"
     "</script>"
 )
+# Auto-fit the component iframe to the visible viewport. The component is a
+# same-origin srcdoc iframe, so it can read the parent window height and resize
+# its own frame. This makes the iframe equal the visible area, so the app's
+# inner body owns the scroll and position:fixed elements (betslip + launcher)
+# pin to the screen instead of to the bottom of a tall fixed-height iframe.
+autofit = (
+    "<script>(function(){function dlFit(){try{var fe=window.frameElement;"
+    "var h=(window.parent&&window.parent.innerHeight)?window.parent.innerHeight:window.innerHeight;"
+    "if(fe&&h){fe.style.height=h+'px';fe.setAttribute('height',h);}}catch(e){}}"
+    "dlFit();window.addEventListener('resize',dlFit);window.addEventListener('load',dlFit);"
+    "try{if(window.parent){window.parent.addEventListener('resize',dlFit);}}catch(e){}"
+    "[150,500,1200,2500].forEach(function(t){setTimeout(dlFit,t);});})();</script>"
+)
 if "</head>" in html:
-    html = html.replace("</head>", inject + "</head>", 1)
+    html = html.replace("</head>", inject + autofit + "</head>", 1)
 else:
-    html = inject + html
+    html = inject + autofit + html
 
-components.html(html, height=1600, scrolling=True)
+components.html(html, height=860, scrolling=True)
