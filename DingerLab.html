@@ -680,7 +680,7 @@ tr.flash{animation:flash 1.2s ease}
 @keyframes flash{0%{background:color-mix(in srgb,var(--notion-green-bg) 70%, transparent)}100%{background:transparent}}
 
 /* Betslip drawer */
-.drawer{position:fixed;left:104px;right:auto;bottom:18px;top:auto;z-index:9000;width:min(380px, calc(100vw - 140px));
+.drawer{position:fixed;right:18px;bottom:18px;top:auto;z-index:9000;width:min(380px, calc(100vw - 36px));
   background:var(--notion-surface);border:1px solid var(--notion-border);border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.20);
   overflow:hidden;display:flex;flex-direction:column;max-height:min(70vh, calc(100vh - 36px))}
 .drawer.hidden{display:none}
@@ -773,11 +773,7 @@ body.mobile-layout .mobile-fold .game-card>.game-body>.help-note:first-of-type{d
 body.mobile-layout #allInOneResults .manual-grid{gap:10px}
 body.mobile-layout #allInOneResults table.players td,body.mobile-layout #allInOneResults table.players th{padding:8px 6px;font-size:11px}
 body.mobile-layout .chip{font-size:10.5px;padding:2px 7px}
-/* Persistent slip launcher — visible on every layout whenever the slip is closed */
-.mobile-slip-fab{display:inline-flex;align-items:center;gap:6px;position:fixed;left:104px;right:auto;bottom:18px;z-index:8800;padding:11px 16px;border-radius:999px;font-weight:700;font-size:13px;cursor:pointer;box-shadow:0 14px 34px rgba(0,0,0,.22);background:#111827;color:#fff;border:1px solid rgba(255,255,255,.10);transition:transform .12s ease,box-shadow .12s ease}
-.mobile-slip-fab:hover{transform:translateY(-1px);box-shadow:0 18px 40px rgba(0,0,0,.28)}
-.mobile-slip-fab.hidden{display:none}
-body.mobile-layout .mobile-slip-fab{position:fixed;left:auto;right:10px;bottom:84px;z-index:9100;padding:10px 14px;box-shadow:0 12px 30px rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.08)}
+body.mobile-layout .mobile-slip-fab{display:inline-flex;position:fixed;right:10px;bottom:84px;z-index:9100;padding:10px 14px;border-radius:999px;box-shadow:0 12px 30px rgba(0,0,0,.18);background:#111827;color:#fff;border:1px solid rgba(255,255,255,.08)}
 body.mobile-layout .mobile-slip-fab.hidden{display:none}
 
 .v22-games-page{display:grid;gap:14px}.v22-games-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin:4px 0 6px}.v22-games-title{font-size:28px;font-weight:950;letter-spacing:-.03em;background:linear-gradient(90deg,#34d399,#a3e635,#facc15);-webkit-background-clip:text;background-clip:text;color:transparent}.v22-games-date{color:var(--notion-text-soft);font-size:13px;text-transform:uppercase;letter-spacing:.08em;margin-top:2px}.v22-hero-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.v22-proj-pill{display:inline-flex;align-items:center;gap:6px;border:1px solid #84cc16aa;background:#84cc1618;color:#a3e635;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:900;margin-top:8px}.v22-filter-card{border:1px solid var(--notion-border);border-radius:16px;background:var(--notion-surface);padding:12px 14px}.v22-filter-title{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--notion-text-faint);font-weight:900;margin-bottom:7px}.v22-chipline{display:flex;flex-wrap:wrap;gap:6px}.v22-chip{border:1px solid var(--notion-border-soft);border-radius:999px;background:var(--notion-bg-soft);color:var(--notion-text-soft);padding:5px 9px;font-size:11px;font-weight:750}.v22-chip.hot{border-color:#f59e0b88;color:#fbbf24;background:#f59e0b14}.v22-chip.good{border-color:#10b98188;color:#34d399;background:#10b98114}.v22-chip.info{border-color:#38bdf888;color:#7dd3fc;background:#38bdf814}.v22-summary-line{display:flex;gap:12px;flex-wrap:wrap;color:var(--notion-text-soft);font-size:13px;margin:4px 0 2px}.v22-game-card{border:1px solid var(--notion-border);border-radius:18px;background:linear-gradient(180deg,color-mix(in srgb,var(--notion-surface) 92%,#22c55e 8%),var(--notion-surface));overflow:hidden;box-shadow:var(--notion-shadow)}.v22-game-card.elite{border-color:#84cc16aa;box-shadow:0 0 0 1px #84cc1622,0 0 24px #84cc1612}.v22-game-head{display:grid;grid-template-columns:1fr auto 1fr auto;gap:12px;align-items:center;padding:15px 18px;border-bottom:1px solid var(--notion-border-soft)}.v22-team-block{min-width:0}.v22-team-abbr{font-size:20px;font-weight:950;color:#34d399}.v22-team-meta{font-size:11px;color:var(--notion-text-faint);text-transform:uppercase;letter-spacing:.08em;margin-top:1px}.v22-at{font-size:20px;font-weight:900;color:#a3e635}.v22-game-context{text-align:right;min-width:170px}.v22-context-line{font-size:12px;color:var(--notion-text-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.v22-context-small{font-size:11px;color:var(--notion-text-faint);margin-top:2px}.v22-watch-row{padding:10px 18px;border-bottom:1px solid var(--notion-border-soft);background:rgba(0,0,0,.08)}.v22-row-title{font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:950;color:#fbbf24;margin-bottom:7px}.v22-watch-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.v22-watch-card{border:1px solid var(--notion-border-soft);border-radius:10px;padding:8px 9px;background:var(--notion-bg-soft);display:flex;justify-content:space-between;align-items:center;gap:8px}.v22-watch-card.gold{border-color:#f59e0b99;background:#f59e0b12}.v22-watch-card.blue{border-color:#38bdf899;background:#38bdf812}.v22-watch-name{font-size:13px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.v22-watch-sub{font-size:10.5px;color:var(--notion-text-soft);margin-top:1px}.v22-watch-score{font-weight:950;color:#93c5fd}.v22-columns{display:grid;grid-template-columns:1fr 1fr;gap:0}.v22-team-col{padding:14px 16px;border-right:1px solid var(--notion-border-soft)}.v22-team-col:last-child{border-right:0}.v22-col-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px}.v22-col-title{font-size:14px;font-weight:950;text-transform:uppercase;letter-spacing:.03em}.v22-col-sub{font-size:11px;color:var(--notion-text-soft);margin-top:2px}.v22-player-list{display:grid;gap:9px}.v22-player-card{position:relative;border:1px solid var(--notion-border-soft);border-radius:14px;background:var(--notion-bg-soft);padding:11px 12px;cursor:pointer}.v22-player-card:hover{border-color:#38bdf8;box-shadow:0 0 0 1px #38bdf833}.v22-player-card.alert{border-color:#ef444488;background:#ef444411}.v22-player-card.elite{border-color:#38bdf8aa;background:#0ea5e916}.v22-p-top{display:flex;justify-content:space-between;gap:10px}.v22-p-name{font-size:15px;font-weight:950;line-height:1.12}.v22-p-badges{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px}.v22-badge{font-size:10px;font-weight:850;border:1px solid var(--notion-border-soft);border-radius:6px;padding:2px 5px;background:var(--notion-surface)}.v22-badge.hot{border-color:#f9731688;color:#fb923c;background:#f9731614}.v22-badge.good{border-color:#10b98188;color:#34d399;background:#10b98114}.v22-badge.purp{border-color:#a855f788;color:#c084fc;background:#a855f714}.v22-p-score{text-align:right;font-size:19px;font-weight:950;color:#7dd3fc}.v22-p-score small{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--notion-text-faint)}.v22-meter{height:7px;border-radius:999px;background:var(--notion-border-soft);overflow:hidden;margin:8px 0 6px}.v22-meter span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#facc15,#fb923c,#ef4444)}.v22-p-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:8px}.v22-p-stat{font-size:10px;color:var(--notion-text-faint);border:1px solid var(--notion-border-soft);border-radius:8px;padding:5px;background:var(--notion-surface)}.v22-p-stat b{display:block;color:var(--notion-text);font-size:12px;margin-top:1px}.v22-side-actions{position:absolute;right:8px;top:50%;transform:translateY(-50%);display:grid;gap:5px;opacity:.82}.v22-icon-btn{width:24px;height:24px;border-radius:999px;display:flex;align-items:center;justify-content:center;border:1px solid var(--notion-border-soft);background:var(--notion-surface);font-size:11px}.v22-more{padding:0 18px 14px}.v22-more summary{cursor:pointer;font-size:12px;color:var(--notion-text-soft);font-weight:850}.v22-empty-team{border:1px dashed var(--notion-border-soft);border-radius:12px;padding:12px;color:var(--notion-text-soft);font-size:12px}@media(max-width:860px){.v22-game-head{grid-template-columns:1fr auto 1fr}.v22-game-context{grid-column:1/-1;text-align:left}.v22-columns{grid-template-columns:1fr}.v22-team-col{border-right:0;border-bottom:1px solid var(--notion-border-soft)}.v22-watch-grid{grid-template-columns:1fr}.v22-games-hero{display:block}.v22-hero-actions{justify-content:flex-start;margin-top:10px}.v22-p-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -845,7 +841,7 @@ html{scroll-behavior:smooth;scrollbar-gutter:stable}body{overflow-y:auto;overscr
       </select>
     </div>
     <div class="field"><label>&nbsp;</label><button id="btnLoad2">Fetch slate</button></div>
-    <div class="field check-field"><label>Player filter</label><label class="toggle-line" title="Only show confirmed starting-lineup players whose games have not started yet."><input id="onlyInGameToggle" type="checkbox"> Confirmed pre-game only</label></div>
+    <div class="field check-field"><label>Player filter</label><label class="toggle-line" title="Only show players confirmed in posted starting lineups. Started/live games stay visible for board capture and tracking."><input id="onlyInGameToggle" type="checkbox"> Confirmed starters only</label></div>
     <div class="field"><label>&nbsp;</label><button class="ghost" id="btnSettings">⚙ Model settings</button></div>
   </div>
   <div class="statusbar" id="status">Ready. Pick a date and load the slate, or try a sample game.</div>
@@ -955,7 +951,7 @@ html{scroll-behavior:smooth;scrollbar-gutter:stable}body{overflow-y:auto;overscr
           </select>
         </div>
         <div class="field"><label>Lineups</label><select id="lineupMode"><option value="all" selected>All hitters</option><option value="confirmed">Confirmed only</option><option value="projected">Projected only</option></select></div>
-        <div class="field check-field"><label>Leg filter</label><label class="toggle-line" title="Only show confirmed starting-lineup players whose games have not started yet"><input id="onlyInGameToggle2" type="checkbox"> Confirmed pre-game only</label></div>
+        <div class="field check-field"><label>Leg filter</label><label class="toggle-line" title="Only show players confirmed in posted starting lineups. Started/live games stay visible for board capture and tracking"><input id="onlyInGameToggle2" type="checkbox"> Confirmed starters only</label></div>
         <div class="field"><label>Max 1 leg per game</label>
           <select id="maxPerGame">
             <option value="auto" selected>Auto (ON for 4+)</option>
@@ -1269,8 +1265,8 @@ html{scroll-behavior:smooth;scrollbar-gutter:stable}body{overflow-y:auto;overscr
 <button class="mobile-slip-fab hidden" id="mobileSlipFab">🧾 Open slip</button>
 
 <script>
-const APP_VERSION = 'v4.6';
-const APP_UPDATED = 'Updated Jun 13, 2026 — Betslip fixed-position fix (Streamlit embed)';
+const APP_VERSION = 'v4.7';
+const APP_UPDATED = 'Updated Jun 13, 2026 — Confirmed-player filter + board capture fix';
 {
   const av=document.getElementById('appVersion');
   if(av) av.textContent=APP_VERSION+' · '+APP_UPDATED;
@@ -1324,7 +1320,7 @@ function renderMobileChrome(){
   if(fab){
     var hidden=(document.getElementById('betslip')||{classList:{contains:function(){return true;}}}).classList.contains('hidden');
     document.body.classList.toggle('mobile-slip-open', !!(mobile && !hidden));
-    fab.classList.toggle('hidden', !hidden);  // show launcher whenever the slip is closed (desktop + mobile)
+    fab.classList.toggle('hidden', !mobile || !hidden);
     fab.textContent='🧾 '+(SLIP.length?('Slip · '+SLIP.length):'Open slip');
   } else {
     document.body.classList.remove('mobile-slip-open');
@@ -1753,8 +1749,9 @@ function syncOnlyInGameToggles(src){
 function playerBuildAllowed(p,g){
   var mode=lineupMode();
   var confirmed=!!(g&&g.env&&g.env.lineupsConfirmed);
-  // Confirmed pre-game only = player is in the posted starting lineup AND the game has not started yet.
-  if(onlyInGameOn()) return confirmed && gameNotStarted(g) && p._lineupStatus==='in';
+  // v4.7: the checkbox means confirmed starters, not "only games that have not started".
+  // The previous pre-game gate caused empty boards after lineups posted or once early games began.
+  if(onlyInGameOn()) return confirmed && p._lineupStatus==='in';
   if(confirmed){
     if(p._lineupStatus==='out') return false;
     if(mode==='confirmed') return p._lineupStatus==='in';
@@ -2307,7 +2304,7 @@ function captureBoardSnapshotAndNotify(dateStr, notify){
     if(n>0){ try{ toast('Board saved', 'Model board filled for '+dateStr+' — '+n+' ranked player-markets captured. Live HR comparisons for this date are now enabled.', '✅'); }catch(e){} }
     else { try{
       if(typeof onlyInGameOn==='function' && onlyInGameOn()){
-        toast('No confirmed pre-game board yet', 'Odds loaded, but the Player filter is ON and no confirmed starting-lineup players qualified yet. This is normal before official lineups post. Turn the filter OFF to see projected players, or refresh closer to first pitch.', 'ℹ️');
+        toast('No confirmed-starter board yet', 'Odds loaded, but no confirmed-starter priced rows qualified yet. I also try an automatic all-hitters fallback before showing this, so this usually means lineups/odds did not match player IDs for the selected slate.', 'ℹ️');
       }else{
         toast('Board empty for '+dateStr, 'Odds loaded but no ranked player-markets qualified. Check Slate date, lineup/confidence filters, or whether props are posted.', '⚠️');
       }
@@ -4832,7 +4829,7 @@ function renderGames(){
   const summary=lineupFilterSummary(all);
   let banner='';
   if(onlyInGameOn()){
-    banner='<div class="help-note" style="margin:0 0 10px;border-left:4px solid #0f9d58;padding-left:10px"><b>Confirmed pre-game only:</b> showing only players confirmed in posted starting lineups whose games have not started yet. Started/live games are hidden.</div>';
+    banner='<div class="help-note" style="margin:0 0 10px;border-left:4px solid #0f9d58;padding-left:10px"><b>Confirmed starters only:</b> showing players confirmed in posted starting lineups. Started/live games remain visible so the board does not go empty after first pitch.</div>';
   } else if(summary.mode==='confirmed'){
     banner='<div class="help-note" style="margin:0 0 10px;border-left:4px solid #0f9d58;padding-left:10px"><b>Confirmed-only mode:</b> showing '+summary.visibleGames+' game'+(summary.visibleGames===1?'':'s')+' with posted lineups. '+summary.hiddenGames+' hidden.</div>';
   } else if(summary.mode==='projected'){
@@ -5250,7 +5247,7 @@ function buildReadyBoardHtml(all){
   if(readyPairs[1]) cards.push(readyPairCard(readyPairs[1],cards.length+1));
   const blocked=all.filter(function(c){ return !isReadyCandidate(c); }).slice(0,8);
   const guard=blocked.length?blocked.map(function(c){ const w=readyCandidateWarnings(c).slice(0,2).join(' · '); return '<div class="guardrail-item"><div class="guardrail-icon">⚠️</div><div class="guardrail-main"><div class="guardrail-title">'+esc(c.p.name)+' · '+esc((MARKET_META[c.mk]&&MARKET_META[c.mk].short)||c.mk)+'</div><div class="guardrail-note">'+esc(w)+'</div></div></div>'; }).join(''):'<div class="help-note">No major avoid warnings from current priced candidates.</div>';
-  return '<div class="ready-board"><div class="ready-panel"><div class="ready-head"><div><div class="ready-title">✅ Ready to Bet</div><div class="ready-sub">Confirmed starters, pre-game only, priced, positive edge. Kept short so the dashboard stays clean.</div></div><div class="ready-controls"><span>Max player exposure</span><select id="readyMaxExposure"><option value="1" '+(maxExp===1?'selected':'')+'>1x</option><option value="2" '+(maxExp===2?'selected':'')+'>2x</option><option value="3" '+(maxExp===3?'selected':'')+'>3x</option></select></div></div><div class="ready-list">'+(cards.join('')||'<div class="help-note">No ready-to-bet plays yet. Turn on Confirmed pre-game only after lineups post, or refresh closer to first pitch.</div>')+'</div></div>'+
+  return '<div class="ready-board"><div class="ready-panel"><div class="ready-head"><div><div class="ready-title">✅ Ready to Bet</div><div class="ready-sub">Confirmed starters, priced, positive edge. Kept short so the dashboard stays clean.</div></div><div class="ready-controls"><span>Max player exposure</span><select id="readyMaxExposure"><option value="1" '+(maxExp===1?'selected':'')+'>1x</option><option value="2" '+(maxExp===2?'selected':'')+'>2x</option><option value="3" '+(maxExp===3?'selected':'')+'>3x</option></select></div></div><div class="ready-list">'+(cards.join('')||'<div class="help-note">No ready-to-bet plays yet. Use Confirmed starters only after lineups post, or refresh odds/lineups.</div>')+'</div></div>'+
     '<div class="ready-panel"><div class="ready-head"><div><div class="ready-title">🚫 Do Not Bet / Wait</div><div class="ready-sub">Warnings are collapsed into short reasons to avoid clutter.</div></div></div><div class="guardrail-list">'+guard+'</div><details style="margin-top:12px"><summary style="cursor:pointer;font-weight:800">Exposure snapshot</summary>'+exposureSummaryHtml(ready.concat(blocked))+'</details></div></div>';
 }
 
@@ -5468,6 +5465,79 @@ const v43BaseRenderDataPage=renderDataPage;
 renderDataPage=function(){v43BaseRenderDataPage();const panel=document.querySelector('[data-panel="data"]');if(panel&&!document.getElementById('v43EdgeLab')){const lab=document.createElement('div');lab.id='v43EdgeLab';lab.className='dl-edge-lab';lab.innerHTML='<div class="dl-data-card"><div class="dl-data-title">🎯 HR Probability + Edge Core</div><div class="dl-data-sub">Adds model HR probability, fair odds, market implied probability, edge %, and a clean bet label: Strong Edge, Playable, Fair Price, Overpriced/Fade, or Need Price.</div></div><div class="dl-data-card"><div class="dl-data-title">🏟️ Official MLB baseline layer</div><div class="dl-data-sub">MLB.com hitting/pitching tables are used as an official baseline/fallback for season HR, OPS, ERA, WHIP, HR allowed, and opponent average. Advanced power-quality proxies still carry more predictive weight.</div></div>';const old=document.getElementById('v42PowerLab');if(old)old.insertAdjacentElement('afterend',lab);else{const grid=panel.querySelector('.dl-data-grid');if(grid)grid.insertAdjacentElement('afterend',lab);}}};
 try{if(typeof DL_PRIORITY_FEATURES!=='undefined'&&!DL_PRIORITY_FEATURES.some(x=>String(x[0]).indexOf('HR Probability')>=0)){[['HR Probability + Edge Core','HR','Model HR probability, fair odds, book implied probability, edge %, bet label'],['Official MLB Baseline','HR / all props','MLB.com hitting and pitching standard stats as fallback/current-season baseline'],['Market Implied Probability','HR / parlays','Converts sportsbook odds into required break-even probability']].forEach(x=>DL_PRIORITY_FEATURES.unshift(x));}}catch(e){}
 
+
+/* v4.7 confirmed-player board capture fix */
+function v47CandidateFromPlayer(g,p,mk){
+  try{
+    const mc=p&&p._mkt&&p._mkt[mk]; const mo=p&&p._mktOdds&&p._mktOdds[mk];
+    if(!mc||mc.p==null||!mo||mo.best==null||mo.mktProb==null) return null;
+    const tier=confidenceLabel(Object.assign({},p,{p:mc.p,calc:mc}));
+    const dec=amToDecimal(mo.best); if(!dec||dec<=1) return null;
+    const adjProb=calibratedJoint(mc.p,tier);
+    return {g:g,p:p,mk:mk,prob:mc.p,adjProb:adjProb,american:mo.best,dec:dec,edge:mc.p-mo.mktProb,ev:parlayEV(adjProb,dec),books:mo.books,bestBook:mo.books&&mo.books.autoBest?mo.books.autoBest:null,tier:tier,stake:suggestStake(adjProb,dec),score:parlayEV(adjProb,dec)*100+(mc.p-mo.mktProb)*12+mc.p};
+  }catch(e){ return null; }
+}
+function v47SortCandidates(out){
+  out.sort(function(a,b){
+    const ap=(a.ev!=null&&a.ev>0)?1:0, bp=(b.ev!=null&&b.ev>0)?1:0;
+    if(ap!==bp) return bp-ap;
+    if(Math.abs((b.ev||0)-(a.ev||0))>1e-9) return (b.ev||0)-(a.ev||0);
+    if(Math.abs((b.edge||0)-(a.edge||0))>1e-9) return (b.edge||0)-(a.edge||0);
+    return (b.prob||0)-(a.prob||0);
+  });
+  return out;
+}
+function v47CollectBoardCandidates(opts){
+  opts=opts||{};
+  const minConf=0, out=[];
+  (GAMES||[]).forEach(function(g){
+    (g.players||[]).forEach(function(p){
+      const confirmed=!!(g&&g.env&&g.env.lineupsConfirmed);
+      const starter=confirmed && p&&p._lineupStatus==='in';
+      const outOfLineup=confirmed && p&&p._lineupStatus==='out';
+      if(opts.confirmedOnly && !starter) return;
+      if(!opts.includeOut && outOfLineup) return;
+      Object.keys(MARKET_META).forEach(function(mk){ const c=v47CandidateFromPlayer(g,p,mk); if(c) out.push(c); });
+    });
+  });
+  return v47SortCandidates(out);
+}
+const v47BaseBoardSnapshot = (typeof _boardSnapshot==='function') ? _boardSnapshot : null;
+_boardSnapshot=function(){
+  let arr=[];
+  try{ arr=collectPortfolioCandidates()||[]; }catch(e){ arr=[]; }
+  // If the user has confirmed-starters checked and the normal filtered board is empty,
+  // still capture confirmed priced starters. If that is still empty, capture all priced non-out hitters.
+  if(!arr.length){
+    try{ arr=v47CollectBoardCandidates({confirmedOnly:!!(typeof onlyInGameOn==='function'&&onlyInGameOn()), includeOut:false}); }catch(e){ arr=[]; }
+  }
+  if(!arr.length){
+    try{ arr=v47CollectBoardCandidates({confirmedOnly:false, includeOut:false}); }catch(e){ arr=[]; }
+  }
+  arr=v47SortCandidates((arr||[]).slice());
+  const byName={}, byId={};
+  arr.forEach(function(x,idx){
+    const p=(x&&x.p)||{}; const nm=String(p.name||'').trim().toLowerCase(); const mlbId=(p.mlbId!=null?String(p.mlbId):null);
+    const row={rank:idx+1,mk:x.mk||'hr',prob:Number(x.prob||0),edge:Number(x.edge||0),ev:Number(x.ev||0),american:x.american!=null?Number(x.american):null,bestBook:x.bestBook||null,gamePk:(x.g&&(x.g.id||x.g.gamePk))!=null?String(x.g.id||x.g.gamePk):null,mlbId:mlbId,name:(p.name||null),lineupStatus:p._lineupStatus||'projected',lineupSpot:p._lineupSpot||p.spot||null};
+    if(mlbId && !byId[mlbId]) byId[mlbId]=row;
+    if(nm && !byName[nm]) byName[nm]=row;
+  });
+  return {arr:arr,byName:byName,byId:byId};
+};
+const v47BaseReadyWarnings = (typeof readyCandidateWarnings==='function') ? readyCandidateWarnings : null;
+readyCandidateWarnings=function(c){
+  const w=[]; if(!c||!c.g||!c.p) return ['Missing player/game data'];
+  const confirmed=!!(c.g.env&&c.g.env.lineupsConfirmed);
+  if(!confirmed) w.push('Lineup not confirmed');
+  if(confirmed && c.p._lineupStatus!=='in') w.push('Player not starting');
+  // v4.7 no longer blocks ready cards just because the game has started; this avoids false-empty confirmed boards.
+  if(c.american==null) w.push('No usable odds');
+  if((c.ev||0)<=0) w.push('Negative EV');
+  if((c.edge||0)<=0) w.push('No market edge');
+  if(c.tier==='Low') w.push('Low confidence');
+  return w;
+};
+
 function renderDashboard(){
   var summary=document.getElementById('dashboardSummary');
   if(!summary) return;
@@ -5484,7 +5554,7 @@ function renderDashboard(){
   }
   var all=collectPortfolioCandidates().map(v2Enrich);
   if(!all.length){
-    summary.innerHTML='<div class="v2-card"><div class="v2-title">No priced plays yet</div><div class="v2-sub">If odds loaded but nothing appears, turn off Confirmed pre-game only before lineups post, or refresh closer to first pitch.</div></div>';
+    summary.innerHTML='<div class="v2-card"><div class="v2-title">No priced plays yet</div><div class="v2-sub">If odds loaded but nothing appears, use Confirmed starters only after lineups post or refresh odds/lineups.</div></div>';
     return;
   }
   all.sort(function(a,b){ return (b.dingerScore-a.dingerScore) || ((b.ev||0)-(a.ev||0)); });
@@ -5604,7 +5674,7 @@ function init(){
   if($('#btnRefreshOdds')) $('#btnRefreshOdds').onclick=()=>{ refreshOdds(); };
   if($('#autoRefresh')) $('#autoRefresh').onchange=()=>{ toggleAutoRefresh(); };
     if($('#lineupMode')) $('#lineupMode').onchange=()=>{ renderGames(); renderSlip(); if($('#builderResults')) $('#builderResults').innerHTML=''; };
-  ['#onlyInGameToggle','#onlyInGameToggle2'].forEach(function(sel){ var el=$(sel); if(!el) return; el.onchange=function(){ syncOnlyInGameToggles(el); savePrefs(); renderGames(); renderSlip(); if(activeTab==='dashboard') renderDashboard(); if(activeTab==='builder') renderBuilderPage(); if($('#builderResults')) $('#builderResults').innerHTML=''; try{ toast('Player filter', el.checked?'Only confirmed pre-game legs will show.':'Showing normal lineup filter again.', '✅'); }catch(e){} }; });
+  ['#onlyInGameToggle','#onlyInGameToggle2'].forEach(function(sel){ var el=$(sel); if(!el) return; el.onchange=function(){ syncOnlyInGameToggles(el); savePrefs(); renderGames(); renderSlip(); if(activeTab==='dashboard') renderDashboard(); if(activeTab==='builder') renderBuilderPage(); if($('#builderResults')) $('#builderResults').innerHTML=''; try{ toast('Player filter', el.checked?'Only confirmed starters will show.':'Showing normal lineup filter again.', '✅'); }catch(e){} }; });
   if($('#btnDemo')) $('#btnDemo').onclick=loadSample;
   $$('.mktbtn').forEach(function(b){ b.onclick=function(){ setMarket(b.dataset.mkt); }; });
   paintMarketButtons();
