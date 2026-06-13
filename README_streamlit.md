@@ -221,4 +221,10 @@ For multi-device use, deploy `dingerlab_server.py` on a small always-on host suc
 ## New in v4.1 — Visible Data tab fix
 - Fixed the v4.0 packaging issue where the Data engine code was present but the actual Data tab/panel was not inserted into the visible navigation.
 - Data tab is now visible in the desktop left rail and the mobile quickbar.
+## New in v4.2 — Power Classifier + Swing Power DNA
+- Added Power Classifier based on 20-HR/30-HR/elite profile logic.
+- Added Swing Power DNA inspired by bat-speed, impact force, rotational acceleration, launch path, and contact-efficiency research.
+- Player cards now show DNA and Fade Risk chips.
+- Intelligence Report now includes a Swing Power DNA card and Power Feature Importance table.
+- Data tab exports new columns: powerClass, swingPowerScore, seasonPowerScore, batSpeedProxy, impactForceProxy, rotationalBurstProxy, launchPathScore, contactEfficiencyScore, powerTranslationScore, expectedPAScore, and fadeRiskScore.
 
