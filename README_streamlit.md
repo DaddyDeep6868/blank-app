@@ -228,3 +228,12 @@ For multi-device use, deploy `dingerlab_server.py` on a small always-on host suc
 - Intelligence Report now includes a Swing Power DNA card and Power Feature Importance table.
 - Data tab exports new columns: powerClass, swingPowerScore, seasonPowerScore, batSpeedProxy, impactForceProxy, rotationalBurstProxy, launchPathScore, contactEfficiencyScore, powerTranslationScore, expectedPAScore, and fadeRiskScore.
 
+## New in v4.3 — HR Probability + Edge Core
+- Added a dedicated HR decision layer that computes a blended model HR probability (market model + season and recent per-PA rates, adjusted by pitcher, park/weather, Swing Power DNA, expected PA, and fade risk), its fair American odds, the sportsbook implied probability, and the resulting edge.
+- Each HR play is labeled Strong Edge / Playable / Fair Price / Overpriced-Fade / Need Price, surfaced as chips on player cards and a full Edge Core panel in the Intelligence Report.
+- Data tab feature store now exports HR probability, fair odds, book odds, market probability, edge %, and edge label columns; MLB.com standard stats are treated as the official fallback baseline.
+
+## New in v4.4 — Persistent betslip launcher
+- The betslip launcher (🧾 Slip · N) is now visible on every layout, not just mobile. Previously, hiding the slip on desktop left no way to reopen it except by adding another leg.
+- The launcher is pinned bottom-right, shows the live leg count, opens/reopens the slip, and hides while the slip is open so the two never overlap. Mobile positioning (above the quickbar) is unchanged.
+- Reuses the existing launcher wiring and leg-count label; no model or tracking behavior changed.
