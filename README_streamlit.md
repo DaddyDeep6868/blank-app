@@ -237,3 +237,7 @@ For multi-device use, deploy `dingerlab_server.py` on a small always-on host suc
 - The betslip launcher (🧾 Slip · N) is now visible on every layout, not just mobile. Previously, hiding the slip on desktop left no way to reopen it except by adding another leg.
 - The launcher is pinned bottom-right, shows the live leg count, opens/reopens the slip, and hides while the slip is open so the two never overlap. Mobile positioning (above the quickbar) is unchanged.
 - Reuses the existing launcher wiring and leg-count label; no model or tracking behavior changed.
+
+## New in v4.5 — Betslip docked left
+- Moved the betslip and its launcher from the bottom-right to the left side. Both stay fixed-position (pinned while you scroll) and are anchored at left:104px so they clear the fixed left navigation rail instead of sitting underneath it.
+- Phone widths (≤720px) and mobile layout are unchanged: the slip is still a full-width bottom sheet and the launcher stays a compact bottom-right pill.
