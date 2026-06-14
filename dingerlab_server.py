@@ -465,15 +465,44 @@ def _tw_config_dir():
     return base
 
 
+def _in_virtualenv():
+    """True if running inside a virtualenv/venv (where --user installs fail)."""
+    try:
+        if os.environ.get("VIRTUAL_ENV"):
+            return True
+        base = getattr(sys, "base_prefix", None) or getattr(sys, "real_prefix", None)
+        return bool(base) and base != sys.prefix
+    except Exception:
+        return False
+
+
+def _is_server_host():
+    """Best-effort detection of a remote/headless host (Render, Heroku, containers, no display)."""
+    try:
+        if any(os.environ.get(k) for k in ("RENDER", "RENDER_SERVICE_ID", "DYNO", "KUBERNETES_SERVICE_HOST", "AWS_EXECUTION_ENV", "FLY_APP_NAME")):
+            return True
+        exe = sys.executable or ""
+        if "/opt/render/" in exe or exe.startswith("/app/"):
+            return True
+        if sys.platform.startswith("linux") and not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def _pip_cmds(pkg):
-    """Return ordered install command candidates for a package."""
+    """Return ordered install command candidates for a package.
+    Inside a virtualenv a '--user' install is impossible, so we skip it to avoid
+    a noisy, guaranteed failure."""
     cmds = []
     pipx = shutil.which("pipx")
     if pipx:
         cmds.append([pipx, "install", pkg])
         cmds.append([pipx, "install", "--force", pkg])
     py = sys.executable or shutil.which("python3") or shutil.which("python") or "python3"
-    cmds.append([py, "-m", "pip", "install", "--user", pkg])
+    if not _in_virtualenv():
+        cmds.append([py, "-m", "pip", "install", "--user", pkg])
     cmds.append([py, "-m", "pip", "install", pkg])
     return cmds
 
@@ -485,6 +514,7 @@ def api_tw_install():
         logs.append(line)
 
     log("python: " + (sys.executable or "?"))
+    log("environment: " + ("remote/server host" if _is_server_host() else "local machine") + (" (virtualenv)" if _in_virtualenv() else ""))
     log("PATH bins detected: " + (", ".join(_extra_bin_dirs()) or "(none of the usual user bins exist yet)"))
 
     # Step A: install agent-reach (the umbrella tool).
@@ -519,11 +549,17 @@ def api_tw_install():
 
     tools = _research_tools()
     tw = _tool_path("twitter")
+    server = _is_server_host()
     if tw:
-        log("\nOK: twitter CLI found at " + tw)
+        log("\nOK: twitter CLI is installed and detected at " + tw + ".")
+        log("This is the only tool DingerLab needs to read MLB prop tweets. The 'agent-reach' umbrella package is OPTIONAL (it is just an installer/orchestrator) and is NOT required \u2014 you can safely ignore any agent-reach install errors above.")
+        if server:
+            log("\nThis is a remote/server host (no browser here). Next step: click 'Paste cookies instead' and paste your own x.com cookies exported with the Cookie-Editor browser extension, then click Verify. 'Import login from this browser' only works on a local computer.")
+        else:
+            log("\nNext: connect your own Twitter/X login (Import login from this browser, or Paste cookies), then click Verify.")
     else:
-        log("\nNOTE: the 'twitter' command was still not found on PATH. If pip reported a successful install, the executable is likely in a user bin that is not on this server's PATH. Restart dingerlab_server.py from a fresh shell, or run 'pipx install twitter-cli' / 'agent-reach install' manually in your terminal, then click Run diagnostics.")
-    return jsonify({"ok": True, "tools": tools, "twitterPath": tw, "agentReachPath": _tool_path("agent-reach"), "output": "\n\n".join(logs)})
+        log("\nNOTE: the 'twitter' command was still not found on PATH. If pip reported a successful install, the executable is likely in a bin that is not on this host's PATH. Restart dingerlab_server.py from a fresh shell, or run 'pipx install twitter-cli' manually, then click Run diagnostics.")
+    return jsonify({"ok": True, "tools": tools, "twitterPath": tw, "agentReachPath": _tool_path("agent-reach"), "serverHost": server, "twitterReady": bool(tw), "output": "\n\n".join(logs)})
 
 
 @app.post("/api/research/twitter/doctor")
@@ -533,7 +569,11 @@ def api_tw_doctor():
     if ar:
         out = (_run_cmd([ar, "doctor"], timeout=40).get("output") or "")
     else:
-        out = "agent-reach not installed yet. Run step 1 (Install connector) first."
+        tw = _tool_path("twitter")
+        if tw:
+            out = "agent-reach (optional umbrella tool) is not installed \u2014 that's fine. The twitter CLI is installed at " + tw + ", which is all DingerLab needs. Connect your login (paste cookies on a server host) and click Verify."
+        else:
+            out = "Neither agent-reach nor the twitter CLI is installed yet. Run step 1 (Install connector) first."
     return jsonify({"ok": True, "tools": _research_tools(), "output": out})
 
 
@@ -587,12 +627,12 @@ def api_tw_verify():
             msg += " agent-reach IS installed (" + ar + "), so run 'agent-reach install' in your terminal to add the Twitter CLI, then restart dingerlab_server.py."
         else:
             msg += " Run step 1 (Install connector) first, or install manually: pipx install agent-reach && agent-reach install."
-        return jsonify({"ok": True, "authenticated": False, "output": msg})
+        return jsonify({"ok": True, "authenticated": False, "serverHost": _is_server_host(), "output": msg})
     res = _run_cmd([tw, "search", "MLB home run", "--limit", "1"], timeout=45)
     out = res.get("output") or ""
     low = out.lower()
     authed = res.get("ok") and not any(k in low for k in ("please log in", "please login", "not logged in", "login required", "authentication required", "unauthorized", "401", "403", "no cookies", "missing cookie", "cookies not found"))
-    return jsonify({"ok": True, "authenticated": bool(authed), "output": out})
+    return jsonify({"ok": True, "authenticated": bool(authed), "serverHost": _is_server_host(), "output": out})
 
 
 @app.post("/api/research/twitter/import_browser")
