@@ -487,8 +487,81 @@ def api_tw_verify():
     res = _run_cmd([tw, "search", "MLB home run", "--limit", "1"], timeout=45)
     out = res.get("output") or ""
     low = out.lower()
-    authed = res.get("ok") and not any(k in low for k in ("login", "unauthorized", "auth", "not logged", "cookie"))
+    authed = res.get("ok") and not any(k in low for k in ("please log in", "please login", "not logged in", "login required", "authentication required", "unauthorized", "401", "403", "no cookies", "missing cookie", "cookies not found"))
     return jsonify({"ok": True, "authenticated": bool(authed), "output": out})
+
+
+@app.post("/api/research/twitter/import_browser")
+def api_tw_import_browser():
+    body = request.get_json(silent=True) or {}
+    which = (body.get("browser") or "auto").lower()
+    try:
+        import browser_cookie3  # type: ignore
+    except Exception:
+        _run_cmd([shutil.which("pip") or "pip", "install", "--user", "browser_cookie3"], timeout=180)
+        try:
+            import browser_cookie3  # type: ignore
+        except Exception as e:
+            return jsonify({"ok": False, "error": "Could not load browser_cookie3 to read your local browser session: " + str(e)}), 503
+
+    loaders = {
+        "chrome": getattr(browser_cookie3, "chrome", None),
+        "edge": getattr(browser_cookie3, "edge", None),
+        "brave": getattr(browser_cookie3, "brave", None),
+        "firefox": getattr(browser_cookie3, "firefox", None),
+        "safari": getattr(browser_cookie3, "safari", None),
+        "opera": getattr(browser_cookie3, "opera", None),
+    }
+    order = [which] if which in loaders else ["chrome", "edge", "brave", "safari", "firefox", "opera"]
+
+    jar = None
+    used = None
+    errs = []
+    for name in order:
+        fn = loaders.get(name)
+        if not fn:
+            continue
+        try:
+            jar = fn(domain_name="x.com")
+            used = name
+            if jar and len(list(jar)) == 0:
+                jar = fn(domain_name="twitter.com")
+            break
+        except Exception as e:
+            errs.append(name + ": " + str(e))
+            continue
+    if jar is None:
+        return jsonify({"ok": False, "error": "No readable browser session found on this machine. " + "; ".join(errs[:4])}), 503
+
+    cookies = [c for c in jar if ("x.com" in (c.domain or "") or "twitter.com" in (c.domain or ""))]
+    if not cookies:
+        return jsonify({"ok": False, "error": "You are logged into Twitter/X in your browser, but no x.com cookies were readable from this machine. Make sure DingerLab runs on the same computer/profile, or use Paste cookies instead."}), 404
+
+    cfg = _tw_config_dir()
+    # Netscape cookies.txt
+    txt_path = os.path.join(cfg, "twitter_cookies.txt")
+    lines = ["# Netscape HTTP Cookie File", "# Imported by DingerLab from your local browser (" + (used or "?") + ")"]
+    json_obj = []
+    for c in cookies:
+        domain = c.domain or ".x.com"
+        flag = "TRUE" if domain.startswith(".") else "FALSE"
+        secure = "TRUE" if getattr(c, "secure", False) else "FALSE"
+        expires = str(int(c.expires)) if getattr(c, "expires", None) else "0"
+        lines.append("\t".join([domain, flag, c.path or "/", secure, expires, c.name, c.value or ""]))
+        json_obj.append({"name": c.name, "value": c.value, "domain": domain, "path": c.path or "/", "secure": bool(getattr(c, "secure", False)), "expires": (int(c.expires) if getattr(c, "expires", None) else None)})
+    try:
+        with open(txt_path, "w") as f:
+            f.write("\n".join(lines) + "\n")
+        os.chmod(txt_path, 0o600)
+        json_path = os.path.join(cfg, "twitter_cookies.json")
+        with open(json_path, "w") as f:
+            json.dump(json_obj, f)
+        os.chmod(json_path, 0o600)
+    except Exception as e:
+        return jsonify({"ok": False, "error": "Read your session but could not save it locally: " + str(e)}), 500
+    os.environ["TWITTER_COOKIES"] = txt_path
+    os.environ["AGENT_REACH_TWITTER_COOKIES"] = txt_path
+    return jsonify({"ok": True, "browser": used, "count": len(cookies), "path": txt_path, "output": "Imported " + str(len(cookies)) + " x.com cookies from your " + (used or "browser") + " session and saved them locally (permissions 600). Click Verify."})
 
 
 @app.post("/api/grade")
