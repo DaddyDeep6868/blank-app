@@ -538,6 +538,102 @@ def _tw_config_dir():
     return base
 
 
+def _tw_env_file():
+    return os.path.join(_tw_config_dir(), "twitter_tokens.json")
+
+
+def _parse_tw_tokens(raw):
+    """Extract auth_token + ct0 from a pasted cookie blob.
+    Supports Cookie-Editor JSON arrays/objects, Netscape cookies.txt, and
+    'name=value; name=value' header strings."""
+    raw = (raw or "").strip()
+    auth = None
+    ct0 = None
+    # JSON (Cookie-Editor export)
+    if raw[:1] in ("[", "{"):
+        try:
+            data = json.loads(raw)
+            items = data if isinstance(data, list) else [data]
+            for c in items:
+                if not isinstance(c, dict):
+                    continue
+                name = (c.get("name") or c.get("Name") or "").strip()
+                val = c.get("value")
+                if val is None:
+                    val = c.get("Value")
+                if name == "auth_token" and val:
+                    auth = str(val)
+                elif name == "ct0" and val:
+                    ct0 = str(val)
+        except Exception:
+            pass
+    if auth and ct0:
+        return auth, ct0
+    # Netscape cookies.txt: domain	flag	path	secure	expires	name	value
+    for line in raw.splitlines():
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) >= 7:
+            nm, vl = parts[5].strip(), parts[6].strip()
+            if nm == "auth_token" and vl:
+                auth = auth or vl
+            elif nm == "ct0" and vl:
+                ct0 = ct0 or vl
+    if auth and ct0:
+        return auth, ct0
+    # Header style: "auth_token=xxx; ct0=yyy"
+    for m in re.finditer(r"(auth_token|ct0)\s*=\s*([^;\s]+)", raw):
+        if m.group(1) == "auth_token":
+            auth = auth or m.group(2)
+        else:
+            ct0 = ct0 or m.group(2)
+    return auth, ct0
+
+
+def _set_tw_env(auth, ct0):
+    """Set the env vars twitter-cli expects, for this process and all subprocesses."""
+    if auth:
+        os.environ["TWITTER_AUTH_TOKEN"] = auth
+    if ct0:
+        os.environ["TWITTER_CT0"] = ct0
+
+
+def _persist_tw_tokens(auth, ct0):
+    """Save tokens (perms 600) so they auto-load on every restart."""
+    try:
+        path = _tw_env_file()
+        with open(path, "w") as f:
+            json.dump({"TWITTER_AUTH_TOKEN": auth or "", "TWITTER_CT0": ct0 or ""}, f)
+        try:
+            os.chmod(path, 0o600)
+        except Exception:
+            pass
+        return path
+    except Exception:
+        return None
+
+
+def _load_persisted_tw_tokens():
+    """Load saved tokens into the environment at startup. Render env vars win if set."""
+    try:
+        if os.environ.get("TWITTER_AUTH_TOKEN") and os.environ.get("TWITTER_CT0"):
+            return True
+        path = _tw_env_file()
+        if not os.path.isfile(path):
+            return False
+        with open(path) as f:
+            data = json.load(f) or {}
+        auth = data.get("TWITTER_AUTH_TOKEN")
+        ct0 = data.get("TWITTER_CT0")
+        if auth and ct0:
+            _set_tw_env(auth, ct0)
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def _in_virtualenv():
     """True if running inside a virtualenv/venv (where --user installs fail)."""
     try:
@@ -690,12 +786,30 @@ def api_tw_cookies():
             pass
     except Exception as e:
         return jsonify({"ok": False, "error": "Could not write cookie file: " + str(e)}), 500
-    # Point common connectors at the cookie file via env for this process where supported.
+    # Point file-based connectors at the cookie file (kept as a fallback).
     os.environ["TWITTER_COOKIES"] = path
     os.environ["AGENT_REACH_TWITTER_COOKIES"] = path
+    # The installed twitter-cli authenticates via TWITTER_AUTH_TOKEN + TWITTER_CT0,
+    # so pull those out of the pasted cookies, set them, and persist them.
+    auth, ct0 = _parse_tw_tokens(cookies)
+    token_msg = ""
+    if auth and ct0:
+        _set_tw_env(auth, ct0)
+        saved = _persist_tw_tokens(auth, ct0)
+        token_msg = "\n\nDetected your auth_token and ct0 and set TWITTER_AUTH_TOKEN + TWITTER_CT0 for the connector."
+        if saved:
+            token_msg += " Saved them (permissions 600) so they load automatically every time the server restarts \u2014 you won't need to paste again on this host."
+        token_msg += " Click Verify now."
+    else:
+        missing = []
+        if not auth:
+            missing.append("auth_token")
+        if not ct0:
+            missing.append("ct0")
+        token_msg = "\n\nWARNING: could not find " + " and ".join(missing) + " in what you pasted. This twitter CLI needs BOTH the 'auth_token' and 'ct0' cookies from x.com. Re-export with Cookie-Editor while logged in and make sure both are included."
     apply_log = _apply_twitter_cookies(_tool_path("twitter"), path)
     extra = ("\n\n" + "\n".join(apply_log)) if apply_log else ""
-    return jsonify({"ok": True, "path": path, "format": ("json" if is_json else "netscape"), "serverHost": _is_server_host(), "output": "Saved your Twitter/X login cookies locally (permissions 600). They never leave this machine." + extra})
+    return jsonify({"ok": bool(auth and ct0), "hasTokens": bool(auth and ct0), "path": path, "format": ("json" if is_json else "netscape"), "serverHost": _is_server_host(), "output": "Saved your Twitter/X login cookies locally (permissions 600). They never leave this machine." + token_msg + extra})
 
 
 @app.post("/api/research/twitter/verify")
@@ -830,6 +944,7 @@ def start_background_worker():
     t.start()
 
 
+_load_persisted_tw_tokens()
 start_background_worker()
 
 
