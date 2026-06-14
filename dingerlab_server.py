@@ -1049,15 +1049,22 @@ def _parse_tweets(out):
 
 
 def _tw_search_structured(tw, query, limit=25):
-    cmd = [tw, "search", query]
-    lf = _tw_limit_flag(tw)
-    if lf:
-        cmd += [lf, str(limit)]
-    ff, ffval = _tw_format_flag(tw)
-    if ff:
-        cmd += ([ff, ffval] if ffval else [ff])
+    """Mirror the command shape that verify/search uses successfully: a plain
+    'twitter search <query>' plus an optional limit flag only if the CLI
+    advertises one. Never add a format flag (the CLI rejects unknown flags).
+    Falls back to the bare command if the first attempt errors or returns nothing."""
+    base = [tw, "search", query]
+    flag = _tw_limit_flag(tw)
+    cmd = base + ([flag, str(limit)] if flag else [])
     res = _run_cmd(cmd, timeout=40)
-    return _parse_tweets(res.get("output") or "")
+    out = res.get("output") or ""
+    tweets = _parse_tweets(out)
+    if not tweets and (cmd != base) and (_looks_like_usage_error(out) or not res.get("ok")):
+        res = _run_cmd(base, timeout=40)
+        out = res.get("output") or ""
+        tweets = _parse_tweets(out)
+    diag = {"cmd": res.get("cmd"), "ok": res.get("ok"), "parsed": len(tweets), "rawSample": out[:500]}
+    return tweets, diag
 
 
 @app.post("/api/research/twitter/consensus")
@@ -1094,16 +1101,20 @@ def api_tw_consensus():
         key_meta[nm + "::" + mk] = {"gamePk": gp, "modelProb": r.get("modelProb"), "hrModelProb": r.get("hrModelProb"), "edgePct": edge, "overSignal": r.get("overSignal")}
     mkterm = {"hr": "home run", "hits": "hit prop", "hits2": "2+ hits", "tb": "total bases", "rbi": "RBI prop", "any": ""}.get(market, "")
     if market == "any":
-        queries = ["MLB home run pick today", "MLB prop bets today", "MLB player props today"]
+        queries = ["MLB home run", "MLB props", "MLB player props"]
     else:
-        queries = ["MLB " + mkterm + " pick today", "MLB " + mkterm + " prop today", "MLB " + mkterm + " bets today"]
+        queries = ["MLB " + mkterm, mkterm + " prop MLB", "MLB " + mkterm + " pick"]
     queries = queries[:3]
     tweets = []
     seen = set()
     used = []
+    diag = []
     for q in queries:
         used.append(q)
-        for t in _tw_search_structured(tw, q, limit):
+        tw_list, d = _tw_search_structured(tw, q, limit)
+        d["q"] = q
+        diag.append(d)
+        for t in tw_list:
             tid = t.get("id") or ((t.get("screenName") or "") + (t.get("text") or "")[:40])
             if tid in seen:
                 continue
@@ -1152,7 +1163,7 @@ def api_tw_consensus():
         })
     plays.sort(key=lambda p: (p["accounts"], p["tweets"], p["engagement"]), reverse=True)
     top = plays[0] if plays else None
-    return jsonify({"ok": True, "market": market, "tweetsScanned": len(tweets), "queriesUsed": used, "playsFound": len(plays), "topPlay": top, "plays": plays[:15], "haveSlate": have_slate, "note": "Public/Twitter consensus is a popularity signal, not a guarantee \u2014 heavily-backed overs are often fade spots. Cross-check the model edge before betting."})
+    return jsonify({"ok": True, "market": market, "tweetsScanned": len(tweets), "queriesUsed": used, "playsFound": len(plays), "topPlay": top, "plays": plays[:15], "haveSlate": have_slate, "slateNames": len(name_set), "diag": diag, "note": "Public/Twitter consensus is a popularity signal, not a guarantee \u2014 heavily-backed overs are often fade spots. Cross-check the model edge before betting."})
 
 
 @app.post("/api/grade")
