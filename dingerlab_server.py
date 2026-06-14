@@ -1209,10 +1209,10 @@ def api_tw_consensus():
         key_meta[nm + "::" + mk] = {"gamePk": gp, "modelProb": r.get("modelProb"), "hrModelProb": r.get("hrModelProb"), "edgePct": edge, "overSignal": r.get("overSignal")}
     mkterm = {"hr": "home run", "hits": "hit prop", "hits2": "2+ hits", "tb": "total bases", "rbi": "RBI prop", "any": ""}.get(market, "")
     if market == "any":
-        queries = ["MLB home run", "MLB props", "MLB player props", "MLB picks today", "MLB best bets"]
+        queries = ["MLB home run", "MLB props", "MLB player props", "MLB picks today", "MLB best bets", "home run prop", "MLB parlay", "#MLBpicks"]
     else:
-        queries = ["MLB " + mkterm, mkterm + " prop MLB", "MLB " + mkterm + " pick", "MLB " + mkterm + " today"]
-    queries = queries[:5]
+        queries = ["MLB " + mkterm, mkterm + " prop MLB", "MLB " + mkterm + " pick", "MLB " + mkterm + " today", mkterm + " prop", "MLB " + mkterm + " bet"]
+    queries = queries[:8]
     tweets = []
     seen = set()
     used = []
