@@ -1065,23 +1065,114 @@ def _parse_tweets(out):
     return _regex_parse_tweets(out)
 
 
-def _tw_search_structured(tw, query, limit=25):
-    """Mirror the command shape that verify/search uses successfully: a plain
-    'twitter search <query>' plus an optional limit flag only if the CLI
-    advertises one. Never add a format flag (the CLI rejects unknown flags).
-    Falls back to the bare command if the first attempt errors or returns nothing."""
-    base = [tw, "search", query]
-    flag = _tw_limit_flag(tw)
-    cmd = base + ([flag, str(limit)] if flag else [])
-    res = _run_cmd(cmd, timeout=40)
-    out = res.get("output") or ""
-    tweets = _parse_tweets(out)
-    if not tweets and (cmd != base) and (_looks_like_usage_error(out) or not res.get("ok")):
-        res = _run_cmd(base, timeout=40)
+_AR_HELP_CACHE = {}
+
+
+def _ar_help(ar, *subs):
+    key = "/".join(subs) or "_root"
+    if key in _AR_HELP_CACHE:
+        return _AR_HELP_CACHE[key]
+    out = _run_cmd([ar] + list(subs) + ["--help"], timeout=20).get("output") or ""
+    _AR_HELP_CACHE[key] = out
+    return out
+
+
+def _flag_from_help(help_txt):
+    low = (help_txt or "").lower()
+    for flag in ("--limit", "--count", "--max-results", "--max", "--num", "--number", "-n"):
+        if flag in low:
+            return flag
+    return None
+
+
+# Cached winning search command template, discovered once then reused across queries.
+_SEARCH_MODE = None
+
+
+def _mode_cmd(mode, query, limit):
+    """Build a concrete command from a cached mode template."""
+    if not mode:
+        return None
+    kind = mode[0]
+    if kind == "ar":
+        _, flag, sub = mode
+        ar = _tool_path("agent-reach")
+        if not ar:
+            return None
+        cmd = [ar] + list(sub) + [query]
+        if flag:
+            cmd += [flag, str(limit)]
+        return cmd
+    if kind == "tw":
+        _, flag = mode
+        tw = _tool_path("twitter")
+        if not tw:
+            return None
+        cmd = [tw, "search", query]
+        if flag:
+            cmd += [flag, str(limit)]
+        return cmd
+    return None
+
+
+def _candidate_modes():
+    """Ordered list of command templates to probe. Agent-Reach is preferred
+    because its twitter search supports proper result counts."""
+    modes = []
+    ar = _tool_path("agent-reach")
+    if ar:
+        arflag = _flag_from_help(_ar_help(ar, "twitter", "search")) or _flag_from_help(_ar_help(ar, "twitter")) or "--limit"
+        modes.append(("ar", arflag, ["twitter", "search"]))
+        modes.append(("ar", None, ["twitter", "search"]))
+        modes.append(("ar", arflag, ["search"]))
+    tw = _tool_path("twitter")
+    if tw:
+        twflag = _tw_limit_flag(tw)
+        if twflag:
+            modes.append(("tw", twflag))
+        for f in ("--limit", "--count", "--max-results", "--num", "-n"):
+            modes.append(("tw", f))
+        modes.append(("tw", None))
+    return modes
+
+
+def _tw_search_structured(tw, query, limit=40):
+    """Return (tweets, diag). Prefers Agent-Reach, then the twitter CLI. Probes
+    several count-flag shapes and caches whichever returns the most tweets so
+    later queries are fast. This fixes the '1 tweet per search' problem caused
+    by the CLI defaulting to a single result when no count flag is accepted."""
+    global _SEARCH_MODE
+    # Fast path: reuse a previously-working command shape.
+    if _SEARCH_MODE is not None:
+        cmd = _mode_cmd(_SEARCH_MODE, query, limit)
+        if cmd:
+            res = _run_cmd(cmd, timeout=45)
+            out = res.get("output") or ""
+            tweets = _parse_tweets(out)
+            if tweets:
+                return tweets, {"q": query, "cmd": res.get("cmd"), "ok": res.get("ok"), "parsed": len(tweets), "rawSample": out[:500]}
+    # Discovery path: probe candidate command shapes, keep the most productive.
+    best = []
+    best_diag = {"q": query}
+    tried = []
+    for mode in _candidate_modes():
+        cmd = _mode_cmd(mode, query, limit)
+        if not cmd:
+            continue
+        res = _run_cmd(cmd, timeout=45)
         out = res.get("output") or ""
         tweets = _parse_tweets(out)
-    diag = {"cmd": res.get("cmd"), "ok": res.get("ok"), "parsed": len(tweets), "rawSample": out[:500]}
-    return tweets, diag
+        tried.append({"cmd": res.get("cmd"), "ok": res.get("ok"), "parsed": len(tweets)})
+        if len(tweets) > len(best):
+            best = tweets
+            best_diag = {"q": query, "cmd": res.get("cmd"), "ok": res.get("ok"), "parsed": len(tweets), "rawSample": out[:500]}
+        if len(tweets) >= 2:
+            _SEARCH_MODE = mode
+            break
+    best_diag["tried"] = tried[:10]
+    if "cmd" not in best_diag:
+        best_diag.update({"cmd": None, "ok": False, "parsed": 0, "rawSample": "(no tweets returned by any command shape \u2014 connector may be rate-limited or the session expired)"})
+    return best, best_diag
 
 
 @app.post("/api/research/twitter/consensus")
@@ -1118,10 +1209,10 @@ def api_tw_consensus():
         key_meta[nm + "::" + mk] = {"gamePk": gp, "modelProb": r.get("modelProb"), "hrModelProb": r.get("hrModelProb"), "edgePct": edge, "overSignal": r.get("overSignal")}
     mkterm = {"hr": "home run", "hits": "hit prop", "hits2": "2+ hits", "tb": "total bases", "rbi": "RBI prop", "any": ""}.get(market, "")
     if market == "any":
-        queries = ["MLB home run", "MLB props", "MLB player props"]
+        queries = ["MLB home run", "MLB props", "MLB player props", "MLB picks today", "MLB best bets"]
     else:
-        queries = ["MLB " + mkterm, mkterm + " prop MLB", "MLB " + mkterm + " pick"]
-    queries = queries[:3]
+        queries = ["MLB " + mkterm, mkterm + " prop MLB", "MLB " + mkterm + " pick", "MLB " + mkterm + " today"]
+    queries = queries[:5]
     tweets = []
     seen = set()
     used = []
