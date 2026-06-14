@@ -943,8 +943,25 @@ def _find_slate_names(text, name_set):
     return [nm for nm in name_set if nm and nm.lower() in low]
 
 
+_NAME_STOP = set("mlb hr nrfi yrfi the best home run runs cheat sheet sunday monday tuesday wednesday thursday friday saturday dingers dinger let writeup write props prop pick picks today tonight parlay parlays slip over under lock locks free bet bets betting sportsbook book odds line lines value plus model board card daily dfs east west central game games play plays fade tail unit units bonus code promo join follow like retweet new hot top big day night first last for with this that here there official report breaking update updates".split())
+
+
+def _looks_like_name_word(w):
+    # A real name word is Title-Case (Juan, Soto), not ALL-CAPS (MLB, HR) and not a known junk token.
+    return bool(re.match(r"^[A-Z][a-z]+(?:['.-][A-Za-z]+)?$", w or ""))
+
+
 def _generic_names(text):
-    return re.findall(r"\b([A-Z][a-zA-Z'\.-]+\s+[A-Z][a-zA-Z'\.-]+)\b", text or "")
+    out = []
+    for w1, w2 in re.findall(r"\b([A-Z][a-zA-Z'.-]+)\s+([A-Z][a-zA-Z'.-]+)\b", text or ""):
+        if not (_looks_like_name_word(w1) and _looks_like_name_word(w2)):
+            continue
+        if w1.lower() in _NAME_STOP or w2.lower() in _NAME_STOP:
+            continue
+        full = w1 + " " + w2
+        if full not in out:
+            out.append(full)
+    return out
 
 
 def _tw_format_flag(tw):
