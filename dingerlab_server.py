@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import threading
 import shutil
 import subprocess
@@ -295,8 +296,56 @@ def perform_grade():
 
 
 # ============================ Research Assistant connector (v4.9) ============================
+def _extra_bin_dirs():
+    home = str(Path.home())
+    dirs = [
+        os.path.join(home, ".local", "bin"),
+        os.path.join(home, "bin"),
+        os.path.join(home, ".local", "pipx", "venvs"),
+        "/usr/local/bin",
+        "/opt/homebrew/bin",
+        os.path.join(home, "Library", "Python", "3.11", "bin"),
+        os.path.join(home, "Library", "Python", "3.12", "bin"),
+        os.path.join(home, "Library", "Python", "3.13", "bin"),
+        os.path.join(home, "AppData", "Roaming", "Python", "Scripts"),
+    ]
+    return [d for d in dirs if os.path.isdir(d)]
+
+
+def _augment_path():
+    parts = (os.environ.get("PATH") or "").split(os.pathsep)
+    changed = False
+    for d in _extra_bin_dirs():
+        if d not in parts:
+            parts.append(d)
+            changed = True
+    if changed:
+        os.environ["PATH"] = os.pathsep.join([p for p in parts if p])
+    return os.environ.get("PATH", "")
+
+
 def _tool_path(name):
-    return shutil.which(name)
+    _augment_path()
+    p = shutil.which(name)
+    if p:
+        return p
+    # Direct probe of common bins, including pipx venv layout (~/.local/pipx/venvs/<pkg>/bin/<name>)
+    exe_names = [name, name + ".exe", name + ".cmd"]
+    for d in _extra_bin_dirs():
+        for en in exe_names:
+            cand = os.path.join(d, en)
+            if os.path.isfile(cand) and os.access(cand, os.X_OK):
+                return cand
+        # pipx venvs/<pkg>/bin/<name>
+        if d.endswith("venvs"):
+            try:
+                for pkg in os.listdir(d):
+                    cand = os.path.join(d, pkg, "bin", name)
+                    if os.path.isfile(cand) and os.access(cand, os.X_OK):
+                        return cand
+            except Exception:
+                pass
+    return None
 
 
 def _run_cmd(cmd, timeout=25):
@@ -416,16 +465,65 @@ def _tw_config_dir():
     return base
 
 
+def _pip_cmds(pkg):
+    """Return ordered install command candidates for a package."""
+    cmds = []
+    pipx = shutil.which("pipx")
+    if pipx:
+        cmds.append([pipx, "install", pkg])
+        cmds.append([pipx, "install", "--force", pkg])
+    py = sys.executable or shutil.which("python3") or shutil.which("python") or "python3"
+    cmds.append([py, "-m", "pip", "install", "--user", pkg])
+    cmds.append([py, "-m", "pip", "install", pkg])
+    return cmds
+
+
 @app.post("/api/research/twitter/install")
 def api_tw_install():
     logs = []
-    # Prefer pipx for the CLIs when available, fall back to pip --user.
-    pipx = shutil.which("pipx")
-    pip_base = ([pipx, "install"] if pipx else [shutil.which("pip") or "pip", "install", "--user"])
-    for pkg in ("agent-reach", "twitter-cli"):
-        res = _run_cmd(pip_base + [pkg], timeout=240)
-        logs.append("$ " + res.get("cmd", "") + "\n" + (res.get("output") or ""))
-    return jsonify({"ok": True, "tools": _research_tools(), "output": "\n\n".join(logs)})
+    def log(line):
+        logs.append(line)
+
+    log("python: " + (sys.executable or "?"))
+    log("PATH bins detected: " + (", ".join(_extra_bin_dirs()) or "(none of the usual user bins exist yet)"))
+
+    # Step A: install agent-reach (the umbrella tool).
+    if not _tool_path("agent-reach"):
+        for cmd in _pip_cmds("agent-reach"):
+            res = _run_cmd(cmd, timeout=300)
+            log("$ " + res.get("cmd", "") + "\n" + (res.get("output") or ""))
+            if _tool_path("agent-reach"):
+                break
+
+    # Step B: prefer agent-reach's own installer to set up the sub-CLIs (twitter-cli, etc.).
+    ar = _tool_path("agent-reach")
+    if ar and not _tool_path("twitter"):
+        for sub in ([ar, "install"], [ar, "install", "twitter"], [ar, "setup"]):
+            res = _run_cmd(sub, timeout=300)
+            log("$ " + res.get("cmd", "") + "\n" + (res.get("output") or ""))
+            if _tool_path("twitter"):
+                break
+
+    # Step C: direct install of the twitter CLI, trying known package names.
+    if not _tool_path("twitter"):
+        for pkg in ("twitter-cli", "twitter-api-client", "twscrape", "tweety-ns"):
+            installed = False
+            for cmd in _pip_cmds(pkg):
+                res = _run_cmd(cmd, timeout=300)
+                log("$ " + res.get("cmd", "") + "\n" + (res.get("output") or ""))
+                if _tool_path("twitter"):
+                    installed = True
+                    break
+            if installed:
+                break
+
+    tools = _research_tools()
+    tw = _tool_path("twitter")
+    if tw:
+        log("\nOK: twitter CLI found at " + tw)
+    else:
+        log("\nNOTE: the 'twitter' command was still not found on PATH. If pip reported a successful install, the executable is likely in a user bin that is not on this server's PATH. Restart dingerlab_server.py from a fresh shell, or run 'pipx install twitter-cli' / 'agent-reach install' manually in your terminal, then click Run diagnostics.")
+    return jsonify({"ok": True, "tools": tools, "twitterPath": tw, "agentReachPath": _tool_path("agent-reach"), "output": "\n\n".join(logs)})
 
 
 @app.post("/api/research/twitter/doctor")
@@ -483,7 +581,13 @@ def api_tw_cookies():
 def api_tw_verify():
     tw = _tool_path("twitter")
     if not tw:
-        return jsonify({"ok": True, "authenticated": False, "output": "twitter-cli not installed yet. Run step 1 first."})
+        ar = _tool_path("agent-reach")
+        msg = "The 'twitter' command is not on this server's PATH yet."
+        if ar:
+            msg += " agent-reach IS installed (" + ar + "), so run 'agent-reach install' in your terminal to add the Twitter CLI, then restart dingerlab_server.py."
+        else:
+            msg += " Run step 1 (Install connector) first, or install manually: pipx install agent-reach && agent-reach install."
+        return jsonify({"ok": True, "authenticated": False, "output": msg})
     res = _run_cmd([tw, "search", "MLB home run", "--limit", "1"], timeout=45)
     out = res.get("output") or ""
     low = out.lower()
