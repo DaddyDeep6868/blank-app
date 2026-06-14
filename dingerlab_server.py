@@ -357,6 +357,79 @@ def _run_cmd(cmd, timeout=25):
         return {"ok": False, "code": -1, "output": str(e), "cmd": " ".join(cmd)}
 
 
+_TW_HELP_CACHE = {}
+
+
+def _tw_help(tw, sub=None):
+    """Return cached --help text for the twitter CLI (root or a subcommand)."""
+    key = sub or "_root"
+    if key in _TW_HELP_CACHE:
+        return _TW_HELP_CACHE[key]
+    cmd = [tw] + ([sub] if sub else []) + ["--help"]
+    out = _run_cmd(cmd, timeout=25).get("output") or ""
+    _TW_HELP_CACHE[key] = out
+    return out
+
+
+def _tw_limit_flag(tw):
+    """Discover which (if any) limit/count flag the installed twitter search supports."""
+    help_txt = (_tw_help(tw, "search") or "").lower()
+    for flag in ("--limit", "--count", "--max-results", "--max", "--num", "--number", "-n"):
+        if flag in help_txt:
+            return flag
+    return None
+
+
+def _tw_search_cmd(tw, query, limit=1):
+    """Build a search command that only includes a limit flag the CLI actually has."""
+    cmd = [tw, "search", query]
+    flag = _tw_limit_flag(tw)
+    if flag:
+        cmd += [flag, str(limit)]
+    return cmd
+
+
+def _looks_like_usage_error(out):
+    low = (out or "").lower()
+    return ("no such option" in low) or ("no such command" in low) or ("got unexpected extra argument" in low) or ("usage:" in low and "--help" in low)
+
+
+def _looks_like_auth_error(out):
+    low = (out or "").lower()
+    return any(k in low for k in ("please log in", "please login", "not logged in", "log in to", "login required", "authentication required", "unauthorized", "not authenticated", "could not authenticate", "401", "403", "no cookies", "missing cookie", "cookies not found"))
+
+
+def _apply_twitter_cookies(tw, path):
+    """Best-effort: hand the saved cookie file to the twitter CLI using whatever
+    login/auth subcommand and flag it advertises. Always non-fatal."""
+    out_lines = []
+    if not tw:
+        return out_lines
+    root = _tw_help(tw) or ""
+    sub = None
+    for cand in ("login", "auth", "cookies"):
+        if re.search(r"\b" + cand + r"\b", root, re.I):
+            sub = cand
+            break
+    if not sub:
+        out_lines.append("Your twitter CLI exposes no obvious login/auth subcommand, so DingerLab is relying on the saved cookie file (" + path + ") plus the TWITTER_COOKIES env var. If verify still fails, run 'twitter --help' to see how it expects authentication.")
+        return out_lines
+    sub_help = _tw_help(tw, sub) or ""
+    flag = None
+    for f in ("--cookies", "--cookie-file", "--cookies-file", "--from-file", "--file", "--input"):
+        if f in sub_help:
+            flag = f
+            break
+    attempt = [tw, sub, flag, path] if flag else [tw, sub, path]
+    res = _run_cmd(attempt, timeout=40)
+    out_lines.append("$ " + res.get("cmd", "") + "\n" + (res.get("output") or ""))
+    if res.get("ok"):
+        out_lines.append("Loaded your cookies into the twitter CLI via '" + sub + "'.")
+    else:
+        out_lines.append("Saved the cookie file; the CLI's '" + sub + "' step did not confirm success, but verify may still work via the cookie file/env.")
+    return out_lines
+
+
 def _research_tools():
     return {
         "agent_reach": bool(_tool_path("agent-reach")),
@@ -553,6 +626,12 @@ def api_tw_install():
     if tw:
         log("\nOK: twitter CLI is installed and detected at " + tw + ".")
         log("This is the only tool DingerLab needs to read MLB prop tweets. The 'agent-reach' umbrella package is OPTIONAL (it is just an installer/orchestrator) and is NOT required \u2014 you can safely ignore any agent-reach install errors above.")
+        try:
+            _sh = _tw_help(tw, "search")
+            if _sh.strip():
+                log("\n'twitter search' supports these options on your install:\n" + _sh.strip()[:1500])
+        except Exception:
+            pass
         if server:
             log("\nThis is a remote/server host (no browser here). Next step: click 'Paste cookies instead' and paste your own x.com cookies exported with the Cookie-Editor browser extension, then click Verify. 'Import login from this browser' only works on a local computer.")
         else:
@@ -614,7 +693,9 @@ def api_tw_cookies():
     # Point common connectors at the cookie file via env for this process where supported.
     os.environ["TWITTER_COOKIES"] = path
     os.environ["AGENT_REACH_TWITTER_COOKIES"] = path
-    return jsonify({"ok": True, "path": path, "format": ("json" if is_json else "netscape"), "output": "Saved your Twitter/X login cookies locally (permissions 600). They never leave this machine."})
+    apply_log = _apply_twitter_cookies(_tool_path("twitter"), path)
+    extra = ("\n\n" + "\n".join(apply_log)) if apply_log else ""
+    return jsonify({"ok": True, "path": path, "format": ("json" if is_json else "netscape"), "serverHost": _is_server_host(), "output": "Saved your Twitter/X login cookies locally (permissions 600). They never leave this machine." + extra})
 
 
 @app.post("/api/research/twitter/verify")
@@ -628,11 +709,19 @@ def api_tw_verify():
         else:
             msg += " Run step 1 (Install connector) first, or install manually: pipx install agent-reach && agent-reach install."
         return jsonify({"ok": True, "authenticated": False, "serverHost": _is_server_host(), "output": msg})
-    res = _run_cmd([tw, "search", "MLB home run", "--limit", "1"], timeout=45)
+    server = _is_server_host()
+    cmd = _tw_search_cmd(tw, "MLB home run", 1)
+    res = _run_cmd(cmd, timeout=45)
     out = res.get("output") or ""
-    low = out.lower()
-    authed = res.get("ok") and not any(k in low for k in ("please log in", "please login", "not logged in", "login required", "authentication required", "unauthorized", "401", "403", "no cookies", "missing cookie", "cookies not found"))
-    return jsonify({"ok": True, "authenticated": bool(authed), "serverHost": _is_server_host(), "output": out})
+    if _looks_like_usage_error(out):
+        help_txt = _tw_help(tw, "search")
+        msg = ("Ran: " + res.get("cmd", "") + "\n\n" + out.strip() +
+               "\n\nThis is a CLI version/flag difference \u2014 NOT a login problem. Here is what your twitter CLI's search actually supports:\n\n" + (help_txt or "").strip())
+        return jsonify({"ok": True, "authenticated": False, "interfaceMismatch": True, "serverHost": server, "output": msg})
+    if _looks_like_auth_error(out):
+        return jsonify({"ok": True, "authenticated": False, "serverHost": server, "output": out})
+    authed = bool(res.get("ok"))
+    return jsonify({"ok": True, "authenticated": authed, "serverHost": server, "output": out})
 
 
 @app.post("/api/research/twitter/import_browser")
