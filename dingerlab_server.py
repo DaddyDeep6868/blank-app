@@ -1,6 +1,9 @@
 import json
 import os
 import threading
+import shutil
+import subprocess
+import re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -289,6 +292,115 @@ def perform_grade():
         "waiting": waiting,
         "state": state,
     }
+
+
+# ============================ Research Assistant connector (v4.9) ============================
+def _tool_path(name):
+    return shutil.which(name)
+
+
+def _run_cmd(cmd, timeout=25):
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        out = (p.stdout or "") + (("\n" + p.stderr) if p.stderr else "")
+        return {"ok": p.returncode == 0, "code": p.returncode, "output": out[:12000], "cmd": " ".join(cmd)}
+    except Exception as e:
+        return {"ok": False, "code": -1, "output": str(e), "cmd": " ".join(cmd)}
+
+
+def _research_tools():
+    return {
+        "agent_reach": bool(_tool_path("agent-reach")),
+        "twitter_cli": bool(_tool_path("twitter")),
+        "opencli": bool(_tool_path("opencli")),
+        "gh": bool(_tool_path("gh")),
+        "yt_dlp": bool(_tool_path("yt-dlp")),
+    }
+
+
+@app.get("/api/research/status")
+def api_research_status():
+    tools = _research_tools()
+    doctor = None
+    if tools.get("agent_reach"):
+        doctor = _run_cmd([_tool_path("agent-reach"), "doctor"], timeout=20)
+    return jsonify({
+        "ok": True,
+        "tools": tools,
+        "doctor": doctor,
+        "note": "Twitter/X research should use your own local logged-in browser/cookie setup. DingerLab does not store cookies or secrets.",
+    })
+
+
+def _github_repo_from_url(url):
+    m = re.search(r"github\.com/([^/]+)/([^/#?]+)", url or "")
+    if not m:
+        return None
+    return m.group(1) + "/" + m.group(2).replace(".git", "")
+
+
+@app.post("/api/research/search")
+def api_research_search():
+    body = request.get_json(silent=True) or {}
+    query = (body.get("query") or "").strip()
+    url = (body.get("url") or "").strip()
+    source = (body.get("source") or "All").strip()
+    if not query and not url:
+        return jsonify({"ok": False, "error": "query or url required"}), 400
+    tools = _research_tools()
+    results = []
+    mode = source
+
+    # Twitter/X: intentionally uses local CLI/browser-login setup when available.
+    if source in ("Twitter/X", "All"):
+        if tools.get("twitter_cli"):
+            cmd = [_tool_path("twitter"), "tweet", url] if url and ("x.com" in url or "twitter.com" in url) else [_tool_path("twitter"), "search", query or url]
+            res = _run_cmd(cmd, timeout=30)
+            results.append({"source": "Twitter/X via local twitter-cli", "title": "Twitter/X local scan", "url": url, "text": res.get("output", ""), "ok": res.get("ok"), "cmd": res.get("cmd")})
+        elif tools.get("opencli"):
+            cmd = [_tool_path("opencli"), "twitter", "search", query or url]
+            res = _run_cmd(cmd, timeout=30)
+            results.append({"source": "Twitter/X via OpenCLI", "title": "Twitter/X local scan", "url": url, "text": res.get("output", ""), "ok": res.get("ok"), "cmd": res.get("cmd")})
+        elif source == "Twitter/X":
+            return jsonify({"ok": False, "error": "Twitter/X connector is not configured. Install agent-reach/twitter-cli/OpenCLI locally and authenticate with your own Twitter login/cookies."}), 503
+
+    if source in ("Reddit", "All"):
+        if tools.get("opencli"):
+            res = _run_cmd([_tool_path("opencli"), "reddit", "search", query or url], timeout=30)
+            results.append({"source": "Reddit via OpenCLI", "title": "Reddit local scan", "url": url, "text": res.get("output", ""), "ok": res.get("ok"), "cmd": res.get("cmd")})
+        elif source == "Reddit":
+            return jsonify({"ok": False, "error": "Reddit connector is not configured. Agent-Reach notes Reddit needs browser login state/OpenCLI or cookies."}), 503
+
+    if source in ("GitHub", "All"):
+        if tools.get("gh"):
+            repo = _github_repo_from_url(url)
+            if repo:
+                cmd = [_tool_path("gh"), "repo", "view", repo, "--json", "name,description,url,stargazerCount,issues"]
+            else:
+                cmd = [_tool_path("gh"), "search", "repos", query or url, "--limit", "8"]
+            res = _run_cmd(cmd, timeout=30)
+            results.append({"source": "GitHub via gh", "title": "GitHub scan", "url": url, "text": res.get("output", ""), "ok": res.get("ok"), "cmd": res.get("cmd")})
+        elif source == "GitHub":
+            return jsonify({"ok": False, "error": "GitHub CLI is not installed/configured."}), 503
+
+    if source in ("YouTube", "All"):
+        if tools.get("yt_dlp"):
+            target = url if url else "ytsearch5:" + (query or "MLB props")
+            res = _run_cmd([_tool_path("yt-dlp"), "--dump-json", "--skip-download", target], timeout=35)
+            results.append({"source": "YouTube via yt-dlp", "title": "YouTube scan", "url": url, "text": res.get("output", ""), "ok": res.get("ok"), "cmd": res.get("cmd")})
+        elif source == "YouTube":
+            return jsonify({"ok": False, "error": "yt-dlp is not installed/configured."}), 503
+
+    if source in ("Web", "All") and url:
+        try:
+            r = requests.get(url, timeout=18, headers={"user-agent": "DingerLab research assistant"})
+            results.append({"source": "Web", "title": url, "url": url, "text": r.text[:6000], "ok": r.ok})
+        except Exception as e:
+            results.append({"source": "Web", "title": url, "url": url, "text": str(e), "ok": False})
+
+    if not results:
+        return jsonify({"ok": False, "error": "No configured connector found for this source. Manual research log is still available."}), 503
+    return jsonify({"ok": True, "mode": mode, "tools": tools, "results": results})
 
 
 @app.post("/api/grade")
