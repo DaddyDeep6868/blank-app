@@ -403,6 +403,94 @@ def api_research_search():
     return jsonify({"ok": True, "mode": mode, "tools": tools, "results": results})
 
 
+# ===================== Automated Twitter/X login setup (v4.11) =====================
+# All of this runs on the LOCAL machine hosting DingerLab. Cookies/login stay local.
+# No credentials are hardcoded and nothing is sent off-box by these endpoints.
+
+def _tw_config_dir():
+    base = os.environ.get("DINGERLAB_RESEARCH_HOME") or os.path.join(str(Path.home()), ".dingerlab", "research")
+    try:
+        os.makedirs(base, exist_ok=True)
+    except Exception:
+        pass
+    return base
+
+
+@app.post("/api/research/twitter/install")
+def api_tw_install():
+    logs = []
+    # Prefer pipx for the CLIs when available, fall back to pip --user.
+    pipx = shutil.which("pipx")
+    pip_base = ([pipx, "install"] if pipx else [shutil.which("pip") or "pip", "install", "--user"])
+    for pkg in ("agent-reach", "twitter-cli"):
+        res = _run_cmd(pip_base + [pkg], timeout=240)
+        logs.append("$ " + res.get("cmd", "") + "\n" + (res.get("output") or ""))
+    return jsonify({"ok": True, "tools": _research_tools(), "output": "\n\n".join(logs)})
+
+
+@app.post("/api/research/twitter/doctor")
+def api_tw_doctor():
+    ar = _tool_path("agent-reach")
+    out = ""
+    if ar:
+        out = (_run_cmd([ar, "doctor"], timeout=40).get("output") or "")
+    else:
+        out = "agent-reach not installed yet. Run step 1 (Install connector) first."
+    return jsonify({"ok": True, "tools": _research_tools(), "output": out})
+
+
+@app.post("/api/research/twitter/login")
+def api_tw_login():
+    tw = _tool_path("twitter")
+    ar = _tool_path("agent-reach")
+    if not (tw or ar):
+        return jsonify({"ok": False, "error": "No Twitter connector installed. Run step 1 first."}), 503
+    # Try to launch the local interactive browser-login flow. This only works on a
+    # machine with a real browser/display; in headless hosting it will report back
+    # so the user can use the cookie-paste path instead.
+    cmd = [tw, "login"] if tw else [ar, "twitter", "login"]
+    res = _run_cmd(cmd, timeout=90)
+    note = "If no browser opened, this host is headless — use 'Paste cookies instead' with cookies exported from your own logged-in browser."
+    return jsonify({"ok": True, "output": (res.get("output") or "") + "\n\n" + note, "note": note})
+
+
+@app.post("/api/research/twitter/cookies")
+def api_tw_cookies():
+    body = request.get_json(silent=True) or {}
+    cookies = (body.get("cookies") or "").strip()
+    if not cookies:
+        return jsonify({"ok": False, "error": "No cookies provided"}), 400
+    cfg = _tw_config_dir()
+    is_json = cookies.lstrip().startswith("{") or cookies.lstrip().startswith("[")
+    fname = "twitter_cookies.json" if is_json else "twitter_cookies.txt"
+    path = os.path.join(cfg, fname)
+    try:
+        with open(path, "w") as f:
+            f.write(cookies)
+        try:
+            os.chmod(path, 0o600)
+        except Exception:
+            pass
+    except Exception as e:
+        return jsonify({"ok": False, "error": "Could not write cookie file: " + str(e)}), 500
+    # Point common connectors at the cookie file via env for this process where supported.
+    os.environ["TWITTER_COOKIES"] = path
+    os.environ["AGENT_REACH_TWITTER_COOKIES"] = path
+    return jsonify({"ok": True, "path": path, "format": ("json" if is_json else "netscape"), "output": "Saved your Twitter/X login cookies locally (permissions 600). They never leave this machine."})
+
+
+@app.post("/api/research/twitter/verify")
+def api_tw_verify():
+    tw = _tool_path("twitter")
+    if not tw:
+        return jsonify({"ok": True, "authenticated": False, "output": "twitter-cli not installed yet. Run step 1 first."})
+    res = _run_cmd([tw, "search", "MLB home run", "--limit", "1"], timeout=45)
+    out = res.get("output") or ""
+    low = out.lower()
+    authed = res.get("ok") and not any(k in low for k in ("login", "unauthorized", "auth", "not logged", "cookie"))
+    return jsonify({"ok": True, "authenticated": bool(authed), "output": out})
+
+
 @app.post("/api/grade")
 def api_grade():
     return jsonify(perform_grade())
