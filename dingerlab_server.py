@@ -911,6 +911,250 @@ def api_tw_import_browser():
     return jsonify({"ok": True, "browser": used, "count": len(cookies), "path": txt_path, "output": "Imported " + str(len(cookies)) + " x.com cookies from your " + (used or "browser") + " session and saved them locally (permissions 600). Click Verify."})
 
 
+# ===================== Public consensus play scanner (v4.20) =====================
+# Scrapes betting Twitter/X via the local twitter CLI and tallies which player
+# prop the most accounts are backing. Consensus is a popularity signal only.
+
+TW_MARKET_KEYWORDS = [
+    ("hr", ["home run", "homerun", "home-run", "homer", "homers", "dinger", "go yard", "goes yard", "going yard", "long ball", "longball", "to homer", "anytime hr", "1+ hr", "hr prop"]),
+    ("hits2", ["2+ hits", "2+ hit", "two hits", "multi hit", "multi-hit", "multiple hits"]),
+    ("tb", ["total bases", "total base", "2+ tb", "1+ tb", "3+ tb", "2+ total bases", "tb prop"]),
+    ("rbi", ["rbi", "rbis", "1+ rbi", "to drive in", "run batted in"]),
+    ("hits", ["1+ hit", "1+ hits", "anytime hit", "record a hit", "to get a hit", "gets a hit", "hit prop"]),
+]
+
+
+def _detect_markets(text):
+    low = " " + (text or "").lower() + " "
+    found = []
+    for mk, kws in TW_MARKET_KEYWORDS:
+        for kw in kws:
+            if kw in low:
+                if mk not in found:
+                    found.append(mk)
+                break
+    if "hr" not in found and re.search(r"\bhr\b", low):
+        found.append("hr")
+    return found
+
+
+def _find_slate_names(text, name_set):
+    low = (text or "").lower()
+    return [nm for nm in name_set if nm and nm.lower() in low]
+
+
+def _generic_names(text):
+    return re.findall(r"\b([A-Z][a-zA-Z'\.-]+\s+[A-Z][a-zA-Z'\.-]+)\b", text or "")
+
+
+def _tw_format_flag(tw):
+    h = (_tw_help(tw, "search") or "").lower()
+    if "--json" in h:
+        return ("--json", None)
+    for f in ("--format", "--output", "-o"):
+        if f in h:
+            return (f, "json")
+    return (None, None)
+
+
+def _norm_tweet(t):
+    if not isinstance(t, dict):
+        return None
+    m = t.get("metrics") or {}
+    au = t.get("author") or {}
+    sn = t.get("screenName") or au.get("screenName") or au.get("screen_name") or au.get("username") or ""
+    def num(*keys, src=None):
+        src = src if src is not None else m
+        for k in keys:
+            v = src.get(k)
+            if isinstance(v, bool):
+                continue
+            if isinstance(v, (int, float)):
+                return v
+            if isinstance(v, str) and v.replace(",", "").isdigit():
+                return int(v.replace(",", ""))
+        return 0
+    return {
+        "id": t.get("id") or t.get("tweetId") or t.get("id_str"),
+        "text": t.get("text") or t.get("full_text") or "",
+        "screenName": sn,
+        "likes": num("likes", "favorite_count", "favoriteCount", "like_count"),
+        "retweets": num("retweets", "retweet_count", "retweetCount"),
+        "replies": num("replies", "reply_count", "replyCount"),
+        "quotes": num("quotes", "quote_count", "quoteCount"),
+        "views": num("views", "view_count", "impression_count"),
+    }
+
+
+def _slice_json(out):
+    s = out.find("{")
+    a = out.find("[")
+    starts = [x for x in (s, a) if x >= 0]
+    if not starts:
+        return None
+    return out[min(starts):]
+
+
+def _regex_parse_tweets(out):
+    tweets = []
+    blocks = re.split(r"\n(?=\s*- id:|\s*-\s*id:)", out or "")
+    for blk in blocks:
+        if "text:" not in blk:
+            continue
+        mt = re.search(r"text:\s*(.+)", blk)
+        txt = mt.group(1).strip().strip('"').strip("'") if mt else ""
+        if not txt:
+            continue
+        ms = re.search(r"screenName:\s*(\S+)", blk)
+        sn = ms.group(1).strip().strip('"').strip("'") if ms else ""
+        idm = re.search(r"id:\s*'?\"?(\d+)", blk)
+        tid = idm.group(1) if idm else None
+        def g(field):
+            mm = re.search(field + r":\s*([0-9,]+)", blk)
+            return int(mm.group(1).replace(",", "")) if mm else 0
+        tweets.append({"id": tid, "text": txt, "screenName": sn, "likes": g("likes"), "retweets": g("retweets"), "replies": g("replies"), "quotes": g("quotes"), "views": g("views")})
+    return tweets
+
+
+def _parse_tweets(out):
+    out = out or ""
+    data = None
+    for attempt in (out, _slice_json(out)):
+        if not attempt:
+            continue
+        try:
+            data = json.loads(attempt)
+            break
+        except Exception:
+            data = None
+    if data is None:
+        try:
+            import yaml  # type: ignore
+            data = yaml.safe_load(out)
+        except Exception:
+            data = None
+    items = []
+    if isinstance(data, dict):
+        items = data.get("data") or data.get("tweets") or data.get("results") or []
+    elif isinstance(data, list):
+        items = data
+    tweets = []
+    for it in (items or []):
+        n = _norm_tweet(it)
+        if n and n.get("text"):
+            tweets.append(n)
+    if tweets:
+        return tweets
+    return _regex_parse_tweets(out)
+
+
+def _tw_search_structured(tw, query, limit=25):
+    cmd = [tw, "search", query]
+    lf = _tw_limit_flag(tw)
+    if lf:
+        cmd += [lf, str(limit)]
+    ff, ffval = _tw_format_flag(tw)
+    if ff:
+        cmd += ([ff, ffval] if ffval else [ff])
+    res = _run_cmd(cmd, timeout=40)
+    return _parse_tweets(res.get("output") or "")
+
+
+@app.post("/api/research/twitter/consensus")
+def api_tw_consensus():
+    tw = _tool_path("twitter")
+    if not tw:
+        return jsonify({"ok": False, "error": "Twitter connector is not installed/authenticated yet. Finish the Twitter/X setup (paste cookies + Verify) first."}), 503
+    body = request.get_json(silent=True) or {}
+    market = (body.get("market") or "any").lower()
+    try:
+        limit = int(body.get("limit") or 25)
+    except Exception:
+        limit = 25
+    limit = max(5, min(limit, 60))
+    rows = body.get("players") or []
+    name_set = []
+    name_game = {}
+    key_meta = {}
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        nm = (r.get("name") or "").strip()
+        if not nm:
+            continue
+        if nm not in name_set:
+            name_set.append(nm)
+        gp = r.get("gamePk")
+        if gp and nm not in name_game:
+            name_game[nm] = gp
+        mk = (r.get("market") or "").lower()
+        edge = r.get("edgePct")
+        if edge is None:
+            edge = r.get("hrEdgePct")
+        key_meta[nm + "::" + mk] = {"gamePk": gp, "modelProb": r.get("modelProb"), "hrModelProb": r.get("hrModelProb"), "edgePct": edge, "overSignal": r.get("overSignal")}
+    mkterm = {"hr": "home run", "hits": "hit prop", "hits2": "2+ hits", "tb": "total bases", "rbi": "RBI prop", "any": ""}.get(market, "")
+    if market == "any":
+        queries = ["MLB home run pick today", "MLB prop bets today", "MLB player props today"]
+    else:
+        queries = ["MLB " + mkterm + " pick today", "MLB " + mkterm + " prop today", "MLB " + mkterm + " bets today"]
+    queries = queries[:3]
+    tweets = []
+    seen = set()
+    used = []
+    for q in queries:
+        used.append(q)
+        for t in _tw_search_structured(tw, q, limit):
+            tid = t.get("id") or ((t.get("screenName") or "") + (t.get("text") or "")[:40])
+            if tid in seen:
+                continue
+            seen.add(tid)
+            tweets.append(t)
+    have_slate = bool(name_set)
+    agg = {}
+    for t in tweets:
+        text = t.get("text") or ""
+        names = _find_slate_names(text, name_set) if have_slate else _generic_names(text)
+        if not names:
+            continue
+        mks = _detect_markets(text) or ["any"]
+        if market != "any":
+            if market not in mks:
+                continue
+            mks = [market]
+        eng = (t.get("likes") or 0) + 2 * (t.get("retweets") or 0) + 1.5 * (t.get("quotes") or 0) + 0.5 * (t.get("replies") or 0)
+        sn = t.get("screenName") or ""
+        for nm in names:
+            for mk in mks:
+                kk = nm + "::" + mk
+                a = agg.get(kk)
+                if not a:
+                    a = {"name": nm, "market": mk, "tweets": 0, "accounts": set(), "engagement": 0.0, "samples": []}
+                    agg[kk] = a
+                a["tweets"] += 1
+                if sn:
+                    a["accounts"].add(sn)
+                a["engagement"] += eng
+                if len(a["samples"]) < 3:
+                    a["samples"].append({"text": text[:240], "screenName": sn, "url": ("https://x.com/" + sn + "/status/" + str(t.get("id"))) if (sn and t.get("id")) else None, "engagement": eng})
+    plays = []
+    for a in agg.values():
+        meta = key_meta.get(a["name"] + "::" + a["market"]) or key_meta.get(a["name"] + "::hr") or {"gamePk": name_game.get(a["name"])}
+        plays.append({
+            "name": a["name"], "market": a["market"],
+            "tweets": a["tweets"], "accounts": len(a["accounts"]),
+            "engagement": round(a["engagement"], 1),
+            "samples": sorted(a["samples"], key=lambda s: s.get("engagement") or 0, reverse=True)[:2],
+            "gamePk": meta.get("gamePk") or name_game.get(a["name"]),
+            "modelProb": meta.get("modelProb"),
+            "hrModelProb": meta.get("hrModelProb"),
+            "edgePct": meta.get("edgePct"),
+            "overSignal": meta.get("overSignal"),
+        })
+    plays.sort(key=lambda p: (p["accounts"], p["tweets"], p["engagement"]), reverse=True)
+    top = plays[0] if plays else None
+    return jsonify({"ok": True, "market": market, "tweetsScanned": len(tweets), "queriesUsed": used, "playsFound": len(plays), "topPlay": top, "plays": plays[:15], "haveSlate": have_slate, "note": "Public/Twitter consensus is a popularity signal, not a guarantee \u2014 heavily-backed overs are often fade spots. Cross-check the model edge before betting."})
+
+
 @app.post("/api/grade")
 def api_grade():
     return jsonify(perform_grade())
