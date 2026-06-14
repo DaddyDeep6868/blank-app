@@ -1037,6 +1037,7 @@ html{scroll-behavior:smooth;scrollbar-gutter:stable}body{overflow-y:auto;overscr
     <div class="dl-data-grid"><div class="dl-metric-card"><div class="k">Feature rows</div><div class="v" id="dataRowCount">0</div><div class="s">player-market observations</div></div><div class="dl-metric-card"><div class="k">Priority fields</div><div class="v" id="dataFieldCount">0</div><div class="s">advanced features/proxies</div></div><div class="dl-metric-card"><div class="k">Modern weight</div><div class="v">45%</div><div class="s">2023–2026 pitch-clock era</div></div><div class="dl-metric-card"><div class="k">Target</div><div class="v">O/U</div><div class="s">prop over/under probability</div></div></div>
     <div class="dl-data-card" style="margin-top:14px"><div class="dl-data-title">Priority extraction plan</div><div class="dl-data-sub">These are extracted first because they drive HR, hits, total bases, RBI, and parlay quality.</div><div id="dataPriorityPlan" class="dl-data-scroll"></div></div>
     <div class="dl-data-card" style="margin-top:14px"><div class="dl-data-title">Feature store preview</div><div class="dl-data-sub">Current-slate rows generated from live data, odds, park/weather, pitcher/bullpen context, and Statcast-style proxies where public historical data is incomplete.</div><div id="dataFeaturePreview" class="dl-data-scroll"><div class="help-note" style="padding:12px">No feature store built yet.</div></div></div>
+    <div class="dl-data-card" style="margin-top:14px"><div class="dl-data-title">🎯 Cross-game play picker</div><div class="dl-data-sub">Auto-builds a 1–3 leg parlay straight from the highest-signal Feature store rows — one leg per game, so every play is a true cross-game build.</div><div class="dl-action-row" style="margin-top:8px;align-items:center"><label class="dl-data-sub" style="display:flex;align-items:center;gap:6px">Legs <select id="dataXgameLegs"><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option></select></label><label class="dl-data-sub" style="display:flex;align-items:center;gap:6px">Market <select id="dataXgameMkt"><option value="any" selected>Any</option><option value="hr">HR</option><option value="hits">1+ Hit</option><option value="hits2">2+ Hits</option><option value="tb">2+ TB</option><option value="rbi">1+ RBI</option></select></label><button id="btnDataXgame">Pick cross-game play</button></div><div id="dataCrossGame" class="dl-data-scroll" style="margin-top:8px"><div class="help-note" style="padding:12px">Build the feature store, then pick a 1–3 leg cross-game play.</div></div></div>
     <div class="dl-data-card" style="margin-top:14px"><div class="dl-data-title">Simulation readout</div><div id="dataSimulation" class="dl-model-readout">Run model simulation after building the feature store.</div></div>
   </div>
 
@@ -1329,8 +1330,8 @@ html{scroll-behavior:smooth;scrollbar-gutter:stable}body{overflow-y:auto;overscr
 <button class="mobile-slip-fab hidden" id="mobileSlipFab">🧾 Open slip</button>
 
 <script>
-const APP_VERSION = 'v4.14';
-const APP_UPDATED = 'Updated Jun 14, 2026 — Robust twitter-cli install + PATH detection';
+const APP_VERSION = 'v4.15';
+const APP_UPDATED = 'Updated Jun 14, 2026 — Cross-game play picker from Feature store';
 {
   const av=document.getElementById('appVersion');
   if(av) av.textContent=APP_VERSION+' · '+APP_UPDATED;
@@ -5473,6 +5474,74 @@ function dlBuildFeatureStore(){const rows=[];(GAMES||[]).forEach(function(g){(g.
 function dlRenderFeatureStore(rows){rows=rows||DL_FEATURE_STORE;const rc=document.getElementById('dataRowCount'),fc=document.getElementById('dataFieldCount');if(rc)rc.textContent=rows.length;if(fc)fc.textContent=rows[0]?Object.keys(rows[0]).length:0;const st=document.getElementById('dataStatus');if(st)st.innerHTML='<b>Feature store ready:</b> '+rows.length+' player-market rows. Pitch-clock era weight is applied; historical metrics use proxy/era-normalized placeholders where raw public Statcast data does not exist.';const el=document.getElementById('dataFeaturePreview');if(!el)return;if(!rows.length){el.innerHTML='<div class="help-note" style="padding:12px">No rows built. Fetch slate first.</div>';return;}el.innerHTML='<table class="dl-feature-table"><thead><tr><th>Player</th><th>Game</th><th>Market</th><th>Signal</th><th>Model</th><th>Barrel</th><th>Pitcher</th><th>Pen HR</th><th>Park</th></tr></thead><tbody>'+rows.slice(0,60).map(function(r){return '<tr><td><b>'+esc(r.player)+'</b><div class="dl-pill">'+esc(r.action)+'</div></td><td>'+esc(r.game)+'</td><td>'+esc((MARKET_META[r.market]&&MARKET_META[r.market].short)||r.market)+'</td><td><b>'+r.overSignal+'</b></td><td>'+fmtPct(r.modelProb)+'</td><td>'+((r.barrelProxy||0)*100).toFixed(1)+'%</td><td>'+r.pitcherWeaknessScore+'</td><td>'+r.bullpenHRRisk.toFixed(2)+'x</td><td>'+(r.parkWeatherBoost>=0?'+':'')+r.parkWeatherBoost+'%</td></tr>';}).join('')+'</tbody></table>';}
 function dlRunSimulation(){const rows=DL_FEATURE_STORE.length?DL_FEATURE_STORE:dlBuildFeatureStore();dlRenderFeatureStore(rows);const el=document.getElementById('dataSimulation');if(!el)return;if(!rows.length){el.innerHTML='No data. Fetch a slate first.';return;}const top=rows.slice(0,25),topHr=rows.filter(r=>r.market==='hr').slice(0,15);function avg(arr,k){return arr.length?arr.reduce((s,r)=>s+(Number(r[k])||0),0)/arr.length:0;}el.innerHTML='<b>Simulation readout:</b><br>Highest-weight current-slate features: <b>model probability</b>, <b>Edge Score</b>, <b>barrel proxy</b>, <b>pitcher weakness</b>, <b>bullpen HR risk</b>, and <b>park/weather boost</b>.<br><br>Top 25 avg Over Signal: <b>'+avg(top,'overSignal').toFixed(1)+'</b> · Top HR avg Barrel proxy: <b>'+((avg(topHr,'barrelProxy'))*100).toFixed(1)+'%</b> · Avg bullpen HR risk on top rows: <b>'+avg(top,'bullpenHRRisk').toFixed(2)+'x</b>.<br><br>Next external data upgrade: replace proxies with FanGraphs/Statcast raw fields: xERA, Barrel%, HardHit%, Whiff%, xwOBA by handedness, pitch-type values, umpire K/BB/run factors, and closing-line outcomes.';}
 function dlExportFeatureStore(kind){const rows=DL_FEATURE_STORE.length?DL_FEATURE_STORE:dlBuildFeatureStore();if(!rows.length){toast('Data','Fetch slate and build feature store first.','⚠️');return;}if(kind==='json')downloadText('dingerlab_feature_store_'+(($('#dateInput')&&$('#dateInput').value)||'slate')+'.json',JSON.stringify({app:APP_VERSION,generatedAt:new Date().toISOString(),weights:DL_DATA_WEIGHTS,priorityFeatures:DL_PRIORITY_FEATURES,rows:rows},null,2));else{const keys=Object.keys(rows[0]);const csv=[keys.join(',')].concat(rows.map(r=>keys.map(k=>'"'+String(r[k]==null?'':r[k]).replace(/"/g,'""')+'"').join(','))).join('\n');downloadText('dingerlab_feature_store_'+(($('#dateInput')&&$('#dateInput').value)||'slate')+'.csv',csv);}}
+/* ---------- v4.15 Cross-game play picker (Feature store preview) ---------- */
+function dlPickCrossGameLegs(legs, mktFilter){
+  var rows = (DL_FEATURE_STORE && DL_FEATURE_STORE.length) ? DL_FEATURE_STORE : dlBuildFeatureStore();
+  legs = Math.max(1, Math.min(3, Number(legs)||3));
+  mktFilter = mktFilter || 'any';
+  // Rows are pre-sorted by overSignal (desc). Greedily take the strongest legs
+  // while enforcing one leg per game (true cross-game) and one per player.
+  var pool = (rows||[]).filter(function(r){
+    if(!r || r.modelProb==null) return false;
+    if(mktFilter!=='any' && r.market!==mktFilter) return false;
+    return true;
+  });
+  var picks=[], usedGames={}, usedPlayers={};
+  for(var i=0;i<pool.length;i++){
+    var r=pool[i];
+    var gid=String(r.gamePk);
+    if(usedGames[gid]) continue;
+    if(usedPlayers[r.player]) continue;
+    picks.push(r); usedGames[gid]=1; usedPlayers[r.player]=1;
+    if(picks.length>=legs) break;
+  }
+  return picks;
+}
+function dlCrossGameRender(){
+  var el=document.getElementById('dataCrossGame');
+  if(!el) return;
+  var legsSel=document.getElementById('dataXgameLegs');
+  var mktSel=document.getElementById('dataXgameMkt');
+  var want=legsSel?Number(legsSel.value):3;
+  var mkt=mktSel?mktSel.value:'any';
+  var rows=(DL_FEATURE_STORE && DL_FEATURE_STORE.length)?DL_FEATURE_STORE:dlBuildFeatureStore();
+  if(!rows.length){ el.innerHTML='<div class="help-note" style="padding:12px">No feature store rows yet. Fetch a slate + odds, then click <b>Build feature store</b> first.</div>'; return; }
+  var picks=dlPickCrossGameLegs(want,mkt);
+  if(!picks.length){ el.innerHTML='<div class="help-note" style="padding:12px">No eligible legs for that market. Try <b>Any</b> or rebuild the feature store.</div>'; return; }
+  var gamesAvail={}; rows.forEach(function(r){ if(r&&r.modelProb!=null&&(mkt==='any'||r.market===mkt)) gamesAvail[String(r.gamePk)]=1; });
+  var shortNote = (picks.length<want) ? ('<div class="help-note" style="margin-top:8px">Only '+picks.length+' game'+(picks.length===1?'':'s')+' available for a cross-game build right now (one leg per game). Load more games for a '+want+'-leg play.</div>') : '';
+  var joint=1, allPriced=true, bookDec=1;
+  picks.forEach(function(r){
+    joint*=clamp(r.modelProb,1e-6,0.999);
+    var am=(r.market==='hr'&&r.hrBookAmerican!=null)?r.hrBookAmerican:r.bestAmerican;
+    if(am==null){ allPriced=false; } else { bookDec*=amToDecimal(am); }
+  });
+  var fair=decToAmerican(1/clamp(joint,1e-9,0.999));
+  var book=allPriced?decToAmerican(bookDec):null;
+  var diff=(typeof slipDifficulty==='function')?slipDifficulty(joint):'';
+  var rowsHtml=picks.map(function(r){
+    var meta=MARKET_META[r.market]||{leg:r.market,short:r.market};
+    var am=(r.market==='hr'&&r.hrBookAmerican!=null)?r.hrBookAmerican:r.bestAmerican;
+    return '<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #eee">'
+      +'<div><b>'+esc(r.player)+'</b> <span class="dl-pill">'+esc(meta.leg)+'</span>'
+      +'<div class="dl-data-sub" style="margin-top:2px">'+esc(r.game)+' \u00b7 Signal '+r.overSignal+' \u00b7 Model '+fmtPct(r.modelProb)+'</div></div>'
+      +'<div style="text-align:right"><b>'+(am!=null?fmtAmerican(am):'\u2014')+'</b>'
+      +'<div class="dl-data-sub">Fair '+fmtAmerican(r.fairAmerican)+'</div></div></div>';
+  }).join('');
+  var payload=picks.map(function(r){return {gamePk:r.gamePk,name:r.player,mk:r.market};});
+  var b64=btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+  el.innerHTML='<div class="game-card open" style="padding:14px 16px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+    +'<div><b>\U0001F3AF '+picks.length+'-leg cross-game play</b><div class="dl-data-sub">One leg per game \u00b7 ranked by Feature store Over Signal</div></div>'
+    +(diff?'<span class="dl-pill">'+esc(diff)+'</span>':'')+'</div>'
+    +rowsHtml
+    +'<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;font-size:13px">'
+    +'<div>Combined model <b>'+fmtPct(joint)+'</b></div><div>Fair <b>'+fair+'</b></div><div>Shop-each-leg <b>'+(book||'\u2014')+'</b></div></div>'
+    +(allPriced?'':'<div class="help-note" style="margin-top:8px">Some legs have no live book price yet \u2014 combined payout hidden. Load all-market odds for a full price.</div>')
+    +shortNote
+    +'<div style="margin-top:10px"><button onclick="addSgpLegs(&#39;'+b64+'&#39;)">\u26a1 Add all legs to slip</button></div>'
+    +'</div>';
+}
 function renderDataPage(){const w=document.getElementById('dataWeights');if(w)w.innerHTML=dlDataWeightsHtml();const p=document.getElementById('dataPriorityPlan');if(p)p.innerHTML=dlPriorityPlanHtml();dlRenderFeatureStore(DL_FEATURE_STORE);}
 
 
@@ -6023,6 +6092,9 @@ function init(){
   };
   $('#btnBuildManual').onclick=()=>{refreshManualMeta();renderManualRoster();switchTab('games');renderGames();setStatus('Manual game built. See the Games tab.');};
   if($('#btnDataBuild')) $('#btnDataBuild').onclick=function(){ dlRenderFeatureStore(dlBuildFeatureStore()); try{toast('Data module','Feature store built.','🧠');}catch(e){} };
+  if($('#btnDataXgame')) $('#btnDataXgame').onclick=function(){ dlCrossGameRender(); };
+  if($('#dataXgameLegs')) $('#dataXgameLegs').onchange=function(){ if(DL_FEATURE_STORE&&DL_FEATURE_STORE.length) dlCrossGameRender(); };
+  if($('#dataXgameMkt')) $('#dataXgameMkt').onchange=function(){ if(DL_FEATURE_STORE&&DL_FEATURE_STORE.length) dlCrossGameRender(); };
   if($('#btnDataSim')) $('#btnDataSim').onclick=function(){ dlRunSimulation(); try{toast('Data module','Simulation readout updated.','📈');}catch(e){} };
   if($('#btnDataCsv')) $('#btnDataCsv').onclick=function(){ dlExportFeatureStore('csv'); };
   if($('#btnDataJson')) $('#btnDataJson').onclick=function(){ dlExportFeatureStore('json'); };
